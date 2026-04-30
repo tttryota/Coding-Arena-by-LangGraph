@@ -78,6 +78,41 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 - `mypy` 非ゼロ終了 + violations 空 = 設定エラーとして即エラー
 - `ENOENT`（コマンド未導入）は即エラー
 
+### コード品質保証の役割分担
+
+コード品質のチェックは **ruff/mypy による機械チェック** と **LLM によるセルフレビュー** の 2 層で行う。両者の責務は明確に分離されている。
+
+**ruff/mypy（機械チェック）— 規約の強制**
+
+確定的に検出できるルール違反を担当。pyproject.toml で設定。
+
+| ルール | 対応する規約 |
+|--------|-------------|
+| N (pep8-naming) | 命名規則（PascalCase, snake_case 等） |
+| PLR0913 (max-args=4) | 引数4つ以内 |
+| PLR0915 (max-statements=20) | 関数の文数制限（30行以内の近似） |
+| C901 (max-complexity=10) | 関数の複雑度 |
+| BLE (blind-except) | bare except 禁止 |
+| EM (errmsg) | エラーメッセージの品質 |
+| FLY (flynt) | f-string 推奨 |
+| S (bandit) | セキュリティ |
+
+**LLM セルフレビュー — 設計判断のチェック**
+
+機械で検出できない意味的なルール違反を担当。review-criteria-*.md がチェックリスト。
+
+- 変数名の省略形（`msg` → `message` 等。ruff N は PEP8 準拠のみで意味的省略は検出できない）
+- マジックナンバー（ruff にマジックナンバー検出ルールはない）
+- 1 関数 1 責務（複雑度では測れない責務の混在）
+- エラーの握り潰し（catch して何もしない。bare except とは異なる）
+- 仕様書との整合性（機械チェック不可能）
+
+**なぜ分離するか**
+
+1. 機械チェックはトークンコスト $0 で確定的。LLM に委ねると見落としや非決定性が発生する
+2. LLM レビューの責務を絞ることで、1 回のレビューでの網羅性が向上する
+3. 機械チェックで弾けるものを LLM に渡すと、指摘の小出し → 収束遅延の原因になる
+
 ### drift-guard.ts — 迷走検知
 
 | シグナル | 閾値 |
@@ -103,6 +138,11 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 **Codex 使用不可時（2ステップ）:**
 1. セルフレビュー（レビュー観点チェック）
 2. 2体並列レビュー + 突合
+
+**レビューサイクルの収束制御**:
+- 各ステップ最大 5 サイクルまでリトライ（MAX_REVIEW_CYCLES=5）
+- critical/major が消えた後、minor のみが 2 サイクル連続した場合は accepted として記録し次のステップへ進む
+- レビュープロンプトにスコープ制約を含む: テストケース網羅性の指摘禁止（design フェーズの責務）、レビュー観点外のリファクタ提案禁止
 
 **レビュー結果パース**:
 - コードフェンス除去 → `JSON.parse` 直接試行 → 非 greedy 正規表現フォールバック

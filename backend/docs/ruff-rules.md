@@ -101,6 +101,25 @@ fixture の scope 指定、parametrize のスタイルなど。
 コードの簡素化を提案。例: `if x == True` → `if x`、
 ネストした if の結合、三項演算子への変換など。一部 auto-fix 可能。
 
+### C4 — flake8-comprehensions
+リスト・辞書・集合の内包表記の最適化を提案。
+`list(x for x in ...)` → `[x for x in ...]`、`dict([(k, v) ...])` → `{k: v ...}` 等。
+不要な中間コンテナの生成を排除し、可読性とパフォーマンスを向上させる。auto-fix 可能。
+
+### ISC — flake8-implicit-str-concat
+暗黙の文字列結合を検出。`("hello" "world")` のように、
+隣り合った文字列リテラルが暗黙に結合されるパターンはバグの元になる。
+`+` による明示的な結合を要求する。
+
+### PIE — flake8-pie
+不要なコードパターンを検出。不要な `pass`（本体があるのに残っている）、
+不要な `...`、dict の `**` スプレッドの冗長パターンなど。auto-fix 可能。
+
+### TC — flake8-type-checking
+`TYPE_CHECKING` ブロックに移動可能な import を検出。
+型アノテーションにのみ使われている import はランタイムに不要であり、
+`if TYPE_CHECKING:` ブロックに移すことでモジュールの起動速度が向上する。
+
 ## 無効化しているルール
 
 | ルール | 理由 |

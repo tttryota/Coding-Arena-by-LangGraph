@@ -38,6 +38,14 @@ select = [
     "PT",
     # simplify
     "SIM",
+    # 内包表記の最適化
+    "C4",
+    # 暗黙の文字列結合を検出
+    "ISC",
+    # 不要な pass/spread 等
+    "PIE",
+    # TYPE_CHECKING ブロックへの import 分離
+    "TC",
 ]
 ignore = ["D", "ANN", "ERA", "FIX", "TD", "E501", "RET504"]
 

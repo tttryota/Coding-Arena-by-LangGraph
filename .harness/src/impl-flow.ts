@@ -74,8 +74,8 @@ ${spec}
       logger,
     );
 
-    // リントチェック
-    await this.lintCheck(lintGuard, plan.scope, "テスト生成後");
+    // リントチェック（テスト生成後は実装がまだないため mypy をスキップ）
+    await this.lintCheck(lintGuard, plan.scope, "テスト生成後", { skipMypy: true });
 
     // RED 確認
     console.log("テスト実行中（RED確認）...");
@@ -179,11 +179,14 @@ ${spec}`;
     );
   }
 
-  private async lintCheck(lintGuard: LintGuard, scope: string, phase: string): Promise<void> {
+  private async lintCheck(
+    lintGuard: LintGuard, scope: string, phase: string,
+    options?: { skipMypy?: boolean },
+  ): Promise<void> {
     console.log(`リントチェック中（${phase}）...`);
     const pyFiles = await this.boundary.findPythonFiles(scope);
     if (pyFiles.length > 0) {
-      await lintGuard.check(pyFiles);
+      await lintGuard.check(pyFiles, options);
     }
   }
 

@@ -18,7 +18,7 @@ export class LintGuard {
     this.projectRoot = projectRoot;
   }
 
-  async check(targetFiles: string[]): Promise<void> {
+  async check(targetFiles: string[], options?: { skipMypy?: boolean }): Promise<void> {
     for (let attempt = 1; attempt <= MAX_LINT_RETRIES; attempt++) {
       const formatOk = await this.runRuffFormat(targetFiles);
       if (!formatOk) {
@@ -26,7 +26,7 @@ export class LintGuard {
       }
 
       const ruffViolations = await this.runRuffCheck(targetFiles);
-      const mypyViolations = await this.runMypy(targetFiles);
+      const mypyViolations = options?.skipMypy ? [] : await this.runMypy(targetFiles);
       const allViolations = [...ruffViolations, ...mypyViolations];
 
       if (allViolations.length === 0) {

@@ -10,13 +10,46 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = [
-    "E", "W", "F", "I", "N", "UP", "B", "A",
-    "S", "T20", "RUF", "COM", "PTH",
+    # 基本
+    "E", "W", "F", "I", "UP", "B", "A", "RUF", "COM", "PTH",
+    # セキュリティ
+    "S",
+    # print文検出
+    "T20",
+    # 命名規則（review-criteria: 命名規則）
+    "N",
+    # 関数の引数数制限（review-criteria: 引数4つ以内）
+    "PLR0913",
+    # 関数の文数制限（review-criteria: 30行以内の近似）
+    "PLR0915",
+    # 複雑度（review-criteria: 1関数1責務の補助指標）
+    "C901",
+    # bare except 禁止（review-criteria-backend: bare except 禁止）
+    "BLE",
+    # エラーメッセージ品質（review-criteria: エラーメッセージに文脈を含める）
+    "EM",
+    # f-string推奨（review-criteria-backend: f-string推奨）
+    "FLY",
+    # return文の簡素化
+    "RET",
+    # 不要な引数
+    "ARG",
+    # pytest スタイル
+    "PT",
+    # simplify
+    "SIM",
 ]
-ignore = ["D", "ANN", "ERA", "FIX", "TD", "E501"]
+ignore = ["D", "ANN", "ERA", "FIX", "TD", "E501", "RET504"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "N"]
+"tests/**/*.py" = ["S101", "N", "PLR0915", "ARG"]
+
+[tool.ruff.lint.pylint]
+max-args = 4             # review-criteria: 引数4つ以内
+max-statements = 20      # review-criteria: 30行以内（文数ベースの近似）
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
 
 [tool.ruff.format]
 quote-style = "double"

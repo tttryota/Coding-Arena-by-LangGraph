@@ -459,7 +459,7 @@ ${spec}
 
       if (!hasCriticalOrMajor) {
         minorOnlyCycles++;
-        if (minorOnlyCycles > MAX_MINOR_ONLY_CYCLES) {
+        if (minorOnlyCycles >= MAX_MINOR_ONLY_CYCLES) {
           // minor のみが続いた場合、残りを accepted として記録し次へ進む
           for (const issue of result.issues) {
             this.records.push({

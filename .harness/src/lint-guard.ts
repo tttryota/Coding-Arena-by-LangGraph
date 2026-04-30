@@ -1,12 +1,13 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { HarnessLogger } from "./logger.ts";
-import { DriftError, ESCALATION_LEVEL, EVENT } from "./types.ts";
+import { DriftError, HarnessError, ESCALATION_LEVEL, EVENT } from "./types.ts";
 import type { LintViolation } from "./types.ts";
 
 const execFileAsync = promisify(execFile);
 
 const MAX_LINT_RETRIES = 3;
+const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
 export class LintGuard {
   private logger: HarnessLogger;
@@ -21,7 +22,7 @@ export class LintGuard {
     for (let attempt = 1; attempt <= MAX_LINT_RETRIES; attempt++) {
       const formatOk = await this.runRuffFormat(targetFiles);
       if (!formatOk) {
-        throw new Error("ruff format が失敗しました。設定を確認してください。");
+        throw new HarnessError("ruff format が失敗しました。設定を確認してください。");
       }
 
       const ruffViolations = await this.runRuffCheck(targetFiles);
@@ -132,7 +133,7 @@ export class LintGuard {
 
     // 非ゼロ終了なのに violations が空 = 設定エラーやクラッシュ
     if (violations.length === 0 && result.exitCode !== 0) {
-      throw new Error(
+      throw new HarnessError(
         `mypy が非ゼロで終了しましたが、型エラーを検出できませんでした。設定エラーの可能性があります。\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
       );
     }
@@ -159,6 +160,7 @@ export class LintGuard {
       const { stdout, stderr } = await execFileAsync(command, args, {
         cwd: this.projectRoot,
         maxBuffer: 10 * 1024 * 1024,
+        timeout: LOCAL_CMD_TIMEOUT_MS,
       });
       return { stdout, stderr, exitCode: 0 };
     } catch (error: unknown) {
@@ -169,7 +171,7 @@ export class LintGuard {
       };
       // ENOENT: コマンドが見つからない場合は即座にエラー
       if (execError.code === "ENOENT") {
-        throw new Error(`${command} が見つかりません。インストールしてください。`);
+        throw new HarnessError(`${command} が見つかりません。インストールしてください。`);
       }
       return {
         stdout: execError.stdout ?? "",

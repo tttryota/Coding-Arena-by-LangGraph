@@ -1,5 +1,6 @@
 import { resolve, join } from "node:path";
 import { HarnessLogger } from "./logger.ts";
+import { HarnessError } from "./types.ts";
 import { Boundary } from "./boundary.ts";
 import { DesignFlow } from "./design-flow.ts";
 import { ImplFlow } from "./impl-flow.ts";
@@ -53,6 +54,11 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error("Harness error:", error);
+  if (error instanceof HarnessError) {
+    // HarnessError, GuardError, DriftError はメッセージのみ表示
+    console.error(`[${error.name}] ${error.message}`);
+  } else {
+    console.error("Unexpected error:", error);
+  }
   process.exit(1);
 });

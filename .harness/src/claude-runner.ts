@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { writeFileSync, rmSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { HarnessError } from "./types.ts";
 import type { ClaudeResult } from "./types.ts";
 import type { HarnessLogger } from "./logger.ts";
 
@@ -28,16 +29,23 @@ export async function runClaude(
   }
 
   if (result.exitCode !== 0) {
-    throw new Error(
+    throw new HarnessError(
       `claude -p failed (exit ${result.exitCode}): ${result.stderr}`,
     );
   }
 
-  const parsed = JSON.parse(result.stdout) as ClaudeResult;
+  let parsed: ClaudeResult;
+  try {
+    parsed = JSON.parse(result.stdout) as ClaudeResult;
+  } catch {
+    throw new HarnessError(
+      `claude -p の出力が不正なJSONです: ${result.stdout.slice(0, 200)}`,
+    );
+  }
 
   // Claude が exit 0 でも内部エラーを報告する場合がある
   if (parsed.is_error) {
-    throw new Error(
+    throw new HarnessError(
       `claude -p returned is_error=true: ${parsed.result}`,
     );
   }

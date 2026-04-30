@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import type { HarnessLogger } from "./logger.ts";
 import type { LintGuard } from "./lint-guard.ts";
 import { runClaude } from "./claude-runner.ts";
-import { DriftError, ESCALATION_LEVEL, EVENT } from "./types.ts";
+import { DriftError, HarnessError, ESCALATION_LEVEL, EVENT } from "./types.ts";
 import type { ReviewIssue, ReviewResult, ReviewRecord, CommandResult } from "./types.ts";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 const MAX_REVIEW_CYCLES = 3;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const CODEX_TIMEOUT_MS = 20 * 60 * 1000;
+const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000;
 
 type ReviewParams = {
   targetFiles: string[];
@@ -159,7 +160,7 @@ export class ReviewOrchestrator {
         );
       }
 
-      const toFix = await this.reconcileReviews(reviewA, reviewB);
+      const toFix = this.reconcileReviews(reviewA, reviewB);
 
       if (toFix.length === 0) {
         this.records.push({
@@ -299,7 +300,7 @@ JSON形式で回答: {"issues": [{"file": "パス", "line": 行番号, "severity
         throw { stderr: result.stderr, code: result.exitCode };
       }
       // Codex の非ゼロ終了（未導入、クラッシュ等）はレビュー失敗として扱う
-      throw new Error(`Codex 実行失敗 (exit ${result.exitCode}): ${result.stderr}`);
+      throw new HarnessError(`Codex 実行失敗 (exit ${result.exitCode}): ${result.stderr}`);
     }
 
     return this.parseReviewResult("codex", result.stdout);
@@ -340,10 +341,10 @@ ${spec}
     ];
   }
 
-  async reconcileReviews(
+  reconcileReviews(
     a: ReviewResult,
     b: ReviewResult,
-  ): Promise<ReviewIssue[]> {
+  ): ReviewIssue[] {
     // 全件残す方式: 両エージェントの指摘を統合し severity で判断
     // - critical/major: 常に修正対象
     // - minor: 両方が指摘した場合のみ修正対象
@@ -517,10 +518,11 @@ ${constraint}`,
       await execFileAsync(cmd, args, {
         cwd: this.projectRoot,
         maxBuffer: 10 * 1024 * 1024,
+        timeout: LOCAL_CMD_TIMEOUT_MS,
       });
     } catch (error: unknown) {
       const execError = error as { stderr?: string };
-      throw new Error(`テスト失敗: ${execError.stderr ?? "unknown error"}`);
+      throw new HarnessError(`テスト失敗: ${execError.stderr ?? "unknown error"}`);
     }
   }
 
@@ -537,14 +539,14 @@ ${constraint}`,
         // 非 greedy: "issues" を含む最初の {...} を抽出
         const jsonMatch = /\{[^{}]*"issues"\s*:\s*\[[\s\S]*?\]\s*\}/.exec(cleaned);
         if (!jsonMatch) {
-          throw new Error(`レビュー出力からJSONを抽出できませんでした (reviewer: ${reviewer})`);
+          throw new HarnessError(`レビュー出力からJSONを抽出できませんでした (reviewer: ${reviewer})`);
         }
         parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
       }
 
       // schema validation: issues が配列であることを確認
       if (!Array.isArray(parsed.issues)) {
-        throw new Error(`issues フィールドが配列ではありません (reviewer: ${reviewer})`);
+        throw new HarnessError(`issues フィールドが配列ではありません (reviewer: ${reviewer})`);
       }
 
       // 各 issue の最低限の形状を検証
@@ -570,10 +572,10 @@ ${constraint}`,
         }
       }
 
-      // 不正要素がある場合: 有効な指摘が0件でも LGTM にしない（fail-closed）
-      if (invalidCount > 0 && validatedIssues.length === 0) {
-        throw new Error(
-          `レビュー出力に ${invalidCount} 件の不正な issue が含まれ、有効な指摘が0件です (reviewer: ${reviewer})`,
+      // 不正要素がある場合: fail-closed
+      if (invalidCount > 0) {
+        throw new HarnessError(
+          `レビュー出力に ${invalidCount} 件の不正な issue が含まれています (reviewer: ${reviewer})。有効: ${validatedIssues.length} 件`,
         );
       }
 

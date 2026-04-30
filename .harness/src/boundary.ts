@@ -7,6 +7,8 @@ import type { TaskPlan } from "./types.ts";
 
 const execFileAsync = promisify(execFile);
 
+const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000; // 5分
+
 /**
  * パス検証・スコープ解決・ファイル探索を担う。
  * 外部に送るファイルの境界チェックはすべてここを通す。
@@ -160,14 +162,15 @@ export class Boundary {
         const realDir = realpathSync(dir);
         const boundary = this.realRoot.endsWith("/") ? this.realRoot : this.realRoot + "/";
         if (!realDir.startsWith(boundary)) {
-          console.log(`警告: プロジェクト外を参照する symlink ディレクトリをスキップ: ${dir} -> ${realDir}`);
-          continue;
+          throw new GuardError(
+            `プロジェクト外を参照する symlink ディレクトリが検出されました: ${dir} -> ${realDir}`,
+          );
         }
       }
       try {
         const { stdout } = await execFileAsync("find", [
           dir, "-name", "*.py", "-type", "f", "-not", "-path", "*__pycache__*",
-        ]);
+        ], { timeout: LOCAL_CMD_TIMEOUT_MS });
         for (const f of stdout.split("\n").filter(Boolean)) {
           if (this.isFileWithinProject(f)) {
             files.push(f);
@@ -212,7 +215,7 @@ export class Boundary {
   async getCurrentCommitHash(): Promise<string> {
     try {
       const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], {
-        cwd: this.projectRoot,
+        cwd: this.projectRoot, timeout: 30_000,
       });
       return stdout.trim();
     } catch {
@@ -222,10 +225,11 @@ export class Boundary {
 
   async countDiffLines(): Promise<number> {
     // 未コミットの変更（ステージ済み + 未ステージ）を数える
+    // fail-closed: git 失敗時は 0 ではなくエラーにする
     try {
       const { stdout } = await execFileAsync(
         "git", ["diff", "HEAD", "--stat"],
-        { cwd: this.projectRoot },
+        { cwd: this.projectRoot, timeout: 30_000 },
       );
       const pattern = /(\d+) insertion|(\d+) deletion/g;
       let total = 0;
@@ -234,8 +238,12 @@ export class Boundary {
         total += parseInt(m[1] ?? m[2], 10);
       }
       return total;
-    } catch {
-      return 0;
+    } catch (error: unknown) {
+      const execError = error as { code?: string };
+      if (execError.code === "ENOENT") {
+        throw new GuardError("git が見つかりません。");
+      }
+      throw new GuardError("git diff の実行に失敗しました。差分サイズを検証できません。");
     }
   }
 
@@ -265,7 +273,7 @@ export class Boundary {
 
   private async gitListChangedFiles(cmd: string, args: string[]): Promise<string[]> {
     try {
-      const { stdout } = await execFileAsync(cmd, args, { cwd: this.projectRoot });
+      const { stdout } = await execFileAsync(cmd, args, { cwd: this.projectRoot, timeout: LOCAL_CMD_TIMEOUT_MS });
       return stdout.split("\n").filter(Boolean);
     } catch (error: unknown) {
       const execError = error as { code?: string };
@@ -303,7 +311,7 @@ export class Boundary {
     try {
       const { stdout } = await execFileAsync(
         "git", ["diff", "HEAD", "--", ...files],
-        { cwd: this.projectRoot, maxBuffer: 10 * 1024 * 1024 },
+        { cwd: this.projectRoot, maxBuffer: 10 * 1024 * 1024, timeout: LOCAL_CMD_TIMEOUT_MS },
       );
       if (stdout.trim()) parts.push(stdout);
     } catch {
@@ -313,7 +321,7 @@ export class Boundary {
     // 未追跡ファイルの内容（新規作成分）
     for (const f of files) {
       try {
-        await execFileAsync("git", ["ls-files", "--error-unmatch", f], { cwd: this.projectRoot });
+        await execFileAsync("git", ["ls-files", "--error-unmatch", f], { cwd: this.projectRoot, timeout: 30_000 });
       } catch {
         // git に追跡されていないファイル → 内容を diff 風に出力
         try {
@@ -357,6 +365,9 @@ export class Boundary {
   parsePlanFile(planPath: string): TaskPlan {
     const fullPath = resolve(this.projectRoot, planPath);
     this.assertWithinProject(fullPath);
+    if (!existsSync(fullPath)) {
+      throw new GuardError(`計画ファイルが存在しません: ${planPath}`);
+    }
     // CRLF 正規化 + 見出し末尾スペース除去
     const content = readFileSync(fullPath, "utf-8")
       .replace(/\r\n/g, "\n")

@@ -15,6 +15,7 @@ const execFileAsync = promisify(execFile);
 
 const MAX_GREEN_RETRIES = 3;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000;
 
 export class ImplFlow {
   private boundary: Boundary;
@@ -214,7 +215,7 @@ ${spec}`;
     try {
       const { stdout, stderr } = await execFileAsync(
         "pytest", [testPath, "-x", "--tb=short"],
-        { cwd: this.boundary.getProjectRoot(), maxBuffer: 10 * 1024 * 1024 },
+        { cwd: this.boundary.getProjectRoot(), maxBuffer: 10 * 1024 * 1024, timeout: LOCAL_CMD_TIMEOUT_MS },
       );
       return { passed: true, output: stdout + stderr };
     } catch (error: unknown) {

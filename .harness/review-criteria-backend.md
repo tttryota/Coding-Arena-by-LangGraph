@@ -1,10 +1,6 @@
 ## Python固有
-- f-string推奨（.format() や % は使わない）
 - dataclass or TypedDict で構造化（dictの直接操作を避ける）
 - async関数とsync関数を混在させない
-
-> 注: bare except は ruff BLE001、f-string は ruff FLY で機械チェック済み。
-> ここでは構造化やasync/sync混在など機械で検出できない設計をレビューする。
 
 ## FastAPI固有
 - エンドポイントは必ずレスポンスモデルを定義

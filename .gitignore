@@ -23,7 +23,8 @@ node_modules/
 Thumbs.db
 
 # Logs
-logs/
+logs/*
+!logs/README.md
 
 # ChromaDB
 chroma_data/

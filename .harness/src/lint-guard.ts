@@ -18,12 +18,21 @@ export class LintGuard {
     this.projectRoot = projectRoot;
   }
 
-  async check(targetFiles: string[], options?: { skipMypy?: boolean }): Promise<void> {
+  async check(
+    targetFiles: string[],
+    options?: {
+      skipMypy?: boolean;
+      claudeFix?: (violations: LintViolation[]) => Promise<void>;
+    },
+  ): Promise<void> {
     for (let attempt = 1; attempt <= MAX_LINT_RETRIES; attempt++) {
       const formatOk = await this.runRuffFormat(targetFiles);
       if (!formatOk) {
         throw new HarnessError("ruff format が失敗しました。設定を確認してください。");
       }
+
+      // ruff --fix で自動修正可能なものを先に処理
+      await this.autoFix(targetFiles);
 
       const ruffViolations = await this.runRuffCheck(targetFiles);
       const mypyViolations = options?.skipMypy ? [] : await this.runMypy(targetFiles);
@@ -40,8 +49,9 @@ export class LintGuard {
         violations: allViolations,
       });
 
-      if (attempt < MAX_LINT_RETRIES) {
-        await this.autoFix(targetFiles);
+      // ruff --fix で直せない違反が残っている場合、claude -p で修正を試みる
+      if (attempt < MAX_LINT_RETRIES && options?.claudeFix) {
+        await options.claudeFix(allViolations);
       }
     }
 

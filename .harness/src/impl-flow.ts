@@ -7,7 +7,7 @@ import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { Boundary } from "./boundary.ts";
 import { runClaude } from "./claude-runner.ts";
 import { GuardError, ESCALATION_LEVEL, EVENT } from "./types.ts";
-import type { TaskPlan, ReviewRecord } from "./types.ts";
+import type { TaskPlan, ReviewRecord, LintViolation } from "./types.ts";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -75,7 +75,11 @@ ${spec}
     );
 
     // リントチェック（テスト生成後は実装がまだないため mypy をスキップ）
-    await this.lintCheck(lintGuard, plan.scope, "テスト生成後", { skipMypy: true });
+    await this.lintCheck(lintGuard, plan.scope, "テスト生成後", {
+      skipMypy: true,
+      scopeTools: scopeTools,
+      root,
+    });
 
     // RED 確認
     console.log("テスト実行中（RED確認）...");
@@ -133,7 +137,10 @@ ${spec}`;
       sessionId = implResult.session_id;
 
       // リントチェック
-      await this.lintCheck(lintGuard, plan.scope, `実装後 (試行 ${attempt})`);
+      await this.lintCheck(lintGuard, plan.scope, `実装後 (試行 ${attempt})`, {
+        scopeTools: scopeTools,
+        root,
+      });
 
       // スコープ外変更の検証
       await this.boundary.verifyChangedFilesWithinScope(plan.scope);
@@ -181,13 +188,39 @@ ${spec}`;
 
   private async lintCheck(
     lintGuard: LintGuard, scope: string, phase: string,
-    options?: { skipMypy?: boolean },
+    options?: { skipMypy?: boolean; scopeTools?: string[]; root?: string },
   ): Promise<void> {
     console.log(`リントチェック中（${phase}）...`);
     const pyFiles = await this.boundary.findPythonFiles(scope);
-    if (pyFiles.length > 0) {
-      await lintGuard.check(pyFiles, options);
-    }
+    if (pyFiles.length === 0) return;
+
+    const claudeFix = options?.scopeTools
+      ? async (violations: LintViolation[]) => {
+          const issueList = violations
+            .map((v) => `${v.tool}: ${v.file}:${v.line} - ${v.message}`)
+            .join("\n");
+          await runClaude(
+            {
+              prompt: `以下のリンター違反を修正してください。ruff --fix では自動修正できなかった違反です。
+
+## 違反一覧
+${issueList}
+
+## 制約
+- 指摘された違反のみ修正する
+- 既存のロジックや振る舞いを変更しない`,
+              allowedTools: options.scopeTools,
+              outputFormat: "json",
+              cwd: options.root,
+            },
+          );
+        }
+      : undefined;
+
+    await lintGuard.check(pyFiles, {
+      skipMypy: options?.skipMypy,
+      claudeFix,
+    });
   }
 
   private async runReview(

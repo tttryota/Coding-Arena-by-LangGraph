@@ -6,7 +6,7 @@ import type { LintViolation } from "./types.ts";
 
 const execFileAsync = promisify(execFile);
 
-const MAX_LINT_RETRIES = 3;
+const MAX_LINT_RETRIES = 5;
 const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
 export class LintGuard {

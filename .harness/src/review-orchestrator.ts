@@ -9,7 +9,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const MAX_REVIEW_CYCLES = 3;
+const MAX_REVIEW_CYCLES = 5;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const CODEX_TIMEOUT_MS = 20 * 60 * 1000;
 const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000;
@@ -222,6 +222,11 @@ export class ReviewOrchestrator {
 ## 対象ファイル
 ${fileContents}
 
+## レビュースコープの制約
+- テストケースの網羅性は指摘しない（テストケースの設計は design フェーズの責務であり、impl フェーズでは対象外）
+- レビュー観点ファイルに記載のないリファクタリング提案はしない
+- レビュー観点ファイルに記載のあるルール違反のみを指摘する
+
 ## 回答形式
 指摘がある場合はJSON形式で回答してください:
 {"issues": [{"file": "ファイルパス", "line": 行番号, "severity": "critical|major|minor", "description": "指摘内容"}]}
@@ -263,6 +268,11 @@ ${spec}
 - エッジケースの処理漏れがないか
 - エラーハンドリングが適切か
 
+## レビュースコープの制約
+- テストケースの網羅性は指摘しない（テストケースの設計は design フェーズの責務であり、impl フェーズでは対象外）
+- 仕様書に記載のない機能追加やリファクタリングは提案しない
+- 仕様書の受け入れ基準と実装の不整合のみを指摘する
+
 ## 回答形式
 {"issues": [{"file": "ファイルパス", "line": 行番号, "severity": "critical|major|minor", "description": "指摘内容"}]}`;
 
@@ -289,6 +299,10 @@ ${fileContents}
 
 ## 仕様書
 ${spec}
+
+## レビュースコープの制約
+- テストケースの網羅性は指摘しない（design フェーズの責務）
+- 仕様書に記載のない機能追加やリファクタリングは提案しない
 
 JSON形式で回答: {"issues": [{"file": "パス", "line": 行番号, "severity": "critical|major|minor", "description": "内容"}]}`;
 
@@ -320,6 +334,10 @@ ${fileContents}
 
 ## 仕様書
 ${spec}
+
+## レビュースコープの制約
+- テストケースの網羅性は指摘しない（design フェーズの責務）
+- 仕様書に記載のない機能追加やリファクタリングは提案しない
 
 ## 回答形式
 {"issues": [{"file": "ファイルパス", "line": 行番号, "severity": "critical|major|minor", "description": "指摘内容"}]}`;
@@ -389,6 +407,9 @@ ${spec}
     reviewFn: () => Promise<ReviewResult>,
     params: ReviewParams,
   ): Promise<ReviewResult> {
+    const MAX_MINOR_ONLY_CYCLES = 2;
+    let minorOnlyCycles = 0;
+
     for (let cycle = 0; cycle < MAX_REVIEW_CYCLES; cycle++) {
       const diffBefore = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
@@ -429,6 +450,33 @@ ${spec}
           "review_parse_failure",
           `レビュー結果のパースに失敗しました（reviewer: ${result.reviewer}）。人間の確認が必要です。`,
         );
+      }
+
+      // minor のみの判定
+      const hasCriticalOrMajor = result.issues.some(
+        (i) => i.severity === "critical" || i.severity === "major",
+      );
+
+      if (!hasCriticalOrMajor) {
+        minorOnlyCycles++;
+        if (minorOnlyCycles > MAX_MINOR_ONLY_CYCLES) {
+          // minor のみが続いた場合、残りを accepted として記録し次へ進む
+          for (const issue of result.issues) {
+            this.records.push({
+              step: result.reviewer,
+              cycle: cycle + 1,
+              reviewer: result.reviewer,
+              findings: [issue],
+              decision: "accepted",
+              diffBefore,
+              diffAfter: "",
+              judgmentSummary: `minor 指摘が ${MAX_MINOR_ONLY_CYCLES} サイクル修正後も残存。許容して次へ進む`,
+            });
+          }
+          return result;
+        }
+      } else {
+        minorOnlyCycles = 0;
       }
 
       await this.applyFixes(result.issues, params);

@@ -1,0 +1,25 @@
+[project]
+name = "obsidian-rag-langgraph"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "A",
+    "S", "T20", "RUF", "COM", "PTH",
+]
+ignore = ["D", "ANN", "ERA", "FIX", "TD"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true

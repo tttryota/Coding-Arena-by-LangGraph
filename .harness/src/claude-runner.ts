@@ -1,0 +1,122 @@
+import { spawn } from "node:child_process";
+import { writeFileSync, rmSync, mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import type { ClaudeResult } from "./types.ts";
+import type { HarnessLogger } from "./logger.ts";
+
+export type ClaudeOptions = {
+  prompt: string;
+  allowedTools?: string[];
+  appendSystemPrompt?: string;
+  resume?: string;
+  outputFormat?: "json" | "text" | "stream-json";
+  cwd?: string;
+  timeoutMs?: number;
+};
+
+export async function runClaude(
+  options: ClaudeOptions,
+  logger?: HarnessLogger,
+): Promise<ClaudeResult> {
+  const { args, tempFile } = buildArgs({ ...options, outputFormat: options.outputFormat ?? "json" });
+  const result = await spawnWithStdin("claude", args, options.prompt, options.cwd, options.timeoutMs);
+  if (tempFile) cleanupTemp(tempFile);
+
+  if (logger) {
+    logger.logCommand("claude", ["-p", "(stdin)", ...args.slice(1)], result);
+  }
+
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `claude -p failed (exit ${result.exitCode}): ${result.stderr}`,
+    );
+  }
+
+  const parsed = JSON.parse(result.stdout) as ClaudeResult;
+
+  // Claude が exit 0 でも内部エラーを報告する場合がある
+  if (parsed.is_error) {
+    throw new Error(
+      `claude -p returned is_error=true: ${parsed.result}`,
+    );
+  }
+
+  return parsed;
+}
+
+function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string | null } {
+  // prompt は stdin 経由で渡すので "-p" に "-" を指定
+  const args = ["-p", "-"];
+  let tempFile: string | null = null;
+
+  if (options.outputFormat) {
+    args.push("--output-format", options.outputFormat);
+  }
+
+  if (options.allowedTools && options.allowedTools.length > 0) {
+    args.push("--allowedTools", options.allowedTools.join(","));
+  }
+
+  if (options.appendSystemPrompt) {
+    // 大きな system prompt は一時ファイル経由で渡す（E2BIG 防止）
+    const dir = mkdtempSync(join(tmpdir(), "harness-"));
+    tempFile = join(dir, "system-prompt.txt");
+    writeFileSync(tempFile, options.appendSystemPrompt, "utf-8");
+    args.push("--append-system-prompt-file", tempFile);
+  }
+
+  if (options.resume) {
+    args.push("--resume", options.resume);
+  }
+
+  return { args, tempFile };
+}
+
+function cleanupTemp(filePath: string): void {
+  try {
+    // ファイルと親ディレクトリ（mkdtempSync で作成）を両方削除
+    const dir = join(filePath, "..");
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // ベストエフォート
+  }
+}
+
+function spawnWithStdin(
+  command: string,
+  args: string[],
+  stdinData: string,
+  cwd?: string,
+  timeoutMs?: number,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      cwd,
+      timeout: timeoutMs,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("close", (code) => {
+      resolve({ stdout, stderr, exitCode: code ?? 1 });
+    });
+
+    child.on("error", (err) => {
+      resolve({ stdout, stderr: err.message, exitCode: 1 });
+    });
+
+    child.stdin.write(stdinData);
+    child.stdin.end();
+  });
+}

@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "name": "harness",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.8",
+    "@types/node": "^22"
+  }
+}

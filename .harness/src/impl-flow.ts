@@ -79,7 +79,7 @@ ${spec}
 
     // RED 確認
     console.log("テスト実行中（RED確認）...");
-    const redResult = await this.runTests(testPath);
+    const redResult = await this.runTests(testPath, { allowCollectionError: true });
 
     if (redResult.passed) {
       console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
@@ -214,6 +214,7 @@ ${spec}`;
 
   private async runTests(
     testPath: string,
+    options?: { allowCollectionError?: boolean },
   ): Promise<{ passed: boolean; output: string }> {
     try {
       const { stdout, stderr } = await execFileAsync(
@@ -233,7 +234,9 @@ ${spec}`;
       if (execError.code === "ENOENT") {
         throw new GuardError("pytest が見つかりません。インストールしてください。");
       }
-      if (exitCode >= 2) {
+      // exit 2 = collection error（import 失敗等）。RED 確認時は実装が
+      // まだないため許容し、テスト失敗として扱う
+      if (exitCode >= 2 && !options?.allowCollectionError) {
         throw new GuardError(
           `pytest が内部エラーで終了しました (exit ${exitCode})。環境を確認してください。\n${output}`,
         );

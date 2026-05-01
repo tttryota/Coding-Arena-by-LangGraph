@@ -142,8 +142,14 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 
 **レビューサイクルの収束制御**:
 - 各ステップ最大 5 サイクルまでリトライ（MAX_REVIEW_CYCLES=5）
-- critical/major が消えた後、minor のみが 2 サイクル連続した場合は accepted として記録し次のステップへ進む
+- critical/major が消えた後、minor のみが 2 サイクル連続した場合は第三者判断工程に入る
 - レビュープロンプトにスコープ制約を含む: テストケース網羅性の指摘禁止（design フェーズの責務）、レビュー観点外のリファクタ提案禁止
+
+**minor 指摘の第三者判断**:
+- 修正を試みた Claude セッションとは別の新しい claude -p で許容可否を判断
+- safe=true → accepted として記録し次のステップへ
+- safe=false → 修正を再試行（1回のみ）→ 解消すれば fixed、残存すれば escalated
+- 自己正当化を避けるため、修正した Claude 自身には許容理由を生成させない
 
 **レビュー結果パース**:
 - コードフェンス除去 → `JSON.parse` 直接試行 → 非 greedy 正規表現フォールバック

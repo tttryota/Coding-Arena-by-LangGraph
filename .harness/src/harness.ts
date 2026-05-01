@@ -11,7 +11,7 @@ async function main(): Promise<void> {
 
   if (!command) {
     console.log("Usage:");
-    console.log("  ./harness impl <plan-file>");
+    console.log("  ./harness impl <plan-file> [--resume]");
     console.log('  ./harness design <feature-name> "<requirements>"');
     process.exit(1);
   }
@@ -31,8 +31,9 @@ async function main(): Promise<void> {
         console.error("Error: plan file path required");
         process.exit(1);
       }
+      const resume = args.includes("--resume");
       const implFlow = new ImplFlow(boundary);
-      await implFlow.run(planPath);
+      await implFlow.run(planPath, { resume });
       break;
     }
     case "design": {

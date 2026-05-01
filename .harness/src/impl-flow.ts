@@ -6,8 +6,8 @@ import { DriftGuard } from "./drift-guard.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { Boundary } from "./boundary.ts";
 import { runClaude } from "./claude-runner.ts";
-import { GuardError, ESCALATION_LEVEL, EVENT } from "./types.ts";
-import type { TaskPlan, ReviewRecord, LintViolation } from "./types.ts";
+import { GuardError, ESCALATION_LEVEL, EVENT, STEP_ORDER } from "./types.ts";
+import type { TaskPlan, ReviewRecord, LintViolation, CompletedStep } from "./types.ts";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -24,7 +24,12 @@ export class ImplFlow {
     this.boundary = boundary;
   }
 
-  async run(planPath: string): Promise<void> {
+  private shouldSkip(completedStep: CompletedStep | null, target: CompletedStep): boolean {
+    if (!completedStep) return false;
+    return STEP_ORDER.indexOf(completedStep) >= STEP_ORDER.indexOf(target);
+  }
+
+  async run(planPath: string, options?: { resume?: boolean }): Promise<void> {
     const plan = this.boundary.parsePlanFile(planPath);
     const root = this.boundary.getProjectRoot();
     const logger = new HarnessLogger(`impl_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, "logs") });
@@ -32,11 +37,19 @@ export class ImplFlow {
     const driftGuard = new DriftGuard(logger);
     const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root);
 
+    // チェックポイント復元
+    const checkpoint = options?.resume ? logger.loadCheckpoint() : null;
+    const resumeFrom = checkpoint?.completedStep ?? null;
+    let sessionId = checkpoint?.sessionId ?? "";
+
+    if (resumeFrom) {
+      console.log(`チェックポイントから再開: ${resumeFrom} 以降を実行`);
+    }
+
     // ガードチェック
     this.boundary.implementationGuard(plan);
     logger.log(EVENT.GUARD_CHECK, { scope: plan.scope, result: "pass" });
 
-    // テストケース数から期待スコープ行数を推定（1テストケースあたり約30行）
     const LINES_PER_TEST_CASE = 30;
     const expectedLines = plan.targetTestCases.length * LINES_PER_TEST_CASE;
     driftGuard.startTask(plan.scope, expectedLines);
@@ -50,10 +63,11 @@ export class ImplFlow {
     logger.log(EVENT.TDD_START, { testCases: plan.targetTestCases });
 
     // テストコード一括生成
-    console.log("テストコードを生成中...");
-    const testGenResult = await runClaude(
-      {
-        prompt: `以下のテストケースに対応するpytestテストコードを書いてください。
+    if (!this.shouldSkip(resumeFrom, "test_generated")) {
+      console.log("テストコードを生成中...");
+      const testGenResult = await runClaude(
+        {
+          prompt: `以下のテストケースに対応するpytestテストコードを書いてください。
 
 ## テストケース
 ${plan.targetTestCases.join("\n")}
@@ -65,46 +79,62 @@ ${spec}
 - テスト命名: test_{対象}_{条件}_{期待結果}
 - 1テスト1関心事
 - モックは外部依存のみ`,
-        allowedTools: scopeTools,
-        appendSystemPrompt: criteria,
-        outputFormat: "json",
-        cwd: root,
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
-      logger,
-    );
-
-    // テスト生成後にステージング（以降の git diff で差分を追跡可能にする）
-    await this.boundary.stageFiles(plan.scope);
-
-    // リントチェック（テスト生成後は実装がまだないため mypy をスキップ）
-    await this.lintCheck(lintGuard, plan.scope, "テスト生成後", {
-      skipMypy: true,
-      scopeTools: scopeTools,
-      root,
-    });
-
-    // テストレビュー（2ステップ: self_quality + codex）
-    await this.runTestReview(reviewOrchestrator, plan, testPath);
-
-    // RED 確認
-    console.log("テスト実行中（RED確認）...");
-    const redResult = await this.runTests(testPath, { allowCollectionError: true });
-
-    if (redResult.passed) {
-      console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
-      logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: redResult.output });
-      await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
-      this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
-      console.log("完了しました。");
-      return;
+          allowedTools: scopeTools,
+          appendSystemPrompt: criteria,
+          outputFormat: "json",
+          cwd: root,
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        },
+        logger,
+      );
+      sessionId = testGenResult.session_id;
+      await this.boundary.stageFiles(plan.scope);
+      await this.lintCheck(lintGuard, plan.scope, "テスト生成後", {
+        skipMypy: true,
+        scopeTools: scopeTools,
+        root,
+      });
+      logger.saveCheckpoint({
+        planPath, completedStep: "test_generated", sessionId,
+        records: [], greenAttempt: 0, timestamp: new Date().toISOString(),
+      });
     }
 
-    logger.log(EVENT.TEST_RUN, { result: "RED", output: redResult.output });
+    // テストレビュー
+    if (!this.shouldSkip(resumeFrom, "test_reviewed")) {
+      await this.runTestReview(reviewOrchestrator, plan, testPath);
+      logger.saveCheckpoint({
+        planPath, completedStep: "test_reviewed", sessionId,
+        records: reviewOrchestrator.getRecords(), greenAttempt: 0,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // RED 確認
+    if (!this.shouldSkip(resumeFrom, "red_confirmed")) {
+      console.log("テスト実行中（RED確認）...");
+      const redResult = await this.runTests(testPath, { allowCollectionError: true });
+
+      if (redResult.passed) {
+        console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
+        logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: redResult.output });
+        await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
+        this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
+        console.log("完了しました。");
+        return;
+      }
+
+      logger.log(EVENT.TEST_RUN, { result: "RED", output: redResult.output });
+      logger.saveCheckpoint({
+        planPath, completedStep: "red_confirmed", sessionId,
+        records: reviewOrchestrator.getRecords(), greenAttempt: 0,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     // 実装 → GREEN リトライループ
-    let sessionId = testGenResult.session_id;
-    let lastFailureOutput = redResult.output;
+    let lastFailureOutput = "";
+    if (!this.shouldSkip(resumeFrom, "green_confirmed")) {
     for (let attempt = 1; attempt <= MAX_GREEN_RETRIES; attempt++) {
       console.log(`実装コードを生成中... (試行 ${attempt}/${MAX_GREEN_RETRIES})`);
 
@@ -169,6 +199,12 @@ ${spec}`;
         const diffLines = await this.boundary.countDiffLines();
         driftGuard.checkDiffScope(diffLines);
 
+        logger.saveCheckpoint({
+          planPath, completedStep: "green_confirmed", sessionId,
+          records: reviewOrchestrator.getRecords(), greenAttempt: attempt,
+          timestamp: new Date().toISOString(),
+        });
+
         // 実装レビュー（3ステップ: self_criteria + self_quality + codex）
         await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
         this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: attempt, alreadyGreen: false });
@@ -184,7 +220,6 @@ ${spec}`;
       if (level !== null) {
         logger.log(EVENT.DRIFT_DETECTED, { metric: "green_failure", escalation: level, attempt });
         if (level >= ESCALATION_LEVEL.LEVEL_3) {
-          // handleDrift が throw するのでここには来ないが念のため
           throw new GuardError("迷走検知: 人間のエスカレーションが必要です。");
         }
       }
@@ -193,6 +228,15 @@ ${spec}`;
     throw new GuardError(
       `${MAX_GREEN_RETRIES} 回の試行でテストが GREEN になりませんでした。`,
     );
+    } // end if !shouldSkip green_confirmed
+
+    // GREEN確認済みからの再開: 実装レビューのみ実行
+    if (this.shouldSkip(resumeFrom, "green_confirmed") && !this.shouldSkip(resumeFrom, "impl_reviewed")) {
+      await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
+      const greenAttempt = checkpoint?.greenAttempt ?? 1;
+      this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: greenAttempt, alreadyGreen: false });
+      console.log("完了しました。");
+    }
   }
 
   private async lintCheck(

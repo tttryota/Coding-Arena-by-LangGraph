@@ -1,6 +1,6 @@
-import { mkdirSync, appendFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, appendFileSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { CommandResult } from "./types.ts";
+import type { CommandResult, CheckpointData } from "./types.ts";
 
 type LoggerOptions = {
   baseDir?: string;
@@ -94,6 +94,21 @@ export class HarnessLogger {
     const dataPath = join(this.logDir, "review-data.json");
     const content = JSON.stringify(data, null, 2);
     writeFileSync(dataPath, this.redactOutput ? redact(content) : content, "utf-8");
+  }
+
+  saveCheckpoint(data: CheckpointData): void {
+    const checkpointPath = join(this.logDir, "checkpoint.json");
+    writeFileSync(checkpointPath, JSON.stringify(data, null, 2), "utf-8");
+  }
+
+  loadCheckpoint(): CheckpointData | null {
+    const checkpointPath = join(this.logDir, "checkpoint.json");
+    if (!existsSync(checkpointPath)) return null;
+    try {
+      return JSON.parse(readFileSync(checkpointPath, "utf-8")) as CheckpointData;
+    } catch {
+      return null;
+    }
   }
 
   getLogDir(): string {

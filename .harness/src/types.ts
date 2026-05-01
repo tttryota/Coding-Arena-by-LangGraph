@@ -105,6 +105,27 @@ export type CommandResult = {
   exitCode: number;
 };
 
+// === チェックポイント ===
+
+export const STEP_ORDER = [
+  "test_generated",
+  "test_reviewed",
+  "red_confirmed",
+  "green_confirmed",
+  "impl_reviewed",
+] as const;
+
+export type CompletedStep = (typeof STEP_ORDER)[number];
+
+export type CheckpointData = {
+  planPath: string;
+  completedStep: CompletedStep;
+  sessionId: string;
+  records: ReviewRecord[];
+  greenAttempt: number;
+  timestamp: string;
+};
+
 // === ログイベント定数 ===
 
 export const EVENT = {

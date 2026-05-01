@@ -474,20 +474,56 @@ ${spec}
       if (!hasCriticalOrMajor) {
         minorOnlyCycles++;
         if (minorOnlyCycles >= MAX_MINOR_ONLY_CYCLES) {
-          // minor のみが続いた場合、残りを accepted として記録し次へ進む
-          for (const issue of result.issues) {
+          // 第三者 Claude に許容可否を判断させる
+          const verdict = await this.judgeMinorAcceptance(
+            result.issues, diffBefore, params.specPath,
+          );
+          if (verdict.safe) {
+            for (const issue of result.issues) {
+              this.records.push({
+                step: result.reviewer,
+                cycle: cycle + 1,
+                reviewer: result.reviewer,
+                findings: [issue],
+                decision: "accepted",
+                diffBefore,
+                diffAfter: "",
+                judgmentSummary: verdict.reason,
+              });
+            }
+            return result;
+          }
+          // unsafe → 修正を再試行（1回のみ）
+          await this.applyFixes(result.issues, params);
+          const retryResult = await reviewFn();
+          const diffAfterRetry = params.getFileDiff
+            ? await params.getFileDiff(params.targetFiles)
+            : "";
+          if (retryResult.isLgtm) {
             this.records.push({
               step: result.reviewer,
-              cycle: cycle + 1,
+              cycle: cycle + 2,
               reviewer: result.reviewer,
-              findings: [issue],
-              decision: "accepted",
+              findings: [],
+              decision: "lgtm",
               diffBefore,
-              diffAfter: "",
-              judgmentSummary: `minor 指摘が ${MAX_MINOR_ONLY_CYCLES} サイクル修正後も残存。許容して次へ進む`,
+              diffAfter: diffAfterRetry,
+              judgmentSummary: `第三者判断により修正: ${verdict.reason}`,
             });
+            return retryResult;
           }
-          return result;
+          // 修正後も残存 → escalated
+          this.records.push({
+            step: result.reviewer,
+            cycle: cycle + 2,
+            reviewer: result.reviewer,
+            findings: retryResult.issues,
+            decision: "escalated",
+            diffBefore,
+            diffAfter: diffAfterRetry,
+            judgmentSummary: `${verdict.reason}（修正後も残存）`,
+          });
+          return retryResult;
         }
       } else {
         minorOnlyCycles = 0;
@@ -693,6 +729,60 @@ ${diffAfter.slice(0, 2000)}`,
       return result.result;
     } catch {
       return "（判断理由の生成に失敗しました）";
+    }
+  }
+
+  private async judgeMinorAcceptance(
+    issues: ReviewIssue[],
+    diffHistory: string,
+    specPath: string,
+  ): Promise<{ safe: boolean; reason: string }> {
+    const issueText = issues
+      .map((i) => `[${i.severity}] ${i.file}:${i.line ?? "?"} - ${i.description}`)
+      .join("\n");
+    const spec = readFileSync(specPath, "utf-8");
+
+    try {
+      const result = await runClaude(
+        {
+          prompt: `あなたは第三者のコードレビュアーです。
+以下の minor 指摘について、2回の修正試行後も解消されていません。
+この指摘を許容（対応しない）して安全かどうか判断してください。
+
+## 未解消の指摘
+${issueText}
+
+## 修正試行の履歴（diff）
+${diffHistory.slice(0, 3000)}
+
+## 仕様書
+${spec.slice(0, 3000)}
+
+## 判断基準
+- 機能の正確性に影響するか
+- 保守性に深刻な影響を与えるか
+- 仕様書の要件を満たしているか
+
+## 回答形式（厳守）
+{"safe": true, "reason": "判断理由"}
+または
+{"safe": false, "reason": "判断理由"}`,
+          allowedTools: ["Read"],
+          outputFormat: "json",
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        },
+        this.logger,
+      );
+
+      const cleaned = result.result.replace(/```(?:json)?\s*\n([\s\S]*?)```/g, "$1");
+      const parsed = JSON.parse(cleaned) as { safe?: boolean; reason?: string };
+      return {
+        safe: parsed.safe ?? true,
+        reason: parsed.reason ?? "（判断理由なし）",
+      };
+    } catch {
+      // フォールバック: 判断失敗時は safe=true（ハーネスを止めない）
+      return { safe: true, reason: "（第三者判断の生成に失敗。許容として扱う）" };
     }
   }
 

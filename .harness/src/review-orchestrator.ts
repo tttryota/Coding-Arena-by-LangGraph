@@ -699,11 +699,14 @@ ${constraint}`,
       params.targetFiles = await params.rescanFiles();
     }
 
-    // 対象ファイルが空ならリント/テストをスキップ（全体に広がるのを防止）
+    // 対象ファイルが空ならリントをスキップ（全体に広がるのを防止）
     if (params.targetFiles.length > 0) {
       await this.lintGuard.check(params.targetFiles);
     }
-    await this.runTests(params.testCommand);
+    // テストレビュー時は実装が未生成のためテスト実行をスキップ
+    if (params.reviewMode !== "test") {
+      await this.runTests(params.testCommand);
+    }
   }
 
   private async runTests(

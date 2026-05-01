@@ -222,6 +222,24 @@ export class Boundary {
     ];
   }
 
+  implAllowedTools(scope: string): string[] {
+    const category = scope.includes("/") ? scope.split("/")[0] : scope;
+    return [
+      "Read",
+      `Write(backend/${category}/*.py)`,
+      `Edit(backend/${category}/*.py)`,
+    ];
+  }
+
+  testAllowedTools(scope: string): string[] {
+    const category = scope.includes("/") ? scope.split("/")[0] : scope;
+    return [
+      "Read",
+      `Write(backend/${category}/tests/*)`,
+      `Edit(backend/${category}/tests/*)`,
+    ];
+  }
+
   // === git 操作 ===
 
   async stageFiles(scope: string): Promise<void> {

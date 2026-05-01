@@ -23,6 +23,8 @@ type ReviewParams = {
   scopeAllowedTools: string[];
   getFileDiff?: (files: string[]) => Promise<string>;
   designDecisions?: string[];
+  reviewMode: "test" | "implementation";
+  testCasesPath?: string;
 };
 
 export class ReviewOrchestrator {
@@ -52,8 +54,59 @@ export class ReviewOrchestrator {
     this.records = [];
     const results: ReviewResult[] = [];
 
+    if (params.reviewMode === "test") {
+      return this.runTestReview(params, results);
+    }
+    return this.runImplementationReview(params, results);
+  }
+
+  private async runTestReview(
+    params: ReviewParams,
+    results: ReviewResult[],
+  ): Promise<ReviewResult[]> {
+    this.logger.log(EVENT.REVIEW_START, { mode: "test-2-step" });
+
+    // Step 1: テスト品質チェック（テストケース文書との整合性）
+    const step1Result = await this.reviewStep(
+      () => this.selfReviewTestQuality(
+        params.targetFiles, params.specPath, params.testCasesPath ?? "",
+      ),
+      params,
+    );
+    results.push(step1Result);
+
+    // Step 2: Codex レビュー（テストデータの妥当性）
+    if (this.codexAvailable) {
+      try {
+        const step2Result = await this.reviewStep(
+          () => this.codexReview(params.targetFiles, params.specPath),
+          params,
+        );
+        results.push(step2Result);
+      } catch (error: unknown) {
+        if (isCodexRateLimit(error)) {
+          this.logger.log(EVENT.CODEX_RATE_LIMITED, { fallback: "dual_claude" });
+          this.codexAvailable = false;
+          const dualResult = await this.runDualStep(params);
+          results.push(...dualResult);
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      const dualResult = await this.runDualStep(params);
+      results.push(...dualResult);
+    }
+
+    return results;
+  }
+
+  private async runImplementationReview(
+    params: ReviewParams,
+    results: ReviewResult[],
+  ): Promise<ReviewResult[]> {
     this.logger.log(EVENT.REVIEW_START, {
-      mode: this.codexAvailable ? "3-step" : "2-step",
+      mode: this.codexAvailable ? "impl-3-step" : "impl-2-step",
     });
 
     // Step 1: セルフレビュー（レビュー観点チェック）
@@ -79,9 +132,7 @@ export class ReviewOrchestrator {
         results.push(step3Result);
       } catch (error: unknown) {
         if (isCodexRateLimit(error)) {
-          this.logger.log(EVENT.CODEX_RATE_LIMITED, {
-            fallback: "dual_claude",
-          });
+          this.logger.log(EVENT.CODEX_RATE_LIMITED, { fallback: "dual_claude" });
           this.codexAvailable = false;
           const dualResult = await this.runDualStep(params);
           results.push(...dualResult);
@@ -90,7 +141,6 @@ export class ReviewOrchestrator {
         }
       }
     } else {
-      // 2ステップフロー
       const dualResult = await this.runDualStep(params);
       results.push(...dualResult);
     }
@@ -206,6 +256,54 @@ export class ReviewOrchestrator {
       "review_cycle",
       `レビューが ${MAX_REVIEW_CYCLES} サイクルで収束しませんでした`,
     );
+  }
+
+  private async selfReviewTestQuality(
+    targetFiles: string[],
+    specPath: string,
+    testCasesPath: string,
+  ): Promise<ReviewResult> {
+    const fileContents = this.readFiles(targetFiles);
+    const spec = readFileSync(specPath, "utf-8");
+    const testCases = testCasesPath ? readFileSync(testCasesPath, "utf-8") : "";
+
+    const prompt = `あなたはテストコードのレビュアーです。以下のテストコードを、テストケース文書と仕様書に照らして網羅的にレビューしてください。
+該当する問題を全て一度に列挙してください。
+
+## テストコード
+${fileContents}
+
+## テストケース文書
+${testCases}
+
+## 仕様書
+${spec}
+
+## 観点
+- テストケース文書の全件がテストコードでカバーされているか
+- テストケース文書にないテストを独自に追加していないか
+- 1つのテストケースが複数のテスト関数に不要に分割されていないか（既存テストのアサート追加で済むものを別テストにしていないか）
+- テスト種類ごとの検証焦点に応じた検証がされているか（基本動作は全フィールド、フィルタは含む/含まないの確認）
+
+## レビュースコープの制約
+- テストケースの追加提案はしない（テストケース文書にないテストの提案は design フェーズの責務）
+- 仕様書のスコープ外セクションに記載された項目に関するテスト不足は指摘しない
+
+## severity の判定基準
+- critical: テストケース文書の項目が完全に欠落
+- major: テストのアサーションが検証焦点を満たしていない、テストケース文書との不整合
+- minor: テストの冗長性、命名の改善提案
+
+## 回答形式
+{"issues": [{"file": "ファイルパス", "line": 行番号, "severity": "critical|major|minor", "description": "指摘内容"}]}`;
+
+    const result = await runClaude(
+      { prompt, allowedTools: ["Read"], outputFormat: "json", timeoutMs: DEFAULT_TIMEOUT_MS },
+      this.logger,
+    );
+
+    this.logger.log(EVENT.SELF_REVIEW, { step: "test_quality" });
+    return this.parseReviewResult("test_self_quality", result.result);
   }
 
   private async selfReviewCriteria(

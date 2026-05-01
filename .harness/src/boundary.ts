@@ -149,15 +149,30 @@ export class Boundary {
 
   async findPythonFiles(scope: string): Promise<string[]> {
     const category = scope.includes("/") ? scope.split("/")[0] : scope;
-    const dirs = [
+    return this.findPythonFilesInDirs([
       join(this.projectRoot, "backend", category),
       join(this.projectRoot, "backend", category, "tests"),
-    ];
+    ]);
+  }
 
+  async findImplementationFiles(scope: string): Promise<string[]> {
+    const category = scope.includes("/") ? scope.split("/")[0] : scope;
+    const dir = join(this.projectRoot, "backend", category);
+    const allFiles = await this.findPythonFilesInDirs([dir]);
+    return allFiles.filter((f) => !f.includes("/tests/"));
+  }
+
+  async findTestFiles(scope: string): Promise<string[]> {
+    const category = scope.includes("/") ? scope.split("/")[0] : scope;
+    return this.findPythonFilesInDirs([
+      join(this.projectRoot, "backend", category, "tests"),
+    ]);
+  }
+
+  private async findPythonFilesInDirs(dirs: string[]): Promise<string[]> {
     const files: string[] = [];
     for (const dir of dirs) {
       if (!existsSync(dir)) continue;
-      // ディレクトリ自体が symlink でプロジェクト外を指す場合を拒否
       if (lstatSync(dir).isSymbolicLink()) {
         const realDir = realpathSync(dir);
         const boundary = this.realRoot.endsWith("/") ? this.realRoot : this.realRoot + "/";
@@ -181,7 +196,6 @@ export class Boundary {
         if (execError.code === "ENOENT") {
           throw new GuardError("find コマンドが見つかりません。");
         }
-        // fail-closed: find の非ゼロ終了は未検査ファイルが残る可能性があるためエラー
         throw new GuardError(
           `${dir} のファイル探索に失敗しました。権限やディレクトリ構造を確認してください。\n${execError.stderr ?? ""}`,
         );

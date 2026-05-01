@@ -84,6 +84,9 @@ ${spec}
       root,
     });
 
+    // テストレビュー（2ステップ: self_quality + codex）
+    await this.runTestReview(reviewOrchestrator, plan, testPath);
+
     // RED 確認
     console.log("テスト実行中（RED確認）...");
     const redResult = await this.runTests(testPath, { allowCollectionError: true });
@@ -91,7 +94,7 @@ ${spec}
     if (redResult.passed) {
       console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
       logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: redResult.output });
-      await this.runReview(reviewOrchestrator, plan, criteriaPaths, testPath);
+      await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
       this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
       console.log("完了しました。");
       return;
@@ -166,8 +169,8 @@ ${spec}`;
         const diffLines = await this.boundary.countDiffLines();
         driftGuard.checkDiffScope(diffLines);
 
-        // レビュー
-        await this.runReview(reviewOrchestrator, plan, criteriaPaths, testPath);
+        // 実装レビュー（3ステップ: self_criteria + self_quality + codex）
+        await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
         this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: attempt, alreadyGreen: false });
         console.log("完了しました。");
         return;
@@ -229,25 +232,48 @@ ${issueList}
     });
   }
 
-  private async runReview(
+  private async runTestReview(
+    orchestrator: ReviewOrchestrator,
+    plan: TaskPlan,
+    testPath: string,
+  ): Promise<void> {
+    const testFiles = await this.boundary.findTestFiles(plan.scope);
+    if (testFiles.length === 0) return;
+
+    console.log("テストレビュー実行中...");
+    await orchestrator.runReview({
+      targetFiles: testFiles,
+      specPath: resolve(this.boundary.getProjectRoot(), plan.specPath),
+      criteriaPaths: [],
+      testCommand: ["pytest", testPath, "-x", "--tb=short"],
+      rescanFiles: () => this.boundary.findTestFiles(plan.scope),
+      scopeAllowedTools: this.boundary.scopeAllowedTools(plan.scope),
+      getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
+      reviewMode: "test",
+      testCasesPath: resolve(this.boundary.getProjectRoot(), plan.testCasesPath),
+    });
+  }
+
+  private async runImplReview(
     orchestrator: ReviewOrchestrator,
     plan: TaskPlan,
     criteriaPaths: string[],
     testPath: string,
   ): Promise<void> {
-    const pyFiles = await this.boundary.findPythonFiles(plan.scope);
-    if (pyFiles.length === 0) return;
+    const implFiles = await this.boundary.findImplementationFiles(plan.scope);
+    if (implFiles.length === 0) return;
 
-    console.log("レビュー実行中...");
+    console.log("実装レビュー実行中...");
     await orchestrator.runReview({
-      targetFiles: pyFiles,
+      targetFiles: implFiles,
       specPath: resolve(this.boundary.getProjectRoot(), plan.specPath),
       criteriaPaths,
       testCommand: ["pytest", testPath, "-x", "--tb=short"],
-      rescanFiles: () => this.boundary.findPythonFiles(plan.scope),
+      rescanFiles: () => this.boundary.findImplementationFiles(plan.scope),
       scopeAllowedTools: this.boundary.scopeAllowedTools(plan.scope),
       getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
       designDecisions: plan.designDecisions,
+      reviewMode: "implementation",
     });
   }
 

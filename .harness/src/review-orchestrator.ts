@@ -86,7 +86,7 @@ export class ReviewOrchestrator {
     if (this.codexAvailable) {
       try {
         const step2Result = await this.reviewStep(
-          () => this.codexReview(params.targetFiles, params.specPath),
+          () => this.codexTestReview(params.targetFiles, params.specPath, params.testCasesPath ?? ""),
           params,
         );
         results.push(step2Result);
@@ -400,6 +400,46 @@ ${spec}
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "quality" });
     return this.parseReviewResult("self_quality", result.result);
+  }
+
+  private async codexTestReview(
+    targetFiles: string[],
+    specPath: string,
+    testCasesPath: string,
+  ): Promise<ReviewResult> {
+    const fileContents = this.readFiles(targetFiles);
+    const spec = readFileSync(specPath, "utf-8");
+    const testCases = testCasesPath ? readFileSync(testCasesPath, "utf-8") : "";
+
+    const reviewPrompt = `以下のテストコードをレビューしてください。テストケース文書と仕様書に照らして、テストデータの妥当性と検証の正確性を確認してください。
+
+## テストコード
+${fileContents}
+
+## テストケース文書
+${testCases}
+
+## 仕様書
+${spec}
+
+## レビュースコープの制約
+- テストコードのみをレビューする。実装コードへの指摘はしない
+- テストケースの追加提案はしない（design フェーズの責務）
+- テストデータが仕様書の振る舞いを正しく検証しているかに集中する
+
+JSON形式で回答: {"issues": [{"file": "パス", "line": 行番号, "severity": "critical|major|minor", "description": "内容"}]}`;
+
+    const result = await this.execCodex(reviewPrompt);
+    this.logger.logCommand("codex", ["test-review"], result);
+
+    if (result.exitCode !== 0) {
+      if (isCodexRateLimit(result)) {
+        throw { stderr: result.stderr, code: result.exitCode };
+      }
+      throw new HarnessError(`Codex 実行失敗 (exit ${result.exitCode}): ${result.stderr}`);
+    }
+
+    return this.parseReviewResult("test_codex", result.stdout);
   }
 
   private async codexReview(

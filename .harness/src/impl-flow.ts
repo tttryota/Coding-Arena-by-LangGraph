@@ -74,6 +74,9 @@ ${spec}
       logger,
     );
 
+    // テスト生成後にステージング（以降の git diff で差分を追跡可能にする）
+    await this.boundary.stageFiles(plan.scope);
+
     // リントチェック（テスト生成後は実装がまだないため mypy をスキップ）
     await this.lintCheck(lintGuard, plan.scope, "テスト生成後", {
       skipMypy: true,
@@ -135,6 +138,9 @@ ${spec}`;
         logger,
       );
       sessionId = implResult.session_id;
+
+      // 実装生成後にステージング
+      await this.boundary.stageFiles(plan.scope);
 
       // リントチェック
       await this.lintCheck(lintGuard, plan.scope, `実装後 (試行 ${attempt})`, {

@@ -210,6 +210,21 @@ export class Boundary {
 
   // === git 操作 ===
 
+  async stageFiles(scope: string): Promise<void> {
+    const category = scope.includes("/") ? scope.split("/")[0] : scope;
+    try {
+      await execFileAsync("git", ["add", `backend/${category}/`], {
+        cwd: this.projectRoot, timeout: 30_000,
+      });
+    } catch (error: unknown) {
+      const execError = error as { code?: string };
+      if (execError.code === "ENOENT") {
+        throw new GuardError("git が見つかりません。");
+      }
+      throw new GuardError("git add の実行に失敗しました。");
+    }
+  }
+
   async getCurrentCommitHash(): Promise<string> {
     try {
       const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], {

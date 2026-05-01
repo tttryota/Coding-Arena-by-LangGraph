@@ -37,7 +37,7 @@ markdown-toc の全 Phase（Phase 1-3）を一括実装する。
 - 他モジュールとの連携
 
 ## 完了条件
-- 上記16個のテストが GREEN
+- 上記17個のテストが GREEN
 - ruff / mypy がパス
 - レビュー完了
 

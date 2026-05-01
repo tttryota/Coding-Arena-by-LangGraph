@@ -311,46 +311,22 @@ export class Boundary {
   async getFileDiff(files: string[]): Promise<string> {
     if (files.length === 0) return "";
 
-    const MAX_DIFF_SIZE = 100 * 1024; // 100KB
-    const parts: string[] = [];
-
     // 各ファイルの境界チェック
     for (const f of files) {
       this.assertWithinProject(resolve(this.projectRoot, f));
     }
 
-    // 追跡済みファイルの差分
+    // ステージ済みファイルに対するワーキングツリーの差分を取得
+    // （stageFiles で git add 済みなので、修正箇所のみが差分として出る）
     try {
       const { stdout } = await execFileAsync(
-        "git", ["diff", "HEAD", "--", ...files],
+        "git", ["diff", "--", ...files],
         { cwd: this.projectRoot, maxBuffer: 10 * 1024 * 1024, timeout: LOCAL_CMD_TIMEOUT_MS },
       );
-      if (stdout.trim()) parts.push(stdout);
+      return stdout;
     } catch {
-      parts.push("(git diff 取得失敗)");
+      return "(git diff 取得失敗)";
     }
-
-    // 未追跡ファイルの内容（新規作成分）
-    for (const f of files) {
-      try {
-        await execFileAsync("git", ["ls-files", "--error-unmatch", f], { cwd: this.projectRoot, timeout: 30_000 });
-      } catch {
-        // git に追跡されていないファイル → 内容を diff 風に出力
-        try {
-          const { size } = lstatSync(f);
-          if (size > MAX_DIFF_SIZE) {
-            parts.push(`(${f}: ${size} bytes — サイズ上限超過のためスキップ)`);
-            continue;
-          }
-          const content = readFileSync(f, "utf-8");
-          parts.push(`--- /dev/null\n+++ ${f}\n${content.split("\n").map((l) => `+${l}`).join("\n")}`);
-        } catch {
-          parts.push(`(${f}: 読み取り失敗)`);
-        }
-      }
-    }
-
-    return parts.join("\n");
   }
 
   // === frontmatter パース ===

@@ -1,4 +1,4 @@
-import { mkdirSync, appendFileSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, appendFileSync, writeFileSync, readFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandResult, CheckpointData } from "./types.ts";
 
@@ -108,6 +108,13 @@ export class HarnessLogger {
       return JSON.parse(readFileSync(checkpointPath, "utf-8")) as CheckpointData;
     } catch {
       return null;
+    }
+  }
+
+  clearCheckpoint(): void {
+    const checkpointPath = join(this.logDir, "checkpoint.json");
+    if (existsSync(checkpointPath)) {
+      unlinkSync(checkpointPath);
     }
   }
 

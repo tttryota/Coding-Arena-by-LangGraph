@@ -50,8 +50,15 @@ export class ReviewOrchestrator {
     return [...this.records];
   }
 
+  restoreRecords(records: ReviewRecord[]): void {
+    this.records = [...records];
+  }
+
   async runReview(params: ReviewParams): Promise<ReviewResult[]> {
-    this.records = [];
+    // テストレビューは records をリセット、実装レビューは追記
+    if (params.reviewMode === "test") {
+      this.records = [];
+    }
     const results: ReviewResult[] = [];
 
     if (params.reviewMode === "test") {

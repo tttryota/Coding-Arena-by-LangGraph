@@ -44,6 +44,10 @@ export class ImplFlow {
 
     if (resumeFrom) {
       console.log(`チェックポイントから再開: ${resumeFrom} 以降を実行`);
+      // 前回のレビュー記録を復元
+      if (checkpoint?.records && checkpoint.records.length > 0) {
+        reviewOrchestrator.restoreRecords(checkpoint.records);
+      }
     }
 
     // ガードチェック
@@ -120,6 +124,7 @@ ${spec}
         logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: redResult.output });
         await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
         this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
+        logger.clearCheckpoint();
         console.log("完了しました。");
         return;
       }
@@ -208,6 +213,7 @@ ${spec}`;
         // 実装レビュー（3ステップ: self_criteria + self_quality + codex）
         await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
         this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: attempt, alreadyGreen: false });
+        logger.clearCheckpoint();
         console.log("完了しました。");
         return;
       }

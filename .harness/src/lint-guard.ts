@@ -116,12 +116,16 @@ export class LintGuard {
   }
 
   async runMypy(targetFiles: string[]): Promise<LintViolation[]> {
+    // テストファイルは mypy --strict の対象外（重複モジュール検出を回避）
+    const nonTestFiles = targetFiles.filter((f) => !f.includes("/tests/"));
+    if (nonTestFiles.length === 0) return [];
+
     const configPath = `${this.projectRoot}/backend/pyproject.toml`;
     const result = await this.exec("mypy", [
       "--config-file",
       configPath,
       "--strict",
-      ...targetFiles,
+      ...nonTestFiles,
     ]);
 
     this.logger.logCommand("mypy", ["--strict", ...targetFiles], result);

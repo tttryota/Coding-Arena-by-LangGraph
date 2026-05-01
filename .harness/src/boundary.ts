@@ -151,7 +151,7 @@ export class Boundary {
     const category = scope.includes("/") ? scope.split("/")[0] : scope;
     const dirs = [
       join(this.projectRoot, "backend", category),
-      join(this.projectRoot, "tests", "backend", category),
+      join(this.projectRoot, "backend", category, "tests"),
     ];
 
     const files: string[] = [];
@@ -192,7 +192,7 @@ export class Boundary {
 
   testPathForScope(scope: string): string {
     const category = scope.includes("/") ? scope.split("/")[0] : scope;
-    return join("tests", "backend", category);
+    return join("backend", category, "tests");
   }
 
   /**
@@ -204,9 +204,7 @@ export class Boundary {
     return [
       "Read",
       `Write(backend/${category}/*)`,
-      `Write(tests/backend/${category}/*)`,
       `Edit(backend/${category}/*)`,
-      `Edit(tests/backend/${category}/*)`,
     ];
   }
 
@@ -251,7 +249,6 @@ export class Boundary {
     const category = scope.includes("/") ? scope.split("/")[0] : scope;
     const allowedPrefixes = [
       `backend/${category}/`,
-      `tests/backend/${category}/`,
       `docs/reviews/`,
     ];
 

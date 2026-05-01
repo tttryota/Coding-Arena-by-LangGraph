@@ -47,11 +47,12 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 - `validateScope(scope)`: `カテゴリ/名前` 形式を強制 + 各セグメントを検証
 
 **ファイル探索**:
-- `findPythonFiles(scope)`: `find` で `.py` ファイルを探索。symlink ディレクトリ・ファイルの境界チェック付き。失敗は fail-closed
-- `scopeAllowedTools(scope)`: Claude の Write/Edit をスコープ内に限定するパターン生成
+- `findPythonFiles(scope)`: `backend/{category}/` と `backend/{category}/tests/` から `.py` ファイルを探索。symlink ディレクトリ・ファイルの境界チェック付き。失敗は fail-closed
+- `testPathForScope(scope)`: `backend/{category}/tests` を返す（テストは各カテゴリ内に配置）
+- `scopeAllowedTools(scope)`: Claude の Write/Edit を `backend/{category}/*` に限定するパターン生成（テストディレクトリも含む）
 
 **変更検証**:
-- `verifyChangedFilesWithinScope(scope)`: `git diff` + `git ls-files --others` でスコープ外変更を検出。git 失敗は fail-closed
+- `verifyChangedFilesWithinScope(scope)`: `git diff` + `git ls-files --others` でスコープ外変更を検出。許可プレフィクスは `backend/{category}/` と `docs/reviews/`。git 失敗は fail-closed
 
 **ガード**:
 - `implementationGuard(plan)`: 仕様書・テストケースの存在・承認・scope 妥当性を一括検証

@@ -50,7 +50,7 @@ select = [
 ignore = ["D", "ANN", "ERA", "FIX", "TD", "E501", "RET504"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "N", "PLR0915", "ARG"]
+"**/tests/test_*.py" = ["S101", "N", "PLR0915", "ARG"]
 
 [tool.ruff.lint.pylint]
 max-args = 4             # review-criteria: 引数4つ以内

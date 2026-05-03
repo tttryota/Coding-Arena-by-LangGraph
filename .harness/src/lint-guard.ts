@@ -1,42 +1,145 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { resolve } from "node:path";
 import type { HarnessLogger } from "./logger.ts";
 import { DriftError, HarnessError, ESCALATION_LEVEL, EVENT } from "./types.ts";
 import type { LintViolation } from "./types.ts";
-
-const execFileAsync = promisify(execFile);
+import type { LintAdapter, LintAdapterContext } from "./tool-adapter.ts";
+import { runTool } from "./launcher.ts";
+import type { LauncherOptions } from "./launcher.ts";
 
 const MAX_LINT_RETRIES = 5;
-const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 
 export class LintGuard {
   private logger: HarnessLogger;
-  private projectRoot: string;
+  private adapters: LintAdapter[];
+  private launcherOptions: LauncherOptions;
 
-  constructor(logger: HarnessLogger, projectRoot: string) {
+  constructor(
+    logger: HarnessLogger,
+    adapters: LintAdapter[],
+    launcherOptions: LauncherOptions,
+  ) {
     this.logger = logger;
-    this.projectRoot = projectRoot;
+    this.adapters = adapters;
+    this.launcherOptions = launcherOptions;
   }
 
   async check(
     targetFiles: string[],
     options?: {
-      skipMypy?: boolean;
       claudeFix?: (violations: LintViolation[]) => Promise<void>;
+      rescanFiles?: () => Promise<string[]>;
     },
   ): Promise<void> {
+    let currentFiles = targetFiles;
     for (let attempt = 1; attempt <= MAX_LINT_RETRIES; attempt++) {
-      const formatOk = await this.runRuffFormat(targetFiles);
-      if (!formatOk) {
-        throw new HarnessError("ruff format が失敗しました。設定を確認してください。");
+      // claudeFix 後にファイルが追加/リネームされた可能性があるため再スキャン
+      if (attempt > 1 && options?.rescanFiles) {
+        currentFiles = await options.rescanFiles();
       }
+      const allViolations: LintViolation[] = [];
 
-      // ruff --fix で自動修正可能なものを先に処理
-      await this.autoFix(targetFiles);
+      for (const adapter of this.adapters) {
+        const isProjectMode = adapter.filePass === "project";
 
-      const ruffViolations = await this.runRuffCheck(targetFiles);
-      const mypyViolations = options?.skipMypy ? [] : await this.runMypy(targetFiles);
-      const allViolations = [...ruffViolations, ...mypyViolations];
+        // adapter の fileExtensions でまず絞り込み、その上で fileFilter を適用
+        const extSet = new Set(adapter.fileExtensions.map((ext) => `.${ext}`));
+        let filteredFiles = currentFiles.filter((f) => {
+          const dot = f.lastIndexOf(".");
+          return dot !== -1 && extSet.has(f.slice(dot).toLowerCase());
+        });
+        if (adapter.fileFilter) {
+          filteredFiles = filteredFiles.filter(adapter.fileFilter);
+        }
+        // files モードでは対象ファイルがなければスキップ
+        // project モードでは scope 内ファイルの有無に関わらず実行（フィルタ用に保持）
+        if (!isProjectMode && filteredFiles.length === 0) continue;
+
+        const ctx: LintAdapterContext = {
+          configArgs:
+            adapter.resolveConfigArgs?.(this.launcherOptions.toolRoot) ?? [],
+        };
+
+        if (isProjectMode) {
+          // project モード: ファイル引数なしで check のみ実行
+          const checkArgs = adapter.checkArgs([], ctx);
+          const checkResult = await runTool(
+            adapter.name,
+            checkArgs,
+            this.launcherOptions,
+          );
+          this.logger.logCommand(adapter.name, checkArgs, checkResult);
+
+          const parsed = adapter.parseOutput(
+            checkResult.stdout,
+            checkResult.stderr,
+            checkResult.exitCode,
+          );
+
+          if (parsed.kind === "tool-error") {
+            throw new HarnessError(
+              `${adapter.name} が設定エラーまたは内部エラーで終了しました: ${parsed.message}`,
+            );
+          }
+          if (parsed.kind === "violations") {
+            // scope 内ファイルのみにフィルタ
+            // ツール出力のパスは toolRoot (cwd) 相対の場合があるため toolRoot 基準で resolve
+            const toolCwd = resolve(this.launcherOptions.toolRoot);
+            const scopeSet = new Set(filteredFiles.map((f) => resolve(f)));
+            const scopedViolations = parsed.violations.filter(
+              (v) => scopeSet.has(resolve(toolCwd, v.file)),
+            );
+            allViolations.push(...scopedViolations);
+          }
+        } else {
+          // files モード
+          // format
+          if (adapter.formatArgs) {
+            const formatResult = await runTool(
+              adapter.name,
+              adapter.formatArgs(filteredFiles, ctx),
+              this.launcherOptions,
+            );
+            if (formatResult.exitCode !== 0) {
+              throw new HarnessError(
+                `${adapter.name} format が失敗しました。設定を確認してください。\n${formatResult.stderr}`,
+              );
+            }
+          }
+
+          // auto-fix
+          if (adapter.fixArgs) {
+            await runTool(
+              adapter.name,
+              adapter.fixArgs(filteredFiles, ctx),
+              this.launcherOptions,
+            );
+          }
+
+          // check
+          const checkArgs = adapter.checkArgs(filteredFiles, ctx);
+          const checkResult = await runTool(
+            adapter.name,
+            checkArgs,
+            this.launcherOptions,
+          );
+          this.logger.logCommand(adapter.name, checkArgs, checkResult);
+
+          const parsed = adapter.parseOutput(
+            checkResult.stdout,
+            checkResult.stderr,
+            checkResult.exitCode,
+          );
+
+          if (parsed.kind === "tool-error") {
+            throw new HarnessError(
+              `${adapter.name} が設定エラーまたは内部エラーで終了しました: ${parsed.message}`,
+            );
+          }
+          if (parsed.kind === "violations") {
+            allViolations.push(...parsed.violations);
+          }
+        }
+      }
 
       if (allViolations.length === 0) {
         this.logger.log(EVENT.LINT_PASSED, { attempt });
@@ -49,7 +152,6 @@ export class LintGuard {
         violations: allViolations,
       });
 
-      // ruff --fix で直せない違反が残っている場合、claude -p で修正を試みる
       if (attempt < MAX_LINT_RETRIES && options?.claudeFix) {
         await options.claudeFix(allViolations);
       }
@@ -60,138 +162,5 @@ export class LintGuard {
       "lint_retry",
       `リンター違反が ${MAX_LINT_RETRIES} 回の修正後も残っています`,
     );
-  }
-
-  async runRuffCheck(targetFiles: string[]): Promise<LintViolation[]> {
-    const configPath = `${this.projectRoot}/backend/pyproject.toml`;
-    const result = await this.exec("ruff", [
-      "check",
-      "--config",
-      configPath,
-      "--output-format",
-      "json",
-      ...targetFiles,
-    ]);
-
-    this.logger.logCommand("ruff", ["check", ...targetFiles], result);
-
-    if (result.exitCode === 0) return [];
-
-    try {
-      const parsed = JSON.parse(result.stdout) as Array<{
-        filename: string;
-        location: { row: number };
-        message: string;
-        code: string;
-      }>;
-      return parsed.map((v) => ({
-        tool: "ruff_check",
-        file: v.filename,
-        line: v.location.row,
-        message: `${v.code}: ${v.message}`,
-      }));
-    } catch {
-      return [
-        {
-          tool: "ruff_check",
-          file: "",
-          line: 0,
-          message: result.stderr || result.stdout,
-        },
-      ];
-    }
-  }
-
-  async runRuffFormat(targetFiles: string[]): Promise<boolean> {
-    const configPath = `${this.projectRoot}/backend/pyproject.toml`;
-    const result = await this.exec("ruff", [
-      "format",
-      "--config",
-      configPath,
-      ...targetFiles,
-    ]);
-
-    this.logger.logCommand("ruff", ["format", ...targetFiles], result);
-    return result.exitCode === 0;
-  }
-
-  async runMypy(targetFiles: string[]): Promise<LintViolation[]> {
-    // テストファイルは mypy --strict の対象外（重複モジュール検出を回避）
-    const nonTestFiles = targetFiles.filter((f) => !f.includes("/tests/"));
-    if (nonTestFiles.length === 0) return [];
-
-    const configPath = `${this.projectRoot}/backend/pyproject.toml`;
-    const result = await this.exec("mypy", [
-      "--config-file",
-      configPath,
-      "--strict",
-      ...nonTestFiles,
-    ]);
-
-    this.logger.logCommand("mypy", ["--strict", ...targetFiles], result);
-
-    if (result.exitCode === 0) return [];
-
-    const violations: LintViolation[] = [];
-    for (const line of result.stdout.split("\n")) {
-      const match = /^(.+):(\d+): error: (.+)$/.exec(line);
-      if (match) {
-        violations.push({
-          tool: "mypy",
-          file: match[1],
-          line: parseInt(match[2], 10),
-          message: match[3],
-        });
-      }
-    }
-
-    // 非ゼロ終了なのに violations が空 = 設定エラーやクラッシュ
-    if (violations.length === 0 && result.exitCode !== 0) {
-      throw new HarnessError(
-        `mypy が非ゼロで終了しましたが、型エラーを検出できませんでした。設定エラーの可能性があります。\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
-      );
-    }
-
-    return violations;
-  }
-
-  private async autoFix(targetFiles: string[]): Promise<void> {
-    const configPath = `${this.projectRoot}/backend/pyproject.toml`;
-    await this.exec("ruff", [
-      "check",
-      "--fix",
-      "--config",
-      configPath,
-      ...targetFiles,
-    ]);
-  }
-
-  private async exec(
-    command: string,
-    args: string[],
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    try {
-      const { stdout, stderr } = await execFileAsync(command, args, {
-        cwd: this.projectRoot,
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: LOCAL_CMD_TIMEOUT_MS,
-      });
-      return { stdout, stderr, exitCode: 0 };
-    } catch (error: unknown) {
-      const execError = error as {
-        stdout?: string;
-        stderr?: string;
-        code?: number | string;
-      };
-      // ENOENT: コマンドが見つからない場合は即座にエラー
-      if (execError.code === "ENOENT") {
-        throw new HarnessError(`${command} が見つかりません。インストールしてください。`);
-      }
-      return {
-        stdout: execError.stdout ?? "",
-        stderr: execError.stderr ?? "",
-        exitCode: typeof execError.code === "number" ? execError.code : 1,
-      };
-    }
   }
 }

@@ -1,24 +1,21 @@
 import { readFileSync } from "node:fs";
-import { spawn } from "node:child_process";
 import type { HarnessLogger } from "./logger.ts";
 import type { LintGuard } from "./lint-guard.ts";
-import { runClaude } from "./claude-runner.ts";
-import { DriftError, HarnessError, ESCALATION_LEVEL, EVENT } from "./types.ts";
-import type { ReviewIssue, ReviewResult, ReviewRecord, CommandResult } from "./types.ts";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import type { RunnerRegistry } from "./runner-registry.ts";
+import type { FlowStep } from "./steps.ts";
+import { FLOW_STEP } from "./steps.ts";
+import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT } from "./types.ts";
+import type { ReviewIssue, ReviewResult, ReviewRecord } from "./types.ts";
+import { loadTemplate, renderTemplate } from "./templates.ts";
 
-const execFileAsync = promisify(execFile);
 const MAX_REVIEW_CYCLES = 5;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-const CODEX_TIMEOUT_MS = 20 * 60 * 1000;
-const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000;
 
 type ReviewParams = {
   targetFiles: string[];
   specPath: string;
   criteriaPaths: string[];
-  testCommand: string[];
+  runTests?: () => Promise<void>;
   rescanFiles?: () => Promise<string[]>;
   scopeAllowedTools: string[];
   getFileDiff?: (files: string[]) => Promise<string>;
@@ -27,23 +24,30 @@ type ReviewParams = {
   testCasesPath?: string;
 };
 
+type PageReviewParams = ReviewParams & {
+  componentSpecPath: string;
+  figmaSlice: string;
+  dependenciesText: string;
+  browserScenariosText: string;
+};
+
 export class ReviewOrchestrator {
   private logger: HarnessLogger;
   private lintGuard: LintGuard;
   private projectRoot: string;
-  private codexAvailable: boolean;
+  private registry: RunnerRegistry;
   private records: ReviewRecord[] = [];
 
   constructor(
     logger: HarnessLogger,
     lintGuard: LintGuard,
     projectRoot: string,
-    options?: { codexAvailable?: boolean },
+    registry: RunnerRegistry,
   ) {
     this.logger = logger;
     this.lintGuard = lintGuard;
     this.projectRoot = projectRoot;
-    this.codexAvailable = options?.codexAvailable ?? true;
+    this.registry = registry;
   }
 
   getRecords(): ReviewRecord[] {
@@ -67,6 +71,145 @@ export class ReviewOrchestrator {
     return this.runImplementationReview(params, results);
   }
 
+  async runPageReview(params: PageReviewParams): Promise<ReviewResult[]> {
+    const results: ReviewResult[] = [];
+    let minorOnlyCycles = 0;
+
+    this.logger.log(EVENT.REVIEW_START, { mode: "page-3-step" });
+
+    for (let cycle = 0; cycle < MAX_REVIEW_CYCLES; cycle++) {
+      const diffBefore = params.getFileDiff
+        ? await params.getFileDiff(params.targetFiles)
+        : "";
+
+      const cycleResults = [
+        await this.pageDesignReview(
+          params.targetFiles,
+          params.specPath,
+          params.componentSpecPath,
+          params.dependenciesText,
+          params.figmaSlice,
+        ),
+        await this.pageBehaviorReview(
+          params.targetFiles,
+          params.specPath,
+          params.browserScenariosText,
+        ),
+        await this.pageCodeReview(
+          params.targetFiles,
+          params.criteriaPaths,
+        ),
+      ];
+      results.push(...cycleResults);
+
+      const combinedIssues = cycleResults.flatMap((result) => result.issues);
+      if (combinedIssues.length === 0) {
+        this.records.push({
+          step: "page_review",
+          cycle: cycle + 1,
+          reviewer: "page_review",
+          findings: [],
+          decision: "lgtm",
+          diffBefore,
+          diffAfter: "",
+          judgmentSummary: "指摘なし",
+        });
+        return results;
+      }
+
+      const hasParseFailure = combinedIssues.some(
+        (issue) => issue.file === "" && issue.severity === "critical",
+      );
+      if (hasParseFailure) {
+        this.records.push({
+          step: "page_review",
+          cycle: cycle + 1,
+          reviewer: "page_review",
+          findings: combinedIssues,
+          decision: "escalated",
+          diffBefore,
+          diffAfter: "",
+          judgmentSummary: "ページレビュー結果のパースに失敗。人間の確認が必要。",
+        });
+        throw new DriftError(
+          ESCALATION_LEVEL.LEVEL_3,
+          "page_review_parse_failure",
+          "ページレビュー結果のパースに失敗しました。人間の確認が必要です。",
+        );
+      }
+
+      const hasCriticalOrMajor = combinedIssues.some(
+        (issue) => issue.severity === "critical" || issue.severity === "major",
+      );
+
+      if (!hasCriticalOrMajor) {
+        minorOnlyCycles++;
+        if (minorOnlyCycles >= 2) {
+          const verdict = await this.judgeMinorAcceptance(
+            combinedIssues,
+            diffBefore,
+            params.specPath,
+          );
+          if (verdict.safe) {
+            this.records.push({
+              step: "page_review",
+              cycle: cycle + 1,
+              reviewer: "page_review",
+              findings: combinedIssues,
+              decision: "accepted",
+              diffBefore,
+              diffAfter: "",
+              judgmentSummary: verdict.reason,
+            });
+            return results;
+          }
+        }
+      } else {
+        minorOnlyCycles = 0;
+      }
+
+      await this.applyFixes(combinedIssues, params);
+      const diffAfter = params.getFileDiff
+        ? await params.getFileDiff(params.targetFiles)
+        : "";
+      const judgmentSummary = await this.generateJudgmentSummary(combinedIssues, diffBefore, diffAfter);
+      this.records.push({
+        step: "page_review",
+        cycle: cycle + 1,
+        reviewer: "page_review",
+        findings: combinedIssues,
+        decision: "fixed",
+        diffBefore,
+        diffAfter,
+        judgmentSummary,
+      });
+    }
+
+    throw new DriftError(
+      ESCALATION_LEVEL.LEVEL_1,
+      "page_review_cycle",
+      `ページレビューが ${MAX_REVIEW_CYCLES} サイクルで収束しませんでした`,
+    );
+  }
+
+  async runComponentReview(
+    targetFiles: string[],
+    criteriaPaths: string[],
+  ): Promise<ReviewResult> {
+    const fileContents = this.readFiles(targetFiles);
+    const criteria = criteriaPaths.map((p) => readFileSync(p, "utf-8")).join("\n\n");
+    const config = this.registry.getConfig();
+    const template = loadTemplate("review-impl-criteria", this.projectRoot, config.templates);
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, { fileContents, responseFormat });
+    return this.executeReview(
+      FLOW_STEP.COMPONENT_SELF_REVIEW,
+      prompt,
+      "component_self_review",
+      { appendSystemPrompt: criteria },
+    );
+  }
+
   private async runTestReview(
     params: ReviewParams,
     results: ReviewResult[],
@@ -82,8 +225,10 @@ export class ReviewOrchestrator {
     );
     results.push(step1Result);
 
-    // Step 2: Codex レビュー（テストデータの妥当性）
-    if (this.codexAvailable) {
+    // Step 2: 外部レビュー（テストデータの妥当性）
+    if (this.registry.isStepSkipped(FLOW_STEP.TEST_EXTERNAL_REVIEW)) {
+      // light フロー: 外部レビューをスキップ
+    } else {
       try {
         const step2Result = await this.reviewStep(
           () => this.codexTestReview(params.targetFiles, params.specPath, params.testCasesPath ?? ""),
@@ -91,18 +236,14 @@ export class ReviewOrchestrator {
         );
         results.push(step2Result);
       } catch (error: unknown) {
-        if (isCodexRateLimit(error)) {
-          this.logger.log(EVENT.CODEX_RATE_LIMITED, { fallback: "dual_claude" });
-          this.codexAvailable = false;
+        if (error instanceof RunnerRateLimitError) {
+          this.logger.log(EVENT.RUNNER_RATE_LIMITED, { fallback: "dual_fallback", runner: error.runnerName });
           const dualResult = await this.runDualStep(params);
           results.push(...dualResult);
         } else {
           throw error;
         }
       }
-    } else {
-      const dualResult = await this.runDualStep(params);
-      results.push(...dualResult);
     }
 
     return results;
@@ -113,7 +254,7 @@ export class ReviewOrchestrator {
     results: ReviewResult[],
   ): Promise<ReviewResult[]> {
     this.logger.log(EVENT.REVIEW_START, {
-      mode: this.codexAvailable ? "impl-3-step" : "impl-2-step",
+      mode: this.registry.isStepSkipped(FLOW_STEP.IMPL_EXTERNAL_REVIEW) ? "impl-2-step" : "impl-3-step",
     });
 
     // Step 1: セルフレビュー（レビュー観点チェック）
@@ -123,14 +264,17 @@ export class ReviewOrchestrator {
     );
     results.push(step1Result);
 
-    if (this.codexAvailable) {
-      // 3ステップフロー
-      const step2Result = await this.reviewStep(
-        () => this.selfReviewQuality(params.targetFiles, params.specPath),
-        params,
-      );
-      results.push(step2Result);
+    // Step 2: セルフレビュー（品質チェック）
+    const step2Result = await this.reviewStep(
+      () => this.selfReviewQuality(params.targetFiles, params.specPath),
+      params,
+    );
+    results.push(step2Result);
 
+    // Step 3: 外部レビュー
+    if (this.registry.isStepSkipped(FLOW_STEP.IMPL_EXTERNAL_REVIEW)) {
+      // light フロー: 外部レビューをスキップ
+    } else {
       try {
         const step3Result = await this.reviewStep(
           () => this.codexReview(params.targetFiles, params.specPath),
@@ -138,18 +282,14 @@ export class ReviewOrchestrator {
         );
         results.push(step3Result);
       } catch (error: unknown) {
-        if (isCodexRateLimit(error)) {
-          this.logger.log(EVENT.CODEX_RATE_LIMITED, { fallback: "dual_claude" });
-          this.codexAvailable = false;
+        if (error instanceof RunnerRateLimitError) {
+          this.logger.log(EVENT.RUNNER_RATE_LIMITED, { fallback: "dual_fallback", runner: error.runnerName });
           const dualResult = await this.runDualStep(params);
           results.push(...dualResult);
         } else {
           throw error;
         }
       }
-    } else {
-      const dualResult = await this.runDualStep(params);
-      results.push(...dualResult);
     }
 
     // 設計判断を accepted として記録
@@ -181,16 +321,17 @@ export class ReviewOrchestrator {
         ? await params.getFileDiff(params.targetFiles)
         : "";
 
-      const [reviewA, reviewB] = await this.dualClaudeReview(
+      const [reviewA, reviewB] = await this.dualFallbackReview(
         params.targetFiles,
         params.specPath,
+        params.reviewMode === "test" ? params.testCasesPath : undefined,
       );
 
-      this.logger.log(EVENT.CLAUDE_REVIEW, {
+      this.logger.log(EVENT.FALLBACK_REVIEW, {
         agent: "A",
         issues: reviewA.issues.length,
       });
-      this.logger.log(EVENT.CLAUDE_REVIEW, {
+      this.logger.log(EVENT.FALLBACK_REVIEW, {
         agent: "B",
         issues: reviewB.issues.length,
       });
@@ -201,9 +342,9 @@ export class ReviewOrchestrator {
       );
       if (hasParseFailure) {
         this.records.push({
-          step: "dual_claude",
+          step: "dual_fallback",
           cycle,
-          reviewer: "agent_a+agent_b",
+          reviewer: "fallback_a+fallback_b",
           findings: [...reviewA.issues, ...reviewB.issues],
           decision: "escalated",
           diffBefore,
@@ -221,9 +362,9 @@ export class ReviewOrchestrator {
 
       if (toFix.length === 0) {
         this.records.push({
-          step: "dual_claude",
+          step: "dual_fallback",
           cycle,
-          reviewer: "agent_a+agent_b",
+          reviewer: "fallback_a+fallback_b",
           findings: [],
           decision: "lgtm",
           diffBefore,
@@ -247,9 +388,9 @@ export class ReviewOrchestrator {
       const judgmentSummary = await this.generateJudgmentSummary(toFix, diffBefore, diffAfter);
 
       this.records.push({
-        step: "dual_claude",
+        step: "dual_fallback",
         cycle,
-        reviewer: "agent_a+agent_b",
+        reviewer: "fallback_a+fallback_b",
         findings: toFix,
         decision: "fixed",
         diffBefore,
@@ -273,44 +414,13 @@ export class ReviewOrchestrator {
     const fileContents = this.readFiles(targetFiles);
     const spec = readFileSync(specPath, "utf-8");
     const testCases = testCasesPath ? readFileSync(testCasesPath, "utf-8") : "";
-
-    const prompt = `あなたはテストコードのレビュアーです。以下のテストコードを、テストケース文書と仕様書に照らして網羅的にレビューしてください。
-該当する問題を全て一度に列挙してください。
-
-## テストコード
-${fileContents}
-
-## テストケース文書
-${testCases}
-
-## 仕様書
-${spec}
-
-## 観点
-- テストケース文書の全件がテストコードでカバーされているか
-- テストケース文書にないテストを独自に追加していないか
-- 1つのテストケースが複数のテスト関数に不要に分割されていないか（既存テストのアサート追加で済むものを別テストにしていないか）
-- テスト種類ごとの検証焦点に応じた検証がされているか（基本動作は全フィールド、フィルタは含む/含まないの確認）
-
-## レビュースコープの制約
-- テストケースの追加提案はしない（テストケース文書にないテストの提案は design フェーズの責務）
-- 仕様書のスコープ外セクションに記載された項目に関するテスト不足は指摘しない
-
-## severity の判定基準
-- critical: テストケース文書の項目が完全に欠落
-- major: テストのアサーションが検証焦点を満たしていない、テストケース文書との不整合
-- minor: テストの冗長性、命名の改善提案
-
-## 回答形式
-{"issues": [{"file": "ファイルパス", "line": 行番号, "severity": "critical|major|minor", "description": "指摘内容"}]}`;
-
-    const result = await runClaude(
-      { prompt, allowedTools: ["Read"], outputFormat: "json", timeoutMs: DEFAULT_TIMEOUT_MS },
-      this.logger,
-    );
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-test-quality", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, { fileContents, testCases, spec, responseFormat });
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "test_quality" });
-    return this.parseReviewResult("test_self_quality", result.result);
+    return this.executeReview(FLOW_STEP.TEST_SELF_QUALITY, prompt, "test_self_quality");
   }
 
   private async selfReviewCriteria(
@@ -321,42 +431,14 @@ ${spec}
     const criteria = criteriaPaths
       .map((p) => readFileSync(p, "utf-8"))
       .join("\n\n");
-
-    const prompt = `以下のコードをレビュー観点に照らして網羅的にレビューしてください。
-該当する違反を全て一度に列挙してください。一部だけ指摘して残りを次回に回さないでください。
-
-## 対象ファイル
-${fileContents}
-
-## レビュースコープの制約
-- テストケースの網羅性は指摘しない（テストケースの設計は design フェーズの責務であり、impl フェーズでは対象外）
-- レビュー観点ファイルに記載のないリファクタリング提案はしない
-- レビュー観点ファイルに記載のあるルール違反のみを指摘する
-
-## severity の判定基準
-- critical: 実行時エラーやデータ破損を引き起こすバグ
-- major: 仕様との不整合、エラーハンドリング規約違反（握り潰し等）
-- minor: 命名規則、マジックナンバー、関数行数超過などのスタイル違反
-
-## 回答形式
-指摘がある場合はJSON形式で回答してください:
-{"issues": [{"file": "ファイルパス", "line": 行番号, "severity": "critical|major|minor", "description": "指摘内容"}]}
-指摘がない場合は:
-{"issues": []}`;
-
-    const result = await runClaude(
-      {
-        prompt,
-        allowedTools: ["Read"],
-        appendSystemPrompt: criteria,
-        outputFormat: "json",
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
-      this.logger,
-    );
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-impl-criteria", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, { fileContents, responseFormat });
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "criteria" });
-    return this.parseReviewResult("self_criteria", result.result);
+    // Pass criteria as appendSystemPrompt option
+    return this.executeReview(FLOW_STEP.IMPL_SELF_CRITERIA, prompt, "self_criteria", { appendSystemPrompt: criteria });
   }
 
   private async selfReviewQuality(
@@ -365,41 +447,13 @@ ${fileContents}
   ): Promise<ReviewResult> {
     const fileContents = this.readFiles(targetFiles);
     const spec = readFileSync(specPath, "utf-8");
-
-    const prompt = `以下のコードにバグ、品質問題、仕様との不整合がないか網羅的にレビューしてください。
-該当する問題を全て一度に列挙してください。一部だけ指摘して残りを次回に回さないでください。
-
-## 対象ファイル
-${fileContents}
-
-## 仕様書
-${spec}
-
-## 観点
-- 仕様書の受け入れ基準を全て満たしているか
-- 仕様書の境界条件の定義と実装が一致しているか
-- エラーハンドリングが適切か
-
-## レビュースコープの制約
-- テストケースの網羅性は指摘しない（テストケースの設計は design フェーズの責務であり、impl フェーズでは対象外）
-- 仕様書に記載のない機能追加やリファクタリングは提案しない
-- 仕様書の受け入れ基準と実装の不整合のみを指摘する
-
-## severity の判定基準
-- critical: 実行時エラーやデータ破損を引き起こすバグ
-- major: 仕様との不整合、境界条件の処理が仕様と異なる
-- minor: 仕様の意図からの軽微な逸脱
-
-## 回答形式
-{"issues": [{"file": "ファイルパス", "line": 行番号, "severity": "critical|major|minor", "description": "指摘内容"}]}`;
-
-    const result = await runClaude(
-      { prompt, allowedTools: ["Read"], outputFormat: "json", timeoutMs: DEFAULT_TIMEOUT_MS },
-      this.logger,
-    );
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-impl-quality", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, { fileContents, spec, responseFormat });
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "quality" });
-    return this.parseReviewResult("self_quality", result.result);
+    return this.executeReview(FLOW_STEP.IMPL_SELF_QUALITY, prompt, "self_quality");
   }
 
   private async codexTestReview(
@@ -410,36 +464,12 @@ ${spec}
     const fileContents = this.readFiles(targetFiles);
     const spec = readFileSync(specPath, "utf-8");
     const testCases = testCasesPath ? readFileSync(testCasesPath, "utf-8") : "";
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-codex-test", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, { fileContents, testCases, spec, responseFormat });
 
-    const reviewPrompt = `以下のテストコードをレビューしてください。テストケース文書と仕様書に照らして、テストデータの妥当性と検証の正確性を確認してください。
-
-## テストコード
-${fileContents}
-
-## テストケース文書
-${testCases}
-
-## 仕様書
-${spec}
-
-## レビュースコープの制約
-- テストコードのみをレビューする。実装コードへの指摘はしない
-- テストケースの追加提案はしない（design フェーズの責務）
-- テストデータが仕様書の振る舞いを正しく検証しているかに集中する
-
-JSON形式で回答: {"issues": [{"file": "パス", "line": 行番号, "severity": "critical|major|minor", "description": "内容"}]}`;
-
-    const result = await this.execCodex(reviewPrompt);
-    this.logger.logCommand("codex", ["test-review"], result);
-
-    if (result.exitCode !== 0) {
-      if (isCodexRateLimit(result)) {
-        throw { stderr: result.stderr, code: result.exitCode };
-      }
-      throw new HarnessError(`Codex 実行失敗 (exit ${result.exitCode}): ${result.stderr}`);
-    }
-
-    return this.parseReviewResult("test_codex", result.stdout);
+    return this.executeReview(FLOW_STEP.TEST_EXTERNAL_REVIEW, prompt, "test_external");
   }
 
   private async codexReview(
@@ -448,73 +478,113 @@ JSON形式で回答: {"issues": [{"file": "パス", "line": 行番号, "severity
   ): Promise<ReviewResult> {
     const fileContents = this.readFiles(targetFiles);
     const spec = readFileSync(specPath, "utf-8");
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-codex-impl", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, { fileContents, spec, responseFormat });
 
-    const reviewPrompt = `以下のコードをレビューしてください。仕様書との整合性、バグ、品質問題を確認してください。
-
-## 対象ファイル
-${fileContents}
-
-## 仕様書
-${spec}
-
-## レビュースコープの制約
-- テストケースの網羅性は指摘しない（design フェーズの責務）
-- 仕様書に記載のない機能追加やリファクタリングは提案しない
-- 仕様書の「スコープ外」セクションに記載された項目に関する指摘はしない
-- 仕様書の「境界条件」セクションで「許容する」「既知の制限」と明記されている振る舞いは指摘しない
-
-JSON形式で回答: {"issues": [{"file": "パス", "line": 行番号, "severity": "critical|major|minor", "description": "内容"}]}`;
-
-    const result = await this.execCodex(reviewPrompt);
-    this.logger.logCommand("codex", ["review"], result);
-
-    if (result.exitCode !== 0) {
-      if (isCodexRateLimit(result)) {
-        throw { stderr: result.stderr, code: result.exitCode };
-      }
-      // Codex の非ゼロ終了（未導入、クラッシュ等）はレビュー失敗として扱う
-      throw new HarnessError(`Codex 実行失敗 (exit ${result.exitCode}): ${result.stderr}`);
-    }
-
-    return this.parseReviewResult("codex", result.stdout);
+    return this.executeReview(FLOW_STEP.IMPL_EXTERNAL_REVIEW, prompt, "impl_external");
   }
 
-  private async dualClaudeReview(
+  private async pageDesignReview(
     targetFiles: string[],
     specPath: string,
+    componentSpecPath: string,
+    dependenciesText: string,
+    figmaSlice: string,
+  ): Promise<ReviewResult> {
+    const fileContents = this.readFiles(targetFiles);
+    const spec = readFileSync(specPath, "utf-8");
+    const componentSpec = readFileSync(componentSpecPath, "utf-8");
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-page-design", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, {
+      fileContents,
+      spec,
+      componentSpec,
+      dependencies: dependenciesText,
+      figmaSlice,
+      responseFormat,
+    });
+
+    return this.executeReview(FLOW_STEP.PAGE_REVIEW_DESIGN, prompt, "page_design");
+  }
+
+  private async pageBehaviorReview(
+    targetFiles: string[],
+    specPath: string,
+    browserScenariosText: string,
+  ): Promise<ReviewResult> {
+    const fileContents = this.readFiles(targetFiles);
+    const spec = readFileSync(specPath, "utf-8");
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-page-behavior", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, {
+      fileContents,
+      spec,
+      browserScenarios: browserScenariosText,
+      responseFormat,
+    });
+
+    return this.executeReview(FLOW_STEP.PAGE_REVIEW_BEHAVIOR, prompt, "page_behavior");
+  }
+
+  private async pageCodeReview(
+    targetFiles: string[],
+    criteriaPaths: string[],
+  ): Promise<ReviewResult> {
+    const fileContents = this.readFiles(targetFiles);
+    const criteria = criteriaPaths
+      .map((p) => readFileSync(p, "utf-8"))
+      .join("\n\n");
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-impl-criteria", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, { fileContents, responseFormat });
+
+    return this.executeReview(
+      FLOW_STEP.PAGE_REVIEW_CODE,
+      prompt,
+      "page_code",
+      { appendSystemPrompt: criteria },
+    );
+  }
+
+  private async dualFallbackReview(
+    targetFiles: string[],
+    specPath: string,
+    testCasesPath?: string,
   ): Promise<[ReviewResult, ReviewResult]> {
     const fileContents = this.readFiles(targetFiles);
     const spec = readFileSync(specPath, "utf-8");
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
 
-    const prompt = `以下のコードにバグや品質問題がないかレビューしてください。
+    let prompt: string;
+    if (testCasesPath) {
+      const testCases = readFileSync(testCasesPath, "utf-8");
+      const template = loadTemplate("review-codex-test", this.projectRoot, config.templates);
+      prompt = renderTemplate(template, { fileContents, testCases, spec, responseFormat });
+    } else {
+      const template = loadTemplate("review-dual-fallback", this.projectRoot, config.templates);
+      prompt = renderTemplate(template, { fileContents, spec, responseFormat });
+    }
 
-## 対象ファイル
-${fileContents}
-
-## 仕様書
-${spec}
-
-## レビュースコープの制約
-- テストケースの網羅性は指摘しない（design フェーズの責務）
-- 仕様書に記載のない機能追加やリファクタリングは提案しない
-
-## 回答形式
-{"issues": [{"file": "ファイルパス", "line": 行番号, "severity": "critical|major|minor", "description": "指摘内容"}]}`;
-
-    const [resultA, resultB] = await Promise.all([
-      runClaude(
-        { prompt, allowedTools: ["Read"], outputFormat: "json", timeoutMs: DEFAULT_TIMEOUT_MS },
-        this.logger,
-      ),
-      runClaude(
-        { prompt, allowedTools: ["Read"], outputFormat: "json", timeoutMs: DEFAULT_TIMEOUT_MS },
-        this.logger,
-      ),
+    const fallback = this.registry.getFallbackRunner();
+    const request = {
+      prompt,
+      allowedTools: ["Read"],
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+    };
+    const [responseA, responseB] = await Promise.all([
+      fallback.run(request, this.logger),
+      fallback.run(request, this.logger),
     ]);
-
     return [
-      this.parseReviewResult("agent_a", resultA.result),
-      this.parseReviewResult("agent_b", resultB.result),
+      this.parseReviewResult("fallback_a", responseA.text),
+      this.parseReviewResult("fallback_b", responseB.text),
     ];
   }
 
@@ -546,9 +616,9 @@ ${spec}
         } else {
           // 片方のみの minor → 対応不要として記録
           this.records.push({
-            step: "dual_claude",
+            step: "dual_fallback",
             cycle: 0,
-            reviewer: issue.source === "A" ? "agent_a" : "agent_b",
+            reviewer: issue.source === "A" ? "fallback_a" : "fallback_b",
             findings: [issue],
             decision: "accepted",
             diffBefore: "",
@@ -680,7 +750,7 @@ ${spec}
         ? await params.getFileDiff(params.targetFiles)
         : "";
 
-      // 判断理由を claude -p で生成
+      // 判断理由を生成
       const judgmentSummary = await this.generateJudgmentSummary(result.issues, diffBefore, diffAfter);
 
       this.records.push({
@@ -724,22 +794,18 @@ ${spec}
 - 既存テストを壊さない
 - 振る舞いを変えない（リファクタリングのみ）`;
 
-    await runClaude(
-      {
-        prompt: `以下のレビュー指摘を修正してください。
+    const prompt = `以下のレビュー指摘を修正してください。
 
 ## 指摘一覧
 ${issueList}
 
 ## 制約
-${constraint}`,
-        allowedTools: params.scopeAllowedTools,
-        outputFormat: "json",
-        cwd: this.projectRoot,
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
-      this.logger,
-    );
+${constraint}`;
+
+    await this.executeRun(FLOW_STEP.APPLY_FIXES, prompt, {
+      allowedTools: params.scopeAllowedTools,
+      cwd: this.projectRoot,
+    });
 
     // 修正でファイルが追加された可能性があるので再スキャン
     if (params.rescanFiles) {
@@ -751,24 +817,8 @@ ${constraint}`,
       await this.lintGuard.check(params.targetFiles);
     }
     // テストレビュー時は実装が未生成のためテスト実行をスキップ
-    if (params.reviewMode !== "test") {
-      await this.runTests(params.testCommand);
-    }
-  }
-
-  private async runTests(
-    testCommand: string[],
-  ): Promise<void> {
-    const [cmd, ...args] = testCommand;
-    try {
-      await execFileAsync(cmd, args, {
-        cwd: this.projectRoot,
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: LOCAL_CMD_TIMEOUT_MS,
-      });
-    } catch (error: unknown) {
-      const execError = error as { stderr?: string };
-      throw new HarnessError(`テスト失敗: ${execError.stderr ?? "unknown error"}`);
+    if (params.reviewMode !== "test" && params.runTests) {
+      await params.runTests();
     }
   }
 
@@ -856,9 +906,7 @@ ${constraint}`,
       .join("\n");
 
     try {
-      const result = await runClaude(
-        {
-          prompt: `以下のレビュー指摘に対してコード修正が行われました。なぜこの修正が必要だったのか、どういう判断で対応したかを3行以内で日本語で説明してください。
+      const prompt = `以下のレビュー指摘に対してコード修正が行われました。なぜこの修正が必要だったのか、どういう判断で対応したかを3行以内で日本語で説明してください。
 
 ## レビュー指摘
 ${issueText}
@@ -867,14 +915,9 @@ ${issueText}
 ${diffBefore.slice(0, 2000)}
 
 ## 修正後のdiff
-${diffAfter.slice(0, 2000)}`,
-          allowedTools: ["Read"],
-          outputFormat: "json",
-          timeoutMs: DEFAULT_TIMEOUT_MS,
-        },
-        this.logger,
-      );
-      return result.result;
+${diffAfter.slice(0, 2000)}`;
+
+      return this.executeRun(FLOW_STEP.JUDGMENT_SUMMARY, prompt, { allowedTools: ["Read"] });
     } catch {
       return "（判断理由の生成に失敗しました）";
     }
@@ -891,9 +934,7 @@ ${diffAfter.slice(0, 2000)}`,
     const spec = readFileSync(specPath, "utf-8");
 
     try {
-      const result = await runClaude(
-        {
-          prompt: `あなたは第三者のコードレビュアーです。
+      const prompt = `あなたは第三者のコードレビュアーです。
 以下の minor 指摘について、2回の修正試行後も解消されていません。
 この指摘を許容（対応しない）して安全かどうか判断してください。
 
@@ -914,15 +955,11 @@ ${spec.slice(0, 3000)}
 ## 回答形式（厳守）
 {"safe": true, "reason": "判断理由"}
 または
-{"safe": false, "reason": "判断理由"}`,
-          allowedTools: ["Read"],
-          outputFormat: "json",
-          timeoutMs: DEFAULT_TIMEOUT_MS,
-        },
-        this.logger,
-      );
+{"safe": false, "reason": "判断理由"}`;
 
-      const cleaned = result.result.replace(/```(?:json)?\s*\n([\s\S]*?)```/g, "$1");
+      const rawResult = await this.executeRun(FLOW_STEP.JUDGE_MINOR, prompt, { allowedTools: ["Read"] });
+
+      const cleaned = rawResult.replace(/```(?:json)?\s*\n([\s\S]*?)```/g, "$1");
       const parsed = JSON.parse(cleaned) as { safe?: boolean; reason?: string };
       return {
         safe: parsed.safe ?? true,
@@ -943,47 +980,50 @@ ${spec.slice(0, 3000)}
       .join("\n\n");
   }
 
-  private execCodex(prompt: string): Promise<CommandResult> {
-    // prompt を stdin 経由で渡す（E2BIG 防止）
-    return new Promise((resolve) => {
-      const child = spawn(
-        "codex",
-        ["exec", "--full-auto", "--sandbox", "read-only", "--cd", this.projectRoot, "-"],
-        { stdio: ["pipe", "pipe", "pipe"], timeout: CODEX_TIMEOUT_MS },
-      );
-
-      let stdout = "";
-      let stderr = "";
-
-      child.stdout.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-
-      child.on("close", (code) => {
-        const result: CommandResult = { stdout, stderr, exitCode: code ?? 1 };
-        if (result.exitCode !== 0 && isCodexRateLimit(result)) {
-          resolve(result);
-          return;
-        }
-        resolve(result);
-      });
-
-      child.on("error", (err) => {
-        resolve({ stdout, stderr: err.message, exitCode: 1 });
-      });
-
-      child.stdin.write(prompt);
-      child.stdin.end();
-    });
+  private async executeReview(
+    step: FlowStep,
+    prompt: string,
+    reviewer: string,
+    options?: {
+      allowedTools?: string[];
+      appendSystemPrompt?: string;
+      timeoutMs?: number;
+    },
+  ): Promise<ReviewResult> {
+    const runner = this.registry.getRunner(step);
+    const response = await runner.run(
+      {
+        prompt,
+        allowedTools: options?.allowedTools ?? ["Read"],
+        timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        appendSystemPrompt: options?.appendSystemPrompt,
+      },
+      this.logger,
+    );
+    return this.parseReviewResult(reviewer, response.text);
   }
-}
 
-function isCodexRateLimit(obj: unknown): boolean {
-  if (!obj || typeof obj !== "object") return false;
-  const stderr = (obj as { stderr?: string }).stderr ?? "";
-  return /rate|limit|429/i.test(stderr);
+  private async executeRun(
+    step: FlowStep,
+    prompt: string,
+    options?: {
+      allowedTools?: string[];
+      appendSystemPrompt?: string;
+      cwd?: string;
+      timeoutMs?: number;
+    },
+  ): Promise<string> {
+    const runner = this.registry.getRunner(step);
+    const response = await runner.run(
+      {
+        prompt,
+        allowedTools: options?.allowedTools,
+        appendSystemPrompt: options?.appendSystemPrompt,
+        cwd: options?.cwd,
+        timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      },
+      this.logger,
+    );
+    return response.text;
+  }
 }

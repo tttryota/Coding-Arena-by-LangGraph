@@ -13,21 +13,20 @@ Codex CLIを使用してコードレビュー・分析を実行するスキル�
 
 ## 実行コマンド
 
-codex exec --full-auto --sandbox read-only --cd <project_directory> "<request>"
+codex exec --sandbox read-only --cd <project_directory> "<request>"
 
 ## パラメータ
 
 | パラメータ | 説明 |
 |-----------|------|
-| `--full-auto` | 完全自動モードで実行 |
-| `--sandbox read-only` | 読み取り専用サンドボックス（安全な分析用） |
+| `--sandbox <mode>` | サンドボックスモード（`read-only`: 分析用、`workspace-write`: 書き込み可） |
 | `--cd <dir>` | 対象プロジェクトのディレクトリ |
 | `"<request>"` | 依頼内容（日本語可） |
 
 ## 使用例
 
 ### コードレビュー
-codex exec --full-auto --sandbox read-only --cd /path/to/project "{実装計画のファイルのパス} 次の{新規作成or修正}内容について、必要なファイルを適宜読み込んだ上でレビューして。仕様・テスト・実装間で不整合が生じないようにすること：{レビュー依頼内容}"
+codex exec --sandbox read-only --cd /path/to/project "{実装計画のファイルのパス} 次の{新規作成or修正}内容について、必要なファイルを適宜読み込んだ上でレビューして。仕様・テスト・実装間で不整合が生じないようにすること：{レビュー依頼内容}"
 
 ## 実行手順
 

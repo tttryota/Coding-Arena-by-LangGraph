@@ -2,16 +2,19 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { HarnessLogger } from "./logger.ts";
 import type { Boundary } from "./boundary.ts";
-import { runClaude } from "./claude-runner.ts";
+import type { RunnerRegistry } from "./runner-registry.ts";
+import { FLOW_STEP } from "./steps.ts";
 import { GuardError } from "./types.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
 export class DesignFlow {
   private boundary: Boundary;
+  private registry: RunnerRegistry;
 
-  constructor(boundary: Boundary) {
+  constructor(boundary: Boundary, registry: RunnerRegistry) {
     this.boundary = boundary;
+    this.registry = registry;
   }
 
   async run(featureName: string, requirements: string, logger: HarnessLogger): Promise<void> {
@@ -44,8 +47,8 @@ export class DesignFlow {
     }
 
     const specFm = this.boundary.readFrontmatter(specPath);
-    if (specFm.status !== "approved") {
-      console.log("仕様書を確認し、frontmatter の status を approved に更新してから再実行してください。");
+    if (!this.isReadyLikeStatus(specFm.status)) {
+      console.log("仕様書を確認し、frontmatter の status を ready に更新してから再実行してください。");
       return;
     }
 
@@ -62,12 +65,16 @@ export class DesignFlow {
     }
 
     const tcFm = this.boundary.readFrontmatter(tcPath);
-    if (tcFm.status !== "approved") {
-      console.log("テストケースを確認し、frontmatter の status を approved に更新してください。");
+    if (!this.isReadyLikeStatus(tcFm.status)) {
+      console.log("テストケースを確認し、frontmatter の status を ready に更新してください。");
       return;
     }
 
-    console.log("仕様書・テストケースともに承認済みです。impl フローに進めます。");
+    console.log("仕様書・テストケースともに ready です。impl フローに進めます。");
+  }
+
+  private isReadyLikeStatus(status: string | undefined): boolean {
+    return status === "ready" || status === "approved";
   }
 
   private async generateSpec(
@@ -79,7 +86,8 @@ export class DesignFlow {
     const template = existsSync(templatePath) ? readFileSync(templatePath, "utf-8") : "";
     const claudeMd = this.readClaudeMd();
 
-    await runClaude(
+    const runner = this.registry.getRunner(FLOW_STEP.SPEC_GENERATE);
+    await runner.run(
       {
         prompt: `以下の要件から機能仕様書を作成してください。
 
@@ -102,7 +110,6 @@ ${template}
 - 依存は他コンポーネントのインターフェース参照のみ`,
         allowedTools,
         appendSystemPrompt: claudeMd,
-        outputFormat: "json",
         cwd: root,
         timeoutMs: DEFAULT_TIMEOUT_MS,
       },
@@ -119,7 +126,8 @@ ${template}
     const templatePath = join(root, "tests/test-cases/TEMPLATE.md");
     const template = existsSync(templatePath) ? readFileSync(templatePath, "utf-8") : "";
 
-    await runClaude(
+    const runner = this.registry.getRunner(FLOW_STEP.TEST_CASE_GENERATE);
+    await runner.run(
       {
         prompt: `以下の仕様書からテストケースを導出してください。
 
@@ -142,7 +150,6 @@ ${template}
 - 実装順序を考慮した並び
 - 重複がないこと`,
         allowedTools,
-        outputFormat: "json",
         cwd: root,
         timeoutMs: DEFAULT_TIMEOUT_MS,
       },

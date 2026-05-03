@@ -47,6 +47,15 @@ export class GuardError extends HarnessError {
   }
 }
 
+export class RunnerRateLimitError extends HarnessError {
+  runnerName: string;
+  constructor(runnerName: string, message: string) {
+    super(message);
+    this.name = "RunnerRateLimitError";
+    this.runnerName = runnerName;
+  }
+}
+
 // === リント ===
 
 export type LintViolation = {
@@ -73,11 +82,51 @@ export type ReviewResult = {
 
 // === 計画ファイル ===
 
+export type PlanType = "impl" | "component" | "page";
+
+export type PlanDependency = {
+  name: string;
+  importPath: string;
+};
+
+export type BrowserScenario = {
+  name: string;
+  objective: string;
+  route: string;
+  preconditions: string[];
+  steps: string[];
+  expect: string[];
+};
+
+export type BrowserScenarioResult = {
+  name: string;
+  status: "pass" | "fail" | "blocked";
+  completedSteps: string[];
+  failedStep?: string;
+  expected?: string[];
+  observed?: string[];
+  notes?: string;
+};
+
+export type BrowserVerificationResult = {
+  overall: "pass" | "fail" | "blocked";
+  scenarios: BrowserScenarioResult[];
+};
+
 export type TaskPlan = {
+  type?: PlanType;
+  profile?: string;
   scope: string;
   specPath: string;
   testCasesPath: string;
+  componentSpecPath?: string;
+  figmaCachePath?: string;
+  msw?: boolean;
   description: string;
+  targets: string[];
+  dependencies: PlanDependency[];
+  figmaSlice?: string;
+  browserScenarios: BrowserScenario[];
   targetTestCases: string[];
   exclusions: string[];
   completionCriteria: string[];
@@ -124,6 +173,7 @@ export type CheckpointData = {
   records: ReviewRecord[];
   greenAttempt: number;
   timestamp: string;
+  logDir?: string;
 };
 
 // === ログイベント定数 ===
@@ -137,8 +187,8 @@ export const EVENT = {
   LINT_PASSED: "lint_passed",
   SELF_REVIEW: "self_review",
   REVIEW_START: "review_start",
-  CODEX_RATE_LIMITED: "codex_rate_limited",
-  CLAUDE_REVIEW: "claude_review",
+  RUNNER_RATE_LIMITED: "runner_rate_limited",
+  FALLBACK_REVIEW: "fallback_review",
   REVIEW_RECONCILED: "review_reconciled",
   DRIFT_DETECTED: "drift_detected",
   ESCALATION_TO_HUMAN: "escalation_to_human",

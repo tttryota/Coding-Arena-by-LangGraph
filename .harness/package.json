@@ -1,12 +1,28 @@
 {
-  "private": true,
-  "name": "harness",
+  "name": "@tsuryoryo/tdd-harness",
+  "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "tdd-harness": "./src/harness.ts"
+  },
+  "files": [
+    "src/",
+    "templates/",
+    "review-criteria-*.md",
+    "setup-guide.md"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "yaml": "^2.8.3"
+  },
   "devDependencies": {
-    "typescript": "^5.8",
-    "@types/node": "^22"
+    "@types/node": "^22",
+    "typescript": "^5.8"
   }
 }

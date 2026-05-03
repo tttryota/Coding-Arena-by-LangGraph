@@ -1,27 +1,43 @@
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { HarnessLogger, redact } from "./logger.ts";
 import { LintGuard } from "./lint-guard.ts";
 import { DriftGuard } from "./drift-guard.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { Boundary } from "./boundary.ts";
-import { runClaude } from "./claude-runner.ts";
-import { GuardError, ESCALATION_LEVEL, EVENT, STEP_ORDER } from "./types.ts";
+import type { RunnerRegistry } from "./runner-registry.ts";
+import { FLOW_STEP } from "./steps.ts";
+import { GuardError, HarnessError, ESCALATION_LEVEL, EVENT, STEP_ORDER } from "./types.ts";
 import type { TaskPlan, ReviewRecord, LintViolation, CompletedStep } from "./types.ts";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import type { ResolvedProfileConfig } from "./config.ts";
+import type { LintAdapter, TestAdapter } from "./tool-adapter.ts";
+import { loadTemplate, renderTemplate } from "./templates.ts";
+import { runTool } from "./launcher.ts";
+import type { LauncherOptions } from "./launcher.ts";
+import { parsePlan } from "./plan-parser.ts";
 
 const MAX_GREEN_RETRIES = 3;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000;
 
 export class ImplFlow {
   private boundary: Boundary;
+  private registry: RunnerRegistry;
+  private profile: ResolvedProfileConfig;
+  private testAdapter: TestAdapter;
+  private lintAdapters: LintAdapter[];
 
-  constructor(boundary: Boundary) {
+  constructor(
+    boundary: Boundary,
+    registry: RunnerRegistry,
+    profile: ResolvedProfileConfig,
+    testAdapter: TestAdapter,
+    lintAdapters: LintAdapter[],
+  ) {
     this.boundary = boundary;
+    this.registry = registry;
+    this.profile = profile;
+    this.testAdapter = testAdapter;
+    this.lintAdapters = lintAdapters;
   }
 
   private shouldSkip(completedStep: CompletedStep | null, target: CompletedStep): boolean {
@@ -29,13 +45,126 @@ export class ImplFlow {
     return STEP_ORDER.indexOf(completedStep) >= STEP_ORDER.indexOf(target);
   }
 
-  async run(planPath: string, options?: { resume?: boolean }): Promise<void> {
-    const plan = this.boundary.parsePlanFile(planPath);
+  private resolveCriteriaPaths(): string[] {
     const root = this.boundary.getProjectRoot();
-    const logger = new HarnessLogger(`impl_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, "logs") });
-    const lintGuard = new LintGuard(logger, root);
-    const driftGuard = new DriftGuard(logger);
-    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root);
+    const paths: string[] = [];
+
+    // 1. profile.reviewCriteria（ユーザー明示パス）
+    for (const c of this.profile.reviewCriteria) {
+      const fullPath = resolve(root, c);
+      if (!existsSync(fullPath)) {
+        throw new GuardError(`Review criteria not found: ${c}`);
+      }
+      paths.push(fullPath);
+    }
+
+    // 2. profile.criteriaPreset（組み込みプリセット）
+    if (this.profile.criteriaPreset) {
+      const presetNames = [
+        "review-criteria-common",
+        `review-criteria-${this.profile.criteriaPreset}`,
+      ];
+      for (const name of presetNames) {
+        const projectPath = join(root, ".harness", `${name}.md`);
+        if (existsSync(projectPath)) {
+          paths.push(projectPath);
+          continue;
+        }
+        const packagePath = join(import.meta.dirname ?? "", "..", `${name}.md`);
+        if (existsSync(packagePath)) {
+          paths.push(packagePath);
+          continue;
+        }
+        throw new GuardError(`Review criteria not found: ${name}.md`);
+      }
+    }
+
+    // 3. どちらも未指定の場合: common + backend（後方互換）
+    if (this.profile.reviewCriteria.length === 0 && !this.profile.criteriaPreset) {
+      const fallbackNames = ["review-criteria-common", "review-criteria-backend"];
+      for (const name of fallbackNames) {
+        const projectPath = join(root, ".harness", `${name}.md`);
+        if (existsSync(projectPath)) {
+          paths.push(projectPath);
+          continue;
+        }
+        const packagePath = join(import.meta.dirname ?? "", "..", `${name}.md`);
+        if (existsSync(packagePath)) {
+          paths.push(packagePath);
+        }
+      }
+    }
+
+    return paths;
+  }
+
+  private resolveRulesContent(plan: TaskPlan): string {
+    const ruleName = this.resolveRuleName(plan);
+    if (!ruleName) return "";
+
+    const root = this.boundary.getProjectRoot();
+    const projectPath = join(root, ".harness", "rules", `${ruleName}.md`);
+    if (existsSync(projectPath)) {
+      return readFileSync(projectPath, "utf-8");
+    }
+
+    const packagePath = join(import.meta.dirname ?? "", "..", "rules", `${ruleName}.md`);
+    if (existsSync(packagePath)) {
+      return readFileSync(packagePath, "utf-8");
+    }
+
+    return "";
+  }
+
+  private resolveRuleName(plan: TaskPlan): string | undefined {
+    if (plan.type === "impl" && plan.profile === "frontend") {
+      return "logic";
+    }
+    return plan.type;
+  }
+
+  private buildMswInstructions(plan: TaskPlan, mode: "test" | "impl"): string {
+    if (!plan.msw) return "";
+
+    if (mode === "test") {
+      return `## MSW セットアップ
+- テストファイルに MSW server のセットアップ (beforeAll/afterEach/afterAll) を含める
+- API モック用の handler import を含める（handler ファイルは実装フェーズで生成される）
+- handler の配置先: frontend/src/mocks/handlers/
+- server.use(...handlers) でモックを適用する`;
+    }
+
+    return `## MSW ハンドラ生成
+- frontend/src/mocks/handlers/ に共有ハンドラファイルを生成する
+- ハンドラのレスポンス形状はバックエンド API の契約と一致させる
+- テストファイルから import されるパスと一致させる`;
+  }
+
+  async run(planPath: string, options?: { resume?: boolean; plan?: import("./types.ts").TaskPlan }): Promise<void> {
+    const plan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
+    const root = this.boundary.getProjectRoot();
+    const logger = new HarnessLogger(`impl_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, "logs"), resume: options?.resume });
+    const lintGuard = new LintGuard(logger, this.lintAdapters, {
+      toolRoot: this.profile.toolRoot,
+      execOverride: this.profile.exec,
+    });
+    // codexAvailable: ImplFlow の迷走対処に寄与する step で codex が使えるか
+    // impl フローで実際に使う step のうち、外部レビュー系のみを判定対象とする
+    const implFlowSteps: import("./steps.ts").FlowStep[] = [
+      FLOW_STEP.TEST_EXTERNAL_REVIEW,
+      FLOW_STEP.IMPL_EXTERNAL_REVIEW,
+    ];
+    const stepMapping = this.registry.getStepMapping();
+    const runnerConfig = this.registry.getConfig();
+    const hasCodex = implFlowSteps.some((step) => {
+      if (this.registry.isStepSkipped(step)) return false;
+      const runnerName = stepMapping[step];
+      if (!runnerName) return false;
+      const runner = runnerConfig.runners[runnerName];
+      return runner?.type === "codex";
+    });
+    const driftGuard = new DriftGuard(logger, { codexAvailable: hasCodex });
+    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry);
 
     // チェックポイント復元
     const checkpoint = options?.resume ? logger.loadCheckpoint() : null;
@@ -61,42 +190,38 @@ export class ImplFlow {
     const testPath = this.boundary.testPathForScope(plan.scope);
 
     const spec = readFileSync(resolve(root, plan.specPath), "utf-8");
-    const criteriaPaths = this.boundary.determineCriteriaPaths(plan.scope);
+    const criteriaPaths = this.resolveCriteriaPaths();
     const criteria = criteriaPaths.map((p) => readFileSync(p, "utf-8")).join("\n\n");
+    const rules = this.resolveRulesContent(plan);
+    const generationSystemPrompt = [criteria, rules].filter(Boolean).join("\n\n");
 
     logger.log(EVENT.TDD_START, { testCases: plan.targetTestCases });
 
     // テストコード一括生成
     if (!this.shouldSkip(resumeFrom, "test_generated")) {
       console.log("テストコードを生成中...");
-      const testGenResult = await runClaude(
+      const runner = this.registry.getRunner(FLOW_STEP.TEST_GENERATE);
+      const config = this.registry.getConfig();
+      const testGenTemplate = loadTemplate("test-generate", root, config.templates);
+      const testGenPrompt = renderTemplate(testGenTemplate, {
+        testCases: plan.targetTestCases.join("\n"),
+        spec,
+        frameworkName: this.testAdapter.frameworkName,
+        mswInstructions: this.buildMswInstructions(plan, "test"),
+      });
+      const testGenResult = await runner.run(
         {
-          prompt: `以下のテストケースに対応するpytestテストコードを書いてください。
-
-## テストケース
-${plan.targetTestCases.join("\n")}
-
-## 仕様書
-${spec}
-
-## 制約
-- 1つのテストクラスに全テストメソッドをまとめる（クラスを細かく分割しない）
-- テスト命名: test_{対象}_{条件}_{期待結果}
-- 各テストメソッドに docstring を書く。形式: 1行目「検証: 〇〇の場合.」、空行、2行目「期待: 〇〇が返る（具体値）」
-- 1テスト1関心事
-- モックは外部依存のみ`,
+          prompt: testGenPrompt,
           allowedTools: scopeTools,
-          appendSystemPrompt: criteria,
-          outputFormat: "json",
+          appendSystemPrompt: generationSystemPrompt,
           cwd: root,
           timeoutMs: DEFAULT_TIMEOUT_MS,
         },
         logger,
       );
-      sessionId = testGenResult.session_id;
+      sessionId = testGenResult.sessionId ?? "";
       await this.boundary.stageFiles(plan.scope);
       await this.lintCheck(lintGuard, plan.scope, "テスト生成後", {
-        skipMypy: true,
         scopeTools: scopeTools,
         root,
       });
@@ -117,9 +242,26 @@ ${spec}
     }
 
     // RED 確認
+    let redFailureOutput = "";
+    // resume で red_confirmed をスキップする場合、初回実装プロンプト用に RED 出力を復元
+    if (this.shouldSkip(resumeFrom, "red_confirmed") && !this.shouldSkip(resumeFrom, "green_confirmed")) {
+      const rerunResult = await this.runTests(testPath, { allowCollectionError: true });
+      if (rerunResult.passed) {
+        // resume 時にテストが既に GREEN → 通常経路と同じくレビューのみ実行
+        console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
+        logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: rerunResult.output });
+        await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
+        this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
+        logger.clearCheckpoint();
+        console.log("完了しました。");
+        return;
+      }
+      redFailureOutput = rerunResult.output;
+    }
     if (!this.shouldSkip(resumeFrom, "red_confirmed")) {
       console.log("テスト実行中（RED確認）...");
       const redResult = await this.runTests(testPath, { allowCollectionError: true });
+      redFailureOutput = redResult.output;
 
       if (redResult.passed) {
         console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
@@ -140,44 +282,34 @@ ${spec}
     }
 
     // 実装 → GREEN リトライループ
-    let lastFailureOutput = "";
+    let lastFailureOutput = redFailureOutput;
     if (!this.shouldSkip(resumeFrom, "green_confirmed")) {
     for (let attempt = 1; attempt <= MAX_GREEN_RETRIES; attempt++) {
       console.log(`実装コードを生成中... (試行 ${attempt}/${MAX_GREEN_RETRIES})`);
 
-      const implPrompt = attempt === 1
-        ? `テストを実行したところ失敗しました。テストをGREENにする実装を書いてください。
+      const config = this.registry.getConfig();
+      const implTemplate = attempt === 1
+        ? loadTemplate("impl-generate", root, config.templates)
+        : loadTemplate("impl-retry", root, config.templates);
+      const implPrompt = renderTemplate(implTemplate, {
+        testOutput: lastFailureOutput,
+        spec,
+        mswInstructions: this.buildMswInstructions(plan, "impl"),
+      });
 
-## テスト実行結果
-${lastFailureOutput}
-
-## 仕様書
-${spec}
-
-## 制約
-- テストケースの範囲外の機能は実装しない
-- 仕様書に記載のインターフェースに従う`
-        : `前回の実装でもテストが失敗しました。別のアプローチで修正してください。
-
-## テスト実行結果
-${lastFailureOutput}
-
-## 仕様書
-${spec}`;
-
-      const implResult = await runClaude(
+      const implRunner = this.registry.getRunner(FLOW_STEP.IMPL_GENERATE);
+      const implResult = await implRunner.run(
         {
           prompt: implPrompt,
           allowedTools: scopeTools,
-          appendSystemPrompt: criteria,
-          resume: sessionId,
-          outputFormat: "json",
+          appendSystemPrompt: generationSystemPrompt,
+          sessionId,
           cwd: root,
           timeoutMs: DEFAULT_TIMEOUT_MS,
         },
         logger,
       );
-      sessionId = implResult.session_id;
+      sessionId = implResult.sessionId ?? sessionId;
 
       // 実装生成後にステージング
       await this.boundary.stageFiles(plan.scope);
@@ -249,20 +381,21 @@ ${spec}`;
 
   private async lintCheck(
     lintGuard: LintGuard, scope: string, phase: string,
-    options?: { skipMypy?: boolean; scopeTools?: string[]; root?: string },
+    options?: { scopeTools?: string[]; root?: string },
   ): Promise<void> {
     console.log(`リントチェック中（${phase}）...`);
-    const pyFiles = await this.boundary.findPythonFiles(scope);
-    if (pyFiles.length === 0) return;
+    const sourceFiles = await this.boundary.findSourceFiles(scope);
+    if (sourceFiles.length === 0) return;
 
     const claudeFix = options?.scopeTools
       ? async (violations: LintViolation[]) => {
           const issueList = violations
             .map((v) => `${v.tool}: ${v.file}:${v.line} - ${v.message}`)
             .join("\n");
-          await runClaude(
+          const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
+          await runner.run(
             {
-              prompt: `以下のリンター違反を修正してください。ruff --fix では自動修正できなかった違反です。
+              prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
 
 ## 違反一覧
 ${issueList}
@@ -271,15 +404,14 @@ ${issueList}
 - 指摘された違反のみ修正する
 - 既存のロジックや振る舞いを変更しない`,
               allowedTools: options.scopeTools,
-              outputFormat: "json",
               cwd: options.root,
             },
+            undefined,
           );
         }
       : undefined;
 
-    await lintGuard.check(pyFiles, {
-      skipMypy: options?.skipMypy,
+    await lintGuard.check(sourceFiles, {
       claudeFix,
     });
   }
@@ -297,7 +429,12 @@ ${issueList}
       targetFiles: testFiles,
       specPath: resolve(this.boundary.getProjectRoot(), plan.specPath),
       criteriaPaths: [],
-      testCommand: ["pytest", testPath, "-x", "--tb=short"],
+      runTests: async () => {
+        const result = await this.runTests(testPath);
+        if (!result.passed) {
+          throw new HarnessError(`テスト失敗: ${result.output}`);
+        }
+      },
       rescanFiles: () => this.boundary.findTestFiles(plan.scope),
       scopeAllowedTools: this.boundary.testAllowedTools(plan.scope),
       getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
@@ -320,7 +457,12 @@ ${issueList}
       targetFiles: implFiles,
       specPath: resolve(this.boundary.getProjectRoot(), plan.specPath),
       criteriaPaths,
-      testCommand: ["pytest", testPath, "-x", "--tb=short"],
+      runTests: async () => {
+        const result = await this.runTests(testPath);
+        if (!result.passed) {
+          throw new HarnessError(`テスト失敗: ${result.output}`);
+        }
+      },
       rescanFiles: () => this.boundary.findImplementationFiles(plan.scope),
       scopeAllowedTools: this.boundary.implAllowedTools(plan.scope),
       getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
@@ -333,33 +475,41 @@ ${issueList}
     testPath: string,
     options?: { allowCollectionError?: boolean },
   ): Promise<{ passed: boolean; output: string }> {
-    try {
-      const { stdout, stderr } = await execFileAsync(
-        "pytest", [testPath, "-x", "--tb=short"],
-        { cwd: this.boundary.getProjectRoot(), maxBuffer: 10 * 1024 * 1024, timeout: LOCAL_CMD_TIMEOUT_MS },
-      );
-      return { passed: true, output: stdout + stderr };
-    } catch (error: unknown) {
-      const execError = error as {
-        stdout?: string;
-        stderr?: string;
-        code?: number | string;
-      };
-      const exitCode = typeof execError.code === "number" ? execError.code : 1;
-      const output = (execError.stdout ?? "") + (execError.stderr ?? "");
+    // testPath は repo-relative。toolRoot が root 以外の場合に備え絶対パスに変換
+    const absTestPath = resolve(this.boundary.getProjectRoot(), testPath);
+    const args = this.testAdapter.buildArgs(absTestPath);
+    const launcherOptions: LauncherOptions = {
+      toolRoot: this.profile.toolRoot,
+      execOverride: this.profile.exec,
+    };
+    const result = await runTool(this.testAdapter.name, args, launcherOptions);
+    const testResult = this.testAdapter.parseResult(
+      result.stdout,
+      result.stderr,
+      result.exitCode,
+    );
 
-      if (execError.code === "ENOENT") {
-        throw new GuardError("pytest が見つかりません。インストールしてください。");
-      }
-      // exit 2 = collection error（import 失敗等）。RED 確認時は実装が
-      // まだないため許容し、テスト失敗として扱う
-      if (exitCode >= 2 && !options?.allowCollectionError) {
+    switch (testResult.kind) {
+      case "passed":
+        return { passed: true, output: testResult.output };
+      case "failed":
+        return { passed: false, output: testResult.output };
+      case "collection-error":
+        if (options?.allowCollectionError) {
+          return { passed: false, output: testResult.output };
+        }
         throw new GuardError(
-          `pytest が内部エラーで終了しました (exit ${exitCode})。環境を確認してください。\n${output}`,
+          `${this.testAdapter.frameworkName} がコレクションエラーで終了しました。環境を確認してください。\n${testResult.output}`,
         );
-      }
-
-      return { passed: false, output };
+      case "no-tests":
+        throw new GuardError(
+          `${this.testAdapter.frameworkName} がテスト未検出で終了しました。テストパスを確認してください。`,
+        );
+      case "internal-error":
+      case "interrupted":
+        throw new GuardError(
+          `${this.testAdapter.frameworkName} が内部エラーで終了しました (exit ${testResult.exitCode})。\n${testResult.output}`,
+        );
     }
   }
 
@@ -426,20 +576,20 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
         if (record.decision === "lgtm") {
           md += `指摘なし（${record.cycle}回目で通過）\n\n`;
         } else if (record.decision === "fixed") {
+          // 指摘一覧
           for (const issue of record.findings) {
-            md += `#### 指摘: ${redact(issue.description)}（${issue.severity}）\n`;
-            md += `- **ファイル**: ${issue.file}${issue.line ? `:${issue.line}` : ""}\n`;
-            md += `- **判断**: 修正\n`;
-            md += `- **理由**: ${redact(record.judgmentSummary)}\n`;
-            if (record.diffAfter) {
-              // diffAfter は修正直後に取得したスコープファイルの差分
-              const snippet = redact(record.diffAfter.split("\n").slice(0, 30).join("\n"));
-              if (snippet.trim()) {
-                md += `- **修正内容**:\n\`\`\`diff\n${snippet}\n\`\`\`\n`;
-              }
-            }
-            md += `\n`;
+            md += `- [${issue.severity}] ${issue.file}${issue.line ? `:${issue.line}` : ""} — ${redact(issue.description)}\n`;
           }
+          // 判断理由（サイクルあたり1回）
+          md += `\n**判断**: ${redact(record.judgmentSummary)}\n`;
+          // diff（サイクルあたり1回）
+          if (record.diffAfter) {
+            const snippet = redact(record.diffAfter.split("\n").slice(0, 30).join("\n"));
+            if (snippet.trim()) {
+              md += `\n<details><summary>修正 diff</summary>\n\n\`\`\`diff\n${snippet}\n\`\`\`\n</details>\n`;
+            }
+          }
+          md += `\n`;
         } else if (record.decision === "escalated") {
           md += `**エスカレーション**: ${record.judgmentSummary}\n\n`;
         }

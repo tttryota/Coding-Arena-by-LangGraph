@@ -5,6 +5,7 @@ import type { CommandResult, CheckpointData } from "./types.ts";
 type LoggerOptions = {
   baseDir?: string;
   redactOutput?: boolean;
+  resume?: boolean;
 };
 
 const REDACT_PATTERNS = [
@@ -37,23 +38,49 @@ export function redact(text: string): string {
 }
 
 export class HarnessLogger {
+  private baseDir: string;
+  private taskName: string;
   private logDir: string;
   private harnessLogPath: string;
   private redactOutput: boolean;
 
   constructor(taskName: string, options?: LoggerOptions) {
-    const baseDir = options?.baseDir ?? "logs";
+    this.baseDir = options?.baseDir ?? "logs";
     this.redactOutput = options?.redactOutput ?? true;
 
     // パストラバーサル防止: taskName から危険な文字を除去
-    const sanitized = taskName.replace(/[./\\]/g, "_");
+    this.taskName = taskName.replace(/[./\\]/g, "_");
+
+    if (options?.resume) {
+      const restored = this.loadCheckpointFromBase();
+      if (restored?.logDir && existsSync(restored.logDir)) {
+        this.logDir = restored.logDir;
+        this.harnessLogPath = join(this.logDir, "harness.jsonl");
+        return;
+      }
+    }
+
     const timestamp = new Date()
       .toISOString()
       .replace(/[:.]/g, "-")
       .slice(0, 19);
-    this.logDir = join(baseDir, `${timestamp}_${sanitized}`);
+    this.logDir = join(this.baseDir, `${timestamp}_${this.taskName}`);
     mkdirSync(this.logDir, { recursive: true });
     this.harnessLogPath = join(this.logDir, "harness.jsonl");
+  }
+
+  private checkpointBasePath(): string {
+    return join(this.baseDir, `checkpoint_${this.taskName}.json`);
+  }
+
+  private loadCheckpointFromBase(): CheckpointData | null {
+    const p = this.checkpointBasePath();
+    if (!existsSync(p)) return null;
+    try {
+      return JSON.parse(readFileSync(p, "utf-8")) as CheckpointData;
+    } catch {
+      return null;
+    }
   }
 
   log(event: string, data?: Record<string, unknown>): void {
@@ -97,24 +124,21 @@ export class HarnessLogger {
   }
 
   saveCheckpoint(data: CheckpointData): void {
-    const checkpointPath = join(this.logDir, "checkpoint.json");
-    writeFileSync(checkpointPath, JSON.stringify(data, null, 2), "utf-8");
+    const withLogDir = { ...data, logDir: this.logDir };
+    const json = JSON.stringify(withLogDir, null, 2);
+    // ログディレクトリ内（アーカイブ用）
+    writeFileSync(join(this.logDir, "checkpoint.json"), json, "utf-8");
+    // ベースディレクトリ（resume 用の固定パス）
+    writeFileSync(this.checkpointBasePath(), json, "utf-8");
   }
 
   loadCheckpoint(): CheckpointData | null {
-    const checkpointPath = join(this.logDir, "checkpoint.json");
-    if (!existsSync(checkpointPath)) return null;
-    try {
-      return JSON.parse(readFileSync(checkpointPath, "utf-8")) as CheckpointData;
-    } catch {
-      return null;
-    }
+    return this.loadCheckpointFromBase();
   }
 
   clearCheckpoint(): void {
-    const checkpointPath = join(this.logDir, "checkpoint.json");
-    if (existsSync(checkpointPath)) {
-      unlinkSync(checkpointPath);
+    for (const p of [join(this.logDir, "checkpoint.json"), this.checkpointBasePath()]) {
+      if (existsSync(p)) unlinkSync(p);
     }
   }
 

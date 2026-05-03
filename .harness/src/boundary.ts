@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { GuardError } from "./types.ts";
 import type { TaskPlan } from "./types.ts";
+import type { SourceLayoutConfig } from "./config.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -16,50 +17,80 @@ const LOCAL_CMD_TIMEOUT_MS = 5 * 60 * 1000; // 5分
 export class Boundary {
   private projectRoot: string;
   private realRoot: string;
+  private sourceLayout: SourceLayoutConfig;
+  private fileExtensions: readonly string[];
+  private excludeDirs: readonly string[];
 
-  constructor(projectRoot: string) {
+  constructor(
+    projectRoot: string,
+    sourceLayout?: SourceLayoutConfig,
+    fileExtensions?: readonly string[],
+    excludeDirs?: readonly string[],
+  ) {
     this.projectRoot = resolve(projectRoot);
     this.realRoot = realpathSync(this.projectRoot);
+    // Phase 5: sourceLayout 駆動。未指定時は Python デフォルト（後方互換）
+    this.sourceLayout = sourceLayout ?? {
+      sourceDir: "backend/{{category}}",
+      testDir: "backend/{{category}}/tests",
+      scopePattern: "backend/{{category}}/*",
+      additionalAllowedPrefixes: ["docs/reviews/"],
+    };
+    this.fileExtensions = fileExtensions ?? ["py"];
+    this.excludeDirs = excludeDirs ?? ["__pycache__", ".venv"];
   }
 
   getProjectRoot(): string {
     return this.projectRoot;
   }
 
+  // === パターン解決 ===
+
+  private resolvePattern(pattern: string, scope: string): string {
+    const category = this.extractCategory(scope);
+    const name = this.extractName(scope);
+    return pattern.replaceAll("{{category}}", category).replaceAll("{{name}}", name);
+  }
+
   // === スコープ検証 ===
 
   validateScope(scope: string): void {
-    if (!scope.includes("/")) {
+    const parts = scope.split("/");
+    if (parts.length !== 2) {
       throw new GuardError(
-        `scope は "カテゴリ/名前" 形式で指定してください（例: ingestion/chunk-splitter）。受け取った値: "${scope}"`,
+        `scope は "カテゴリ/名前" の2要素形式で指定してください（例: ingestion/chunk-splitter）。受け取った値: "${scope}"（${parts.length}要素）`,
       );
     }
-    for (const segment of scope.split("/")) {
+    for (const segment of parts) {
       this.validatePathSegment(segment);
     }
   }
 
   extractCategory(featureName: string): string {
-    if (!featureName.includes("/")) {
+    const parts = featureName.split("/");
+    if (parts.length !== 2) {
       throw new GuardError(
-        `featureName は "カテゴリ/名前" 形式で指定してください（例: ingestion/chunk-splitter）。受け取った値: "${featureName}"`,
+        `featureName は "カテゴリ/名前" の2要素形式で指定してください（例: ingestion/chunk-splitter）。受け取った値: "${featureName}"（${parts.length}要素）`,
       );
     }
-    const category = featureName.split("/")[0];
-    this.validatePathSegment(category);
-    return category;
+    this.validatePathSegment(parts[0]);
+    return parts[0];
   }
 
   extractName(featureName: string): string {
-    const name = featureName.split("/").slice(1).join("/");
-    this.validatePathSegment(name);
-    return name;
+    const parts = featureName.split("/");
+    if (parts.length !== 2) {
+      throw new GuardError(
+        `featureName は "カテゴリ/名前" の2要素形式で指定してください（例: ingestion/chunk-splitter）。受け取った値: "${featureName}"（${parts.length}要素）`,
+      );
+    }
+    this.validatePathSegment(parts[1]);
+    return parts[1];
   }
 
   // === パス検証 ===
 
   assertWithinProject(fullPath: string): void {
-    // 存在するパスは直接 realpath、存在しない場合は最も近い既存祖先を realpath
     const realPath = existsSync(fullPath)
       ? realpathSync(fullPath)
       : this.realpathNearestAncestor(fullPath);
@@ -72,14 +103,11 @@ export class Boundary {
   }
 
   private realpathNearestAncestor(targetPath: string): string {
-    // 未存在パスの親を遡り、最も近い既存ディレクトリを realpath する
-    // 親 symlink がプロジェクト外を指すケースを検出
     let current = targetPath;
     while (current !== dirname(current)) {
       current = dirname(current);
       if (existsSync(current)) {
         const realAncestor = realpathSync(current);
-        // 祖先の実パスに、残りの相対パスを付加して返す
         const remainder = targetPath.slice(current.length);
         return realAncestor + remainder;
       }
@@ -93,7 +121,6 @@ export class Boundary {
         `不正なパスセグメント: "${segment}"。パストラバーサルは許可されていません。`,
       );
     }
-    // allowedTools 文字列注入防止: CLIメタ文字を拒否
     if (/[,)()*?\\]/.test(segment)) {
       throw new GuardError(
         `不正なパスセグメント: "${segment}"。特殊文字（, ) ( * ? \\）は許可されていません。`,
@@ -113,10 +140,6 @@ export class Boundary {
     if (!plan.scope) {
       throw new GuardError("計画ファイルに scope が指定されていません。");
     }
-    if (plan.scope.startsWith("frontend")) {
-      throw new GuardError("frontend スコープの impl フローは Phase 3 で実装予定です。");
-    }
-
     this.validateScope(plan.scope);
 
     const specFullPath = resolve(this.projectRoot, plan.specPath);
@@ -136,41 +159,63 @@ export class Boundary {
     }
 
     const specFm = this.readFrontmatter(specFullPath);
-    if (specFm.status !== "approved") {
-      throw new GuardError(`仕様書が未承認です（現在: ${specFm.status ?? "なし"}）`);
+    if (!this.isReadyLikeStatus(specFm.status)) {
+      throw new GuardError(`仕様書が ready ではありません（現在: ${specFm.status ?? "なし"}）`);
     }
     const tcFm = this.readFrontmatter(testCasesFullPath);
-    if (tcFm.status !== "approved") {
-      throw new GuardError(`テストケースが未承認です（現在: ${tcFm.status ?? "なし"}）`);
+    if (!this.isReadyLikeStatus(tcFm.status)) {
+      throw new GuardError(`テストケースが ready ではありません（現在: ${tcFm.status ?? "なし"}）`);
     }
   }
 
-  // === ファイル探索 ===
+  private isReadyLikeStatus(status: string | undefined): boolean {
+    return status === "ready" || status === "approved";
+  }
 
-  async findPythonFiles(scope: string): Promise<string[]> {
-    const category = scope.includes("/") ? scope.split("/")[0] : scope;
-    return this.findPythonFilesInDirs([
-      join(this.projectRoot, "backend", category),
-      join(this.projectRoot, "backend", category, "tests"),
-    ]);
+  // === ファイル探索（sourceLayout 駆動） ===
+
+  async findSourceFiles(scope: string): Promise<string[]> {
+    const sourceDir = this.resolvePattern(this.sourceLayout.sourceDir, scope);
+    const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
+    // testDir が sourceDir 配下の場合は重複排除
+    const dirs = [join(this.projectRoot, sourceDir)];
+    const resolvedTestDir = join(this.projectRoot, testDir);
+    if (!resolvedTestDir.startsWith(dirs[0] + "/") && resolvedTestDir !== dirs[0]) {
+      dirs.push(resolvedTestDir);
+    }
+    return this.findFilesInDirs(dirs);
   }
 
   async findImplementationFiles(scope: string): Promise<string[]> {
-    const category = scope.includes("/") ? scope.split("/")[0] : scope;
-    const dir = join(this.projectRoot, "backend", category);
-    const allFiles = await this.findPythonFilesInDirs([dir]);
-    return allFiles.filter((f) => !f.includes("/tests/"));
+    const sourceDir = this.resolvePattern(this.sourceLayout.sourceDir, scope);
+    const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
+    const allFiles = await this.findFilesInDirs([join(this.projectRoot, sourceDir)]);
+    const resolvedTestDir = join(this.projectRoot, testDir);
+    // パス境界を厳密に判定（/tests と /testing を区別）
+    const testDirPrefix = resolvedTestDir.endsWith("/") ? resolvedTestDir : resolvedTestDir + "/";
+    return allFiles.filter((f) => f !== resolvedTestDir && !f.startsWith(testDirPrefix));
   }
 
   async findTestFiles(scope: string): Promise<string[]> {
-    const category = scope.includes("/") ? scope.split("/")[0] : scope;
-    return this.findPythonFilesInDirs([
-      join(this.projectRoot, "backend", category, "tests"),
-    ]);
+    const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
+    return this.findFilesInDirs([join(this.projectRoot, testDir)]);
   }
 
-  private async findPythonFilesInDirs(dirs: string[]): Promise<string[]> {
+  private async findFilesInDirs(dirs: string[]): Promise<string[]> {
     const files: string[] = [];
+    // find の -name 条件を拡張子から動的構築
+    const nameArgs: string[] = [];
+    for (let i = 0; i < this.fileExtensions.length; i++) {
+      if (i > 0) nameArgs.push("-o");
+      nameArgs.push("-name", `*.${this.fileExtensions[i]}`);
+    }
+    // 除外ディレクトリ
+    const excludeArgs: string[] = [];
+    // 除外ディレクトリ: ディレクトリ名の完全一致（/dirname/ パターン）
+    for (const excludeDir of this.excludeDirs) {
+      excludeArgs.push("-not", "-path", `*/${excludeDir}/*`);
+    }
+
     for (const dir of dirs) {
       if (!existsSync(dir)) continue;
       if (lstatSync(dir).isSymbolicLink()) {
@@ -183,9 +228,10 @@ export class Boundary {
         }
       }
       try {
-        const { stdout } = await execFileAsync("find", [
-          dir, "-name", "*.py", "-type", "f", "-not", "-path", "*__pycache__*",
-        ], { timeout: LOCAL_CMD_TIMEOUT_MS });
+        const findArgs = [dir, "-type", "f", "(", ...nameArgs, ")", ...excludeArgs];
+        const { stdout } = await execFileAsync("find", findArgs, {
+          timeout: LOCAL_CMD_TIMEOUT_MS,
+        });
         for (const f of stdout.split("\n").filter(Boolean)) {
           if (this.isFileWithinProject(f)) {
             files.push(f);
@@ -205,47 +251,46 @@ export class Boundary {
   }
 
   testPathForScope(scope: string): string {
-    const category = scope.includes("/") ? scope.split("/")[0] : scope;
-    return join("backend", category, "tests");
+    return this.resolvePattern(this.sourceLayout.testDir, scope);
   }
 
-  /**
-   * scope に対応する allowedTools のパス制限パターンを生成。
-   * Claude の --allowedTools で使用。
-   */
+  // === allowedTools（sourceLayout 駆動） ===
+
   scopeAllowedTools(scope: string): string[] {
-    const category = scope.includes("/") ? scope.split("/")[0] : scope;
-    return [
-      "Read",
-      `Write(backend/${category}/*)`,
-      `Edit(backend/${category}/*)`,
-    ];
+    const pattern = this.resolvePattern(this.sourceLayout.scopePattern, scope);
+    return ["Read", `Write(${pattern})`, `Edit(${pattern})`];
   }
 
   implAllowedTools(scope: string): string[] {
-    const category = scope.includes("/") ? scope.split("/")[0] : scope;
-    return [
-      "Read",
-      `Write(backend/${category}/*.py)`,
-      `Edit(backend/${category}/*.py)`,
-    ];
+    const sourceDir = this.resolvePattern(this.sourceLayout.sourceDir, scope);
+    const extGlob = this.fileExtensions.length === 1
+      ? `*.${this.fileExtensions[0]}`
+      : `*.{${this.fileExtensions.join(",")}}`;
+    return ["Read", `Write(${sourceDir}/**/${extGlob})`, `Edit(${sourceDir}/**/${extGlob})`];
   }
 
   testAllowedTools(scope: string): string[] {
-    const category = scope.includes("/") ? scope.split("/")[0] : scope;
-    return [
-      "Read",
-      `Write(backend/${category}/tests/*)`,
-      `Edit(backend/${category}/tests/*)`,
-    ];
+    const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
+    return ["Read", `Write(${testDir}/**)`, `Edit(${testDir}/**)`];
   }
 
-  // === git 操作 ===
+  // === git 操作（sourceLayout 駆動） ===
+
+  private scopeDirs(scope: string): string[] {
+    const sourceDir = this.resolvePattern(this.sourceLayout.sourceDir, scope);
+    const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
+    // sourceDir と testDir が同じ場合は重複排除
+    const dirs = [sourceDir];
+    if (testDir !== sourceDir && !testDir.startsWith(sourceDir + "/")) {
+      dirs.push(testDir);
+    }
+    return dirs;
+  }
 
   async stageFiles(scope: string): Promise<void> {
-    const category = scope.includes("/") ? scope.split("/")[0] : scope;
+    const dirs = this.scopeDirs(scope);
     try {
-      await execFileAsync("git", ["add", `backend/${category}/`], {
+      await execFileAsync("git", ["add", ...dirs.map((d) => `${d}/`)], {
         cwd: this.projectRoot, timeout: 30_000,
       });
     } catch (error: unknown) {
@@ -269,8 +314,6 @@ export class Boundary {
   }
 
   async countDiffLines(): Promise<number> {
-    // 未コミットの変更（ステージ済み + 未ステージ）を数える
-    // fail-closed: git 失敗時は 0 ではなくエラーにする
     try {
       const { stdout } = await execFileAsync(
         "git", ["diff", "HEAD", "--stat"],
@@ -293,15 +336,13 @@ export class Boundary {
   }
 
   async verifyChangedFilesWithinScope(scope: string): Promise<void> {
-    const category = scope.includes("/") ? scope.split("/")[0] : scope;
+    const dirs = this.scopeDirs(scope);
     const allowedPrefixes = [
-      `backend/${category}/`,
-      `docs/reviews/`,
+      ...dirs.map((d) => d.endsWith("/") ? d : `${d}/`),
+      ...this.sourceLayout.additionalAllowedPrefixes.map((p) => p.endsWith("/") ? p : `${p}/`),
     ];
 
-    // 変更済みファイル（ステージ済み + 未ステージ）
     const tracked = await this.gitListChangedFiles("git", ["diff", "--name-only", "HEAD"]);
-    // 未追跡の新規ファイル
     const untracked = await this.gitListChangedFiles("git", ["ls-files", "--others", "--exclude-standard"]);
     const allChanged = [...tracked, ...untracked];
 
@@ -324,32 +365,17 @@ export class Boundary {
       if (execError.code === "ENOENT") {
         throw new GuardError("git が見つかりません。");
       }
-      // git コマンド失敗は fail-closed: 空ではなくエラーとする
       throw new GuardError(`git コマンド失敗: ${cmd} ${args.join(" ")}`);
     }
-  }
-
-  determineCriteriaPaths(scope: string): string[] {
-    const harnessDir = join(this.projectRoot, ".harness");
-    const paths = [join(harnessDir, "review-criteria-common.md")];
-    if (scope.startsWith("frontend")) {
-      paths.push(join(harnessDir, "review-criteria-frontend.md"));
-    } else {
-      paths.push(join(harnessDir, "review-criteria-backend.md"));
-    }
-    return paths;
   }
 
   async getFileDiff(files: string[]): Promise<string> {
     if (files.length === 0) return "";
 
-    // 各ファイルの境界チェック
     for (const f of files) {
       this.assertWithinProject(resolve(this.projectRoot, f));
     }
 
-    // ステージ済みファイルに対するワーキングツリーの差分を取得
-    // （stageFiles で git add 済みなので、修正箇所のみが差分として出る）
     try {
       const { stdout } = await execFileAsync(
         "git", ["diff", "--", ...files],
@@ -380,41 +406,6 @@ export class Boundary {
       }
     }
     return result;
-  }
-
-  parsePlanFile(planPath: string): TaskPlan {
-    const fullPath = resolve(this.projectRoot, planPath);
-    this.assertWithinProject(fullPath);
-    if (!existsSync(fullPath)) {
-      throw new GuardError(`計画ファイルが存在しません: ${planPath}`);
-    }
-    // CRLF 正規化 + 見出し末尾スペース除去
-    const content = readFileSync(fullPath, "utf-8")
-      .replace(/\r\n/g, "\n")
-      .replace(/^(## .+?) +$/gm, "$1");
-    const frontmatter = this.readFrontmatter(fullPath);
-
-    const extract = (heading: string): string | undefined => {
-      const re = new RegExp(`## ${heading}\\n([\\s\\S]*?)(?=\\n## |$)`);
-      return re.exec(content)?.[1];
-    };
-
-    const parseList = (text: string | undefined): string[] =>
-      (text ?? "")
-        .split("\n")
-        .map((line) => line.replace(/^[-\d.]+\s*/, "").trim())
-        .filter(Boolean);
-
-    return {
-      scope: frontmatter.scope ?? "",
-      specPath: frontmatter.spec ?? "",
-      testCasesPath: frontmatter.test_cases ?? "",
-      description: extract("今回やること")?.trim() ?? "",
-      targetTestCases: parseList(extract("対象テストケース")),
-      exclusions: parseList(extract("やらないこと")),
-      completionCriteria: parseList(extract("完了条件")),
-      designDecisions: parseList(extract("設計判断")),
-    };
   }
 
   // === 内部ヘルパー ===

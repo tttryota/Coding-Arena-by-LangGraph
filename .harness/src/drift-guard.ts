@@ -29,7 +29,7 @@ export class DriftGuard {
     options?: { codexAvailable?: boolean },
   ) {
     this.logger = logger;
-    this.codexAvailable = options?.codexAvailable ?? true;
+    this.codexAvailable = options?.codexAvailable ?? false;
     this.state = this.createInitialState();
   }
 

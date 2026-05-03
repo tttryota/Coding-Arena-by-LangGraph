@@ -1,10 +1,12 @@
-import { spawn } from "node:child_process";
 import { writeFileSync, rmSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { HarnessError } from "./types.ts";
 import type { ClaudeResult } from "./types.ts";
 import type { HarnessLogger } from "./logger.ts";
+import { spawnWithStdin } from "./spawn.ts";
+import { RUNNER_CAPABILITY } from "./runner.ts";
+import type { Runner, RunnerResponse } from "./runner.ts";
 
 export type ClaudeOptions = {
   prompt: string;
@@ -91,40 +93,36 @@ function cleanupTemp(filePath: string): void {
   }
 }
 
-function spawnWithStdin(
-  command: string,
-  args: string[],
-  stdinData: string,
-  cwd?: string,
-  timeoutMs?: number,
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      cwd,
-      timeout: timeoutMs,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-
-    child.on("close", (code) => {
-      resolve({ stdout, stderr, exitCode: code ?? 1 });
-    });
-
-    child.on("error", (err) => {
-      resolve({ stdout, stderr: err.message, exitCode: 1 });
-    });
-
-    child.stdin.write(stdinData);
-    child.stdin.end();
-  });
+export function createClaudeRunner(defaults?: { timeoutMs?: number }): Runner {
+  return {
+    name: "claude",
+    capabilities: new Set([
+      RUNNER_CAPABILITY.SESSION_RESUME,
+      RUNNER_CAPABILITY.ALLOWED_TOOLS,
+      RUNNER_CAPABILITY.SYSTEM_PROMPT,
+    ]),
+    async run(request, logger) {
+      const result = await runClaude(
+        {
+          prompt: request.prompt,
+          allowedTools: request.allowedTools,
+          appendSystemPrompt: request.appendSystemPrompt,
+          resume: request.sessionId,
+          outputFormat: "json",
+          cwd: request.cwd,
+          timeoutMs: request.timeoutMs ?? defaults?.timeoutMs,
+        },
+        logger,
+      );
+      return {
+        text: result.result,
+        sessionId: result.session_id,
+        metadata: {
+          costUsd: result.total_cost_usd,
+          inputTokens: result.usage.input_tokens,
+          outputTokens: result.usage.output_tokens,
+        },
+      } satisfies RunnerResponse;
+    },
+  };
 }

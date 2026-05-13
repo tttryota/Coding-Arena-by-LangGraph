@@ -34,6 +34,19 @@ profiles:
     test: pytest
     toolRoot: backend
     criteriaPreset: backend
+    claude:
+      defaultAgent: harness-backend-general
+      defaultSkillBundles: [backend-core]
+      stepOverrides:
+        impl_generate:
+          agent: harness-backend-impl
+          skillBundles: [backend-impl, backend-failure-modes]
+        impl_self_criteria:
+          agent: harness-backend-reviewer
+          skillBundles: [backend-review-criteria]
+        impl_self_quality:
+          agent: harness-backend-reviewer
+          skillBundles: [backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -68,17 +81,25 @@ runners:
     args: ["copilot"]
     promptFlag: "--prompt"
 
+claude:
+  skillBundles:
+    backend-core: [harness-backend-core]
+    backend-impl: [harness-backend-impl]
+    backend-review-criteria: [harness-backend-review-criteria]
+    backend-review-quality: [harness-backend-review-quality]
+    backend-failure-modes: [harness-backend-failure-modes]
+
 flow: full          # full | light
 fallbackRunner: claude
 
 steps:
   test_generate: claude
   test_self_quality: claude
-  test_external_review: codex
+  test_external_review: claude
   impl_generate: claude
   impl_self_criteria: claude
   impl_self_quality: copilot     # ステップごとに差し替え可能
-  impl_external_review: codex
+  impl_external_review: claude
   lint_fix: claude
   apply_fixes: claude
   judgment_summary: claude
@@ -93,6 +114,7 @@ steps:
 
 ```bash
 tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
+tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能" --profile backend
 ```
 
 1. 仕様書を生成（`docs/spec/{category}/{name}.md`）
@@ -113,7 +135,7 @@ tdd-harness impl plan/current-task.md
 ステップ割り当て:
   1. test_generate: claude
   2. test_self_quality: claude
-  3. test_external_review: codex
+  3. test_external_review: claude
   ...
 
 変更するステップ番号を入力 (Enter でそのまま実行):
@@ -259,6 +281,7 @@ harness（CLI エントリポイント）
 
 同梱テンプレート:
 - `review-response-format.md` — レビュー回答形式の共通指示
+- `benchmark-summary` — 生成済みログディレクトリから review/token/cost 指標を集計
 - `review-test-quality.md` — テストセルフレビュー
 - `review-impl-quality.md` — 実装品質レビュー
 - `review-impl-criteria.md` — レビュー観点チェック

@@ -26,6 +26,19 @@ profiles:
     test: pytest
     toolRoot: backend
     criteriaPreset: backend
+    claude:
+      defaultAgent: harness-backend-general
+      defaultSkillBundles: [backend-core]
+      stepOverrides:
+        impl_generate:
+          agent: harness-backend-impl
+          skillBundles: [backend-impl, backend-failure-modes]
+        impl_self_criteria:
+          agent: harness-backend-reviewer
+          skillBundles: [backend-review-criteria]
+        impl_self_quality:
+          agent: harness-backend-reviewer
+          skillBundles: [backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -75,6 +88,14 @@ runners:
   codex:
     type: codex
     sandbox: read-only
+
+claude:
+  skillBundles:
+    backend-core: [harness-backend-core]
+    backend-impl: [harness-backend-impl]
+    backend-review-criteria: [harness-backend-review-criteria]
+    backend-review-quality: [harness-backend-review-quality]
+    backend-failure-modes: [harness-backend-failure-modes]
 ```
 
 `profiles` は必須。未定義の場合はエラーになる。`tdd-harness init` でこのガイドを表示できる。

@@ -5,7 +5,12 @@ export type ClaudeResult = {
   session_id: string;
   is_error: boolean;
   total_cost_usd: number | null;
-  usage: { input_tokens: number; output_tokens: number };
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
 };
 
 // === エスカレーション ===
@@ -192,4 +197,5 @@ export const EVENT = {
   REVIEW_RECONCILED: "review_reconciled",
   DRIFT_DETECTED: "drift_detected",
   ESCALATION_TO_HUMAN: "escalation_to_human",
+  RUNNER_USAGE: "runner_usage",
 } as const;

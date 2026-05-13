@@ -1,11 +1,24 @@
 import { mkdirSync, appendFileSync, writeFileSync, readFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandResult, CheckpointData } from "./types.ts";
+import { EVENT } from "./types.ts";
 
 type LoggerOptions = {
   baseDir?: string;
   redactOutput?: boolean;
   resume?: boolean;
+};
+
+export type RunnerUsageTotals = {
+  runs: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+};
+
+export type RunnerUsageSummary = {
+  total: RunnerUsageTotals;
+  byStep: Record<string, RunnerUsageTotals>;
 };
 
 const REDACT_PATTERNS = [
@@ -145,4 +158,59 @@ export class HarnessLogger {
   getLogDir(): string {
     return this.logDir;
   }
+
+  summarizeRunnerUsage(): RunnerUsageSummary {
+    return summarizeRunnerUsageFromLog(this.harnessLogPath);
+  }
+}
+
+export function summarizeRunnerUsageFromLog(logPath: string): RunnerUsageSummary {
+  const emptyTotals = (): RunnerUsageTotals => ({
+    runs: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+  });
+  const summary: RunnerUsageSummary = {
+    total: emptyTotals(),
+    byStep: {},
+  };
+
+  if (!existsSync(logPath)) return summary;
+
+  const lines = readFileSync(logPath, "utf-8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (parsed.event !== EVENT.RUNNER_USAGE || typeof parsed.step !== "string") {
+      continue;
+    }
+
+    const step = parsed.step;
+    const totals = summary.byStep[step] ?? emptyTotals();
+    totals.runs += 1;
+    totals.inputTokens += numberOrZero(parsed.inputTokens);
+    totals.outputTokens += numberOrZero(parsed.outputTokens);
+    totals.costUsd += numberOrZero(parsed.costUsd);
+    summary.byStep[step] = totals;
+
+    summary.total.runs += 1;
+    summary.total.inputTokens += numberOrZero(parsed.inputTokens);
+    summary.total.outputTokens += numberOrZero(parsed.outputTokens);
+    summary.total.costUsd += numberOrZero(parsed.costUsd);
+  }
+
+  return summary;
+}
+
+function numberOrZero(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

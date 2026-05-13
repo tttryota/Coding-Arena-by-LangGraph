@@ -15,6 +15,7 @@ import { loadTemplate, renderTemplate } from "./templates.ts";
 import { runTool } from "./launcher.ts";
 import type { LauncherOptions } from "./launcher.ts";
 import { parsePlan } from "./plan-parser.ts";
+import { applyClaudeStepContext } from "./claude-context.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_BROWSER_ATTEMPTS = 2;
@@ -50,7 +51,7 @@ export class PageFlow {
       toolRoot: this.profile.toolRoot,
       execOverride: this.profile.exec,
     });
-    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry);
+    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry, this.profile);
     const criteriaPaths = this.resolveCriteriaPaths();
     const scopeTools = this.boundary.scopeAllowedTools(plan.scope);
     const implFilesRescan = () => this.boundary.findImplementationFiles(plan.scope);
@@ -293,12 +294,18 @@ export class PageFlow {
 
     const runner = this.registry.getRunner(FLOW_STEP.PAGE_GENERATE);
     await runner.run(
-      {
-        prompt,
-        allowedTools: scopeTools,
-        cwd: root,
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
+      applyClaudeStepContext(
+        {
+          prompt,
+          allowedTools: scopeTools,
+          cwd: root,
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        },
+        this.registry.getConfig(),
+        this.profile,
+        FLOW_STEP.PAGE_GENERATE,
+        root,
+      ),
       undefined,
     );
   }
@@ -318,8 +325,9 @@ export class PageFlow {
             .join("\n");
           const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
           await runner.run(
-            {
-              prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
+            applyClaudeStepContext(
+              {
+                prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
 
 ## 違反一覧
 ${issueList}
@@ -327,9 +335,14 @@ ${issueList}
 ## 制約
 - 指摘された違反のみ修正する
 - 既存のロジックや振る舞いを変更しない`,
-              allowedTools: scopeTools,
-              cwd: this.boundary.getProjectRoot(),
-            },
+                allowedTools: scopeTools,
+                cwd: this.boundary.getProjectRoot(),
+              },
+              this.registry.getConfig(),
+              this.profile,
+              FLOW_STEP.LINT_FIX,
+              this.boundary.getProjectRoot(),
+            ),
             undefined,
           );
         },
@@ -389,11 +402,17 @@ ${issueList}
 
     const runner = this.registry.getRunner(FLOW_STEP.PAGE_BROWSER_VERIFY);
     const response = await runner.run(
-      {
-        prompt,
-        cwd: root,
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
+      applyClaudeStepContext(
+        {
+          prompt,
+          cwd: root,
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        },
+        this.registry.getConfig(),
+        this.profile,
+        FLOW_STEP.PAGE_BROWSER_VERIFY,
+        root,
+      ),
       undefined,
     );
 
@@ -493,12 +512,18 @@ ${issueList}
 
     const runner = this.registry.getRunner(FLOW_STEP.APPLY_FIXES);
     await runner.run(
-      {
-        prompt,
-        allowedTools: scopeTools,
-        cwd: this.boundary.getProjectRoot(),
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
+      applyClaudeStepContext(
+        {
+          prompt,
+          allowedTools: scopeTools,
+          cwd: this.boundary.getProjectRoot(),
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        },
+        this.registry.getConfig(),
+        this.profile,
+        FLOW_STEP.APPLY_FIXES,
+        this.boundary.getProjectRoot(),
+      ),
       undefined,
     );
   }

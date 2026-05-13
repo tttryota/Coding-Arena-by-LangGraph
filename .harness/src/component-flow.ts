@@ -16,6 +16,7 @@ import type { ReviewIssue, ReviewResult, TaskPlan } from "./types.ts";
 import { GuardError, EVENT } from "./types.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
 import { parsePlan } from "./plan-parser.ts";
+import { applyClaudeStepContext } from "./claude-context.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_COMPONENT_FIX_RETRIES = 2;
@@ -59,7 +60,7 @@ export class ComponentFlow {
       toolRoot: this.profile.toolRoot,
       execOverride: this.profile.exec,
     });
-    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry);
+    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry, this.profile);
     const criteriaPath = this.resolveComponentCriteriaPath();
     const scopeTools = this.boundary.scopeAllowedTools(plan.scope);
 
@@ -192,12 +193,18 @@ export class ComponentFlow {
 
     const runner = this.registry.getRunner(FLOW_STEP.COMPONENT_GENERATE);
     await runner.run(
-      {
-        prompt,
-        allowedTools: scopeTools,
-        cwd: root,
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
+      applyClaudeStepContext(
+        {
+          prompt,
+          allowedTools: scopeTools,
+          cwd: root,
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        },
+        this.registry.getConfig(),
+        this.profile,
+        FLOW_STEP.COMPONENT_GENERATE,
+        root,
+      ),
       undefined,
     );
   }
@@ -370,12 +377,18 @@ ${issueList}
 
     const runner = this.registry.getRunner(FLOW_STEP.APPLY_FIXES);
     await runner.run(
-      {
-        prompt,
-        allowedTools: scopeTools,
-        cwd: this.boundary.getProjectRoot(),
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
+      applyClaudeStepContext(
+        {
+          prompt,
+          allowedTools: scopeTools,
+          cwd: this.boundary.getProjectRoot(),
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        },
+        this.registry.getConfig(),
+        this.profile,
+        FLOW_STEP.APPLY_FIXES,
+        this.boundary.getProjectRoot(),
+      ),
       undefined,
     );
   }

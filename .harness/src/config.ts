@@ -28,6 +28,11 @@ export type UserSourceLayoutConfig = {
   additionalAllowedPrefixes?: string[];
 };
 
+export type UserStorybookConfig = {
+  renderCommand?: string[];
+  smokeCommand?: string[];
+};
+
 export type SourceLayoutConfig = {
   sourceDir: string;
   testDir: string;
@@ -41,16 +46,23 @@ export type UserProfileConfig = {
   lint?: string[];
   test?: string;
   sourceLayout?: UserSourceLayoutConfig;
+  storybook?: UserStorybookConfig;
   exec?: string | string[];
   toolRoot?: string;
   reviewCriteria?: string[];
   criteriaPreset?: "backend" | "frontend";
 };
 
+export type StorybookConfig = {
+  renderCommand: string[];
+  smokeCommand: string[];
+};
+
 export type ResolvedProfileConfig = {
   lint: string[];
   test: string;
   sourceLayout: SourceLayoutConfig;
+  storybook?: StorybookConfig;
   exec: string[];
   toolRoot: string;
   reviewCriteria: string[];
@@ -235,6 +247,18 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
           }
         }
       }
+      if (profile.storybook !== undefined) {
+        if (typeof profile.storybook !== "object" || Array.isArray(profile.storybook)) {
+          throw new GuardError(`profile "${name}".storybook はオブジェクト形式で指定してください。`);
+        }
+        const sb = profile.storybook;
+        if (sb.renderCommand !== undefined) {
+          validateStringArrayField(sb.renderCommand, `profile "${name}".storybook.renderCommand`);
+        }
+        if (sb.smokeCommand !== undefined) {
+          validateStringArrayField(sb.smokeCommand, `profile "${name}".storybook.smokeCommand`);
+        }
+      }
       if (profile.criteriaPreset !== undefined) {
         if (profile.criteriaPreset !== "backend" && profile.criteriaPreset !== "frontend") {
           throw new GuardError(
@@ -408,6 +432,12 @@ function resolveOneProfile(
   const toolRoot = resolve(projectRoot, rawToolRoot);
   const exec = normalizeExec(user.exec);
   const reviewCriteria = user.reviewCriteria ?? [];
+  const storybook = user.storybook
+    ? {
+        renderCommand: [...(user.storybook.renderCommand ?? [])],
+        smokeCommand: [...(user.storybook.smokeCommand ?? [])],
+      }
+    : undefined;
 
   const userLayout = user.sourceLayout;
   const sourceLayout: SourceLayoutConfig = {
@@ -424,6 +454,7 @@ function resolveOneProfile(
     lint,
     test,
     sourceLayout,
+    storybook,
     exec,
     toolRoot,
     reviewCriteria,
@@ -570,6 +601,32 @@ function validateProfile(name: string, profile: ResolvedProfileConfig): void {
       `profile "${name}".sourceLayout.additionalAllowedPrefixes`,
       prefix,
     );
+  }
+  if (profile.storybook) {
+    validateResolvedStringArray(profile.storybook.renderCommand, `profile "${name}".storybook.renderCommand`);
+    validateResolvedStringArray(profile.storybook.smokeCommand, `profile "${name}".storybook.smokeCommand`);
+  }
+}
+
+function validateStringArrayField(value: unknown, field: string): void {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new GuardError(`${field} は空でない文字列配列で指定してください。`);
+  }
+  for (const item of value) {
+    if (typeof item !== "string" || item.length === 0) {
+      throw new GuardError(`${field} の各要素は空でない文字列である必要があります。`);
+    }
+  }
+}
+
+function validateResolvedStringArray(value: string[], field: string): void {
+  if (value.length === 0) {
+    throw new GuardError(`${field} は空配列にできません。`);
+  }
+  for (const item of value) {
+    if (item.length === 0) {
+      throw new GuardError(`${field} の各要素は空文字列にできません。`);
+    }
   }
 }
 

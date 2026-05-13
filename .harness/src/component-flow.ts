@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { promisify } from "node:util";
+import { execFile } from "node:child_process";
 import { stringify as stringifyYaml } from "yaml";
 import { HarnessLogger } from "./logger.ts";
 import { LintGuard } from "./lint-guard.ts";
@@ -8,17 +10,17 @@ import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { Boundary } from "./boundary.ts";
 import type { RunnerRegistry } from "./runner-registry.ts";
 import { FLOW_STEP } from "./steps.ts";
-import type { ResolvedProfileConfig } from "./config.ts";
-import type { LintAdapter, TestAdapter } from "./tool-adapter.ts";
+import type { ResolvedProfileConfig, StorybookConfig } from "./config.ts";
+import type { LintAdapter } from "./tool-adapter.ts";
 import type { ReviewIssue, ReviewResult, TaskPlan } from "./types.ts";
 import { GuardError, EVENT } from "./types.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
-import { runTool } from "./launcher.ts";
-import type { LauncherOptions } from "./launcher.ts";
 import { parsePlan } from "./plan-parser.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_COMPONENT_FIX_RETRIES = 2;
+const STORYBOOK_TIMEOUT_MS = 5 * 60 * 1000;
+const execFileAsync = promisify(execFile);
 
 type TargetOutcome = {
   target: string;
@@ -32,20 +34,18 @@ export class ComponentFlow {
   private boundary: Boundary;
   private registry: RunnerRegistry;
   private profile: ResolvedProfileConfig;
-  private testAdapter: TestAdapter;
   private lintAdapters: LintAdapter[];
 
   constructor(
     boundary: Boundary,
     registry: RunnerRegistry,
     profile: ResolvedProfileConfig,
-    testAdapter: TestAdapter,
+    _testAdapter: import("./tool-adapter.ts").TestAdapter,
     lintAdapters: LintAdapter[],
   ) {
     this.boundary = boundary;
     this.registry = registry;
     this.profile = profile;
-    this.testAdapter = testAdapter;
     this.lintAdapters = lintAdapters;
   }
 
@@ -147,8 +147,8 @@ export class ComponentFlow {
       throw new GuardError(`コンポーネント定義書が ready ではありません（現在: ${componentSpecStatus ?? "なし"}）`);
     }
 
-    if (this.testAdapter.name !== "vitest") {
-      throw new GuardError(`component フローの story smoke には vitest が必要です。現在の test adapter: ${this.testAdapter.name}`);
+    if (!this.profile.storybook) {
+      throw new GuardError("component フローには profile.storybook.renderCommand / smokeCommand の設定が必要です。");
     }
   }
 
@@ -303,48 +303,53 @@ export class ComponentFlow {
       }];
     }
 
+    const storyFile = storyFiles[0];
     const issues: ReviewIssue[] = [];
-    for (const storyFile of storyFiles) {
-      const storyIssues = await this.runStorySmoke(storyFile);
-      issues.push(...storyIssues);
+    const renderIssues = await this.runStorybookCommand("render", target, storyFile, this.profile.storybook!);
+    issues.push(...renderIssues);
+    if (renderIssues.length === 0) {
+      const smokeIssues = await this.runStorybookCommand("smoke", target, storyFile, this.profile.storybook!);
+      issues.push(...smokeIssues);
     }
     return issues;
   }
 
-  private async runStorySmoke(storyFile: string): Promise<ReviewIssue[]> {
-    const absStoryFile = resolve(storyFile);
-    const args = this.testAdapter.buildArgs(absStoryFile);
-    const launcherOptions: LauncherOptions = {
-      toolRoot: this.profile.toolRoot,
-      execOverride: this.profile.exec,
-    };
-    const result = await runTool(this.testAdapter.name, args, launcherOptions);
-    const parsed = this.testAdapter.parseResult(result.stdout, result.stderr, result.exitCode);
+  private async runStorybookCommand(
+    mode: "render" | "smoke",
+    target: string,
+    storyFile: string,
+    storybook: StorybookConfig,
+  ): Promise<ReviewIssue[]> {
+    const commandTemplate = mode === "render" ? storybook.renderCommand : storybook.smokeCommand;
+    const command = commandTemplate.map((part) => this.expandStorybookArg(part, target, storyFile));
+    const [tool, ...args] = command;
 
-    switch (parsed.kind) {
-      case "passed":
-        return [];
-      case "no-tests":
-        return [{
-          file: storyFile,
-          severity: "major",
-          description: `Story smoke が実行できません。${basename(storyFile)} が Vitest からテストとして認識されていません。@storybook/addon-vitest の設定を確認してください。`,
-        }];
-      case "failed":
-        return [{
-          file: storyFile,
-          severity: "major",
-          description: `Story smoke が失敗しました。主要 Story が render できていない可能性があります。出力: ${parsed.output.slice(0, 1200)}`,
-        }];
-      case "collection-error":
-      case "internal-error":
-      case "interrupted":
-        return [{
-          file: storyFile,
-          severity: "critical",
-          description: `Story smoke 実行中に内部エラーが発生しました。出力: ${parsed.output.slice(0, 1200)}`,
-        }];
+    try {
+      const { stdout, stderr } = await execFileAsync(tool, args, {
+        cwd: this.profile.toolRoot,
+        timeout: STORYBOOK_TIMEOUT_MS,
+      });
+      const output = `${stdout}${stderr}`.trim();
+      if (output) {
+        // no-op; command output remains in process logs only
+      }
+      return [];
+    } catch (error: unknown) {
+      const execError = error as { stdout?: string; stderr?: string; code?: string | number; message?: string };
+      const output = `${execError.stdout ?? ""}${execError.stderr ?? ""}`.trim();
+      return [{
+        file: storyFile,
+        severity: "major",
+        description: `Storybook ${mode} command が失敗しました。command=${command.join(" ")}. output=${(output || execError.message || "").slice(0, 1200)}`,
+      }];
     }
+  }
+
+  private expandStorybookArg(arg: string, target: string, storyFile: string): string {
+    return arg
+      .replaceAll("{{target}}", target)
+      .replaceAll("{{storyFile}}", storyFile)
+      .replaceAll("{{toolRoot}}", this.profile.toolRoot);
   }
 
   private async applyFixes(target: string, issues: ReviewIssue[], scopeTools: string[]): Promise<void> {

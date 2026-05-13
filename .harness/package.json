@@ -8,6 +8,7 @@
   "files": [
     "src/",
     "templates/",
+    "rules/",
     "review-criteria-*.md",
     "setup-guide.md"
   ],

@@ -44,9 +44,13 @@ profiles:
     toolRoot: frontend
     criteriaPreset: frontend
     sourceLayout:
-      sourceDir: "frontend/src/{{category}}"
-      testDir: "frontend/src/{{category}}/__tests__"
-      scopePattern: "frontend/src/{{category}}/*"
+      sourceDir: "frontend/src/{{category}}/{{name}}"
+      testDir: "frontend/src/{{category}}/{{name}}/__tests__"
+      scopePattern: "frontend/src/{{category}}/{{name}}/*"
+      additionalAllowedPrefixes: ["docs/reviews/", "frontend/src/mocks/handlers/"]
+    storybook:
+      renderCommand: ["pnpm", "storybook", "build", "--test", "--docs", "--output-dir", ".storybook-static-{{target}}"]
+      smokeCommand: ["pnpm", "storybook", "test", "--stories-json", "{{storyFile}}"]
 ```
 
 ### ランナー・ステップ割り当て
@@ -100,8 +104,6 @@ tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する
 
 ```bash
 tdd-harness impl plan/current-task.md
-tdd-harness component plan/components-task.md
-tdd-harness page plan/page-task.md
 ```
 
 実行前に対話的にステップごとのランナー割り当てを確認・変更できる:
@@ -142,6 +144,11 @@ tdd-harness impl plan/task.md --no-interactive
 tdd-harness impl plan/task.md --resume
 ```
 
+```bash
+tdd-harness component plan/components-task.md
+tdd-harness page plan/page-task.md
+```
+
 ### Page Flow（Page UI 実装）
 
 ```bash
@@ -162,9 +169,11 @@ tdd-harness component plan/components-task.md
 
 - `Targets` を 1 件ずつ順に処理
 - component と Story を同時生成
-- lint / typecheck / story smoke / セルフレビューを実行
+- lint / typecheck / configured Storybook render + smoke / セルフレビューを実行
 - target ごとに最大 2 回修正
 - 終了時に `未収束 target: N` を標準出力へ表示
+- Storybook コマンドは `profile.storybook.renderCommand` / `smokeCommand` で指定する
+- 利用可能な変数: `{{target}}`, `{{storyFile}}`, `{{toolRoot}}`
 
 ## 計画ファイルのフォーマット
 

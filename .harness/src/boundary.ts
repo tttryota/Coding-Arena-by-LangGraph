@@ -256,9 +256,21 @@ export class Boundary {
 
   // === allowedTools（sourceLayout 駆動） ===
 
+  private resolvedAdditionalAllowedPrefixes(): string[] {
+    return this.sourceLayout.additionalAllowedPrefixes.map((prefix) => prefix.endsWith("/") ? prefix : `${prefix}/`);
+  }
+
   scopeAllowedTools(scope: string): string[] {
     const pattern = this.resolvePattern(this.sourceLayout.scopePattern, scope);
-    return ["Read", `Write(${pattern})`, `Edit(${pattern})`];
+    return [
+      "Read",
+      `Write(${pattern})`,
+      `Edit(${pattern})`,
+      ...this.resolvedAdditionalAllowedPrefixes().flatMap((prefix) => [
+        `Write(${prefix}**)`,
+        `Edit(${prefix}**)`,
+      ]),
+    ];
   }
 
   implAllowedTools(scope: string): string[] {
@@ -266,12 +278,28 @@ export class Boundary {
     const extGlob = this.fileExtensions.length === 1
       ? `*.${this.fileExtensions[0]}`
       : `*.{${this.fileExtensions.join(",")}}`;
-    return ["Read", `Write(${sourceDir}/**/${extGlob})`, `Edit(${sourceDir}/**/${extGlob})`];
+    return [
+      "Read",
+      `Write(${sourceDir}/**/${extGlob})`,
+      `Edit(${sourceDir}/**/${extGlob})`,
+      ...this.resolvedAdditionalAllowedPrefixes().flatMap((prefix) => [
+        `Write(${prefix}**)`,
+        `Edit(${prefix}**)`,
+      ]),
+    ];
   }
 
   testAllowedTools(scope: string): string[] {
     const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
-    return ["Read", `Write(${testDir}/**)`, `Edit(${testDir}/**)`];
+    return [
+      "Read",
+      `Write(${testDir}/**)`,
+      `Edit(${testDir}/**)`,
+      ...this.resolvedAdditionalAllowedPrefixes().flatMap((prefix) => [
+        `Write(${prefix}**)`,
+        `Edit(${prefix}**)`,
+      ]),
+    ];
   }
 
   // === git 操作（sourceLayout 駆動） ===
@@ -287,10 +315,23 @@ export class Boundary {
     return dirs;
   }
 
+  private async changedFilesUnderPrefixes(prefixes: string[]): Promise<string[]> {
+    const tracked = await this.gitListChangedFiles("git", ["diff", "--name-only", "HEAD"]);
+    const untracked = await this.gitListChangedFiles("git", ["ls-files", "--others", "--exclude-standard"]);
+    const allChanged = [...tracked, ...untracked];
+    return allChanged.filter((file) => prefixes.some((prefix) => file.startsWith(prefix)));
+  }
+
   async stageFiles(scope: string): Promise<void> {
     const dirs = this.scopeDirs(scope);
+    const changedExtraFiles = await this.changedFilesUnderPrefixes(this.resolvedAdditionalAllowedPrefixes());
+    const stageTargets = [
+      ...dirs.map((d) => `${d}/`),
+      ...changedExtraFiles,
+    ];
+    if (stageTargets.length === 0) return;
     try {
-      await execFileAsync("git", ["add", ...dirs.map((d) => `${d}/`)], {
+      await execFileAsync("git", ["add", ...stageTargets], {
         cwd: this.projectRoot, timeout: 30_000,
       });
     } catch (error: unknown) {
@@ -339,7 +380,7 @@ export class Boundary {
     const dirs = this.scopeDirs(scope);
     const allowedPrefixes = [
       ...dirs.map((d) => d.endsWith("/") ? d : `${d}/`),
-      ...this.sourceLayout.additionalAllowedPrefixes.map((p) => p.endsWith("/") ? p : `${p}/`),
+      ...this.resolvedAdditionalAllowedPrefixes(),
     ];
 
     const tracked = await this.gitListChangedFiles("git", ["diff", "--name-only", "HEAD"]);

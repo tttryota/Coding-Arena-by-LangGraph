@@ -10,12 +10,12 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness.yml` で `runners` と `steps` を明示設定）
+- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
 - プロジェクトに応じた lint/test ツール
 
 ## 設定ファイル
 
-プロジェクトルートに `.harness.yml` を作成。
+設定ファイルは `.harness/harness.yml` を推奨（後方互換で `.harness.yml` も読み込み可）。
 
 ### 例1: Python バックエンド
 
@@ -42,9 +42,9 @@ profiles:
     toolRoot: .
     criteriaPreset: frontend
     sourceLayout:
-      sourceDir: "src/{{category}}"
-      testDir: "src/{{category}}/__tests__"
-      scopePattern: "src/{{category}}/*"
+      sourceDir: "src/{{category}}/{{name}}"
+      testDir: "src/{{category}}/{{name}}/__tests__"
+      scopePattern: "src/{{category}}/{{name}}/*"
 ```
 
 ### 例3: 複数プロファイル
@@ -65,8 +65,9 @@ profiles:
     toolRoot: frontend
     criteriaPreset: frontend
     sourceLayout:
-      sourceDir: "frontend/src/{{category}}"
-      testDir: "frontend/src/{{category}}/__tests__"
+      sourceDir: "frontend/src/{{category}}/{{name}}"
+      testDir: "frontend/src/{{category}}/{{name}}/__tests__"
+      scopePattern: "frontend/src/{{category}}/{{name}}/*"
 
 runners:
   claude:

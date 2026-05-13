@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { HarnessError, GuardError } from "./types.ts";
 import { LINT_REGISTRY, TEST_REGISTRY } from "./tool-adapter.ts";
@@ -94,7 +94,14 @@ export type HarnessConfig = ResolvedConfig;
 
 // === 定数 ===
 
-const CONFIG_FILENAMES = [".harness.yml", ".harness.yaml"];
+const PREFERRED_CONFIG_PATH = ".harness/harness.yml";
+const LEGACY_CONFIG_PATH = ".harness.yml";
+const CONFIG_FILENAMES = [
+  PREFERRED_CONFIG_PATH,
+  ".harness/harness.yaml",
+  LEGACY_CONFIG_PATH,
+  ".harness.yaml",
+];
 
 const DEFAULT_STEPS: Partial<Record<FlowStep, string>> = {
   test_generate: "claude",
@@ -123,20 +130,17 @@ const DEFAULT_STEPS: Partial<Record<FlowStep, string>> = {
 
 export function loadConfig(projectRoot: string): ResolvedConfig {
   let userConfig: HarnessUserConfig = {};
+  const configPath = findConfigPath(projectRoot);
 
-  for (const name of CONFIG_FILENAMES) {
-    const configPath = join(projectRoot, name);
-    if (existsSync(configPath)) {
-      const raw = readFileSync(configPath, "utf-8");
-      const parsed = parseYaml(raw);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        userConfig = parsed as HarnessUserConfig;
-      } else {
-        throw new GuardError(
-          "設定ファイルの形式が不正です。YAML オブジェクトを記述してください。",
-        );
-      }
-      break;
+  if (configPath) {
+    const raw = readFileSync(configPath, "utf-8");
+    const parsed = parseYaml(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      userConfig = parsed as HarnessUserConfig;
+    } else {
+      throw new GuardError(
+        `設定ファイルの形式が不正です: ${relativeConfigPath(projectRoot, configPath)}。YAML オブジェクトを記述してください。`,
+      );
     }
   }
 
@@ -357,7 +361,7 @@ function requireProfiles(config: HarnessUserConfig): HarnessUserConfig {
     return config;
   }
   throw new GuardError(
-    "profiles が定義されていません。.harness.yml に profiles を追加してください。\n`tdd-harness init` でセットアップガイドを表示できます。",
+    `profiles が定義されていません。${configLocationMessage()} に profiles を追加してください。\n\`tdd-harness init\` でセットアップガイドを表示できます。`,
   );
 }
 
@@ -507,7 +511,7 @@ function validateConfig(config: ResolvedConfig): void {
   const profileNames = Object.keys(config.profiles);
   if (profileNames.length === 0) {
     throw new GuardError(
-      "profiles が定義されていません。.harness.yml に profiles を追加してください。",
+      `profiles が定義されていません。${configLocationMessage()} に profiles を追加してください。`,
     );
   }
 
@@ -685,8 +689,27 @@ export function resolveProfile(
   const profile = config.profiles[profileName];
   if (!profile) {
     throw new GuardError(
-      `profile "${profileName}" が見つかりません。.harness.yml の profiles を確認してください。利用可能: ${Object.keys(config.profiles).join(", ")}`,
+      `profile "${profileName}" が見つかりません。${configLocationMessage()} の profiles を確認してください。利用可能: ${Object.keys(config.profiles).join(", ")}`,
     );
   }
   return profile;
+}
+
+function findConfigPath(projectRoot: string): string | null {
+  for (const name of CONFIG_FILENAMES) {
+    const configPath = join(projectRoot, name);
+    if (existsSync(configPath)) {
+      return configPath;
+    }
+  }
+  return null;
+}
+
+function relativeConfigPath(projectRoot: string, filePath: string): string {
+  const relativePath = relative(resolve(projectRoot), resolve(filePath));
+  return relativePath || filePath;
+}
+
+function configLocationMessage(): string {
+  return `${PREFERRED_CONFIG_PATH}（後方互換で ${LEGACY_CONFIG_PATH} も可）`;
 }

@@ -13,7 +13,7 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提条件:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness.yml` で `runners` と `steps` を明示設定）
+- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
 - プロジェクトに応じた lint/test ツール（Python: ruff + mypy + pytest、TypeScript: eslint + tsc + vitest）
 
 セットアップガイドを表示:
@@ -23,7 +23,7 @@ tdd-harness init
 
 ## 設定
 
-プロジェクトルートに `.harness.yml` を配置:
+設定ファイルは `.harness/harness.yml` を推奨（後方互換で `.harness.yml` も読み込み可）:
 
 ### プロファイル
 
@@ -85,7 +85,7 @@ steps:
   judge_minor: claude
 ```
 
-`.harness.yml` に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
+`.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
 
 ## 使い方
 
@@ -232,7 +232,7 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 
 ```
 harness（CLI エントリポイント）
-  ├── config（.harness.yml 読み込み + プロファイル解決）
+  ├── config（.harness/harness.yml 優先で読み込み + プロファイル解決）
   ├── runner-registry（ステップ → ランナー解決）
   │   ├── claude-runner（claude -p ラッパー）
   │   ├── codex-runner（codex exec ラッパー）

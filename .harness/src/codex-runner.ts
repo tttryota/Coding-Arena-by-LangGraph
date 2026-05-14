@@ -1,41 +1,114 @@
+import { Codex } from "@openai/codex-sdk";
+import type { ApprovalMode, Input, SandboxMode, Thread } from "@openai/codex-sdk";
 import type { Runner, RunnerResponse } from "./runner.ts";
-import { spawnWithStdin } from "./spawn.ts";
+import { RUNNER_CAPABILITY } from "./runner.ts";
+import type { HarnessLogger } from "./logger.ts";
 import { HarnessError, RunnerRateLimitError } from "./types.ts";
 
+function toApprovalPolicy(sandbox: string | undefined): ApprovalMode {
+  if (sandbox === "danger-full-access" || sandbox === "workspace-write") {
+    return "never";
+  }
+  return "untrusted";
+}
+
+function toSandboxMode(sandbox: string | undefined): SandboxMode {
+  if (sandbox === "workspace-write" || sandbox === "danger-full-access" || sandbox === "read-only") {
+    return sandbox;
+  }
+  return "workspace-write";
+}
+
 export function createCodexRunner(defaults?: {
+  name?: string;
   timeoutMs?: number;
   sandbox?: string;
   projectRoot?: string;
 }): Runner {
+  const codex = new Codex();
+
   return {
-    name: "codex",
-    capabilities: new Set([]),
+    name: defaults?.name ?? "codex",
+    capabilities: new Set([
+      RUNNER_CAPABILITY.SESSION_RESUME,
+    ]),
     async run(request, logger) {
-      const args = ["exec"];
-      args.push("--sandbox", defaults?.sandbox ?? "read-only");
       const cwd = request.cwd ?? defaults?.projectRoot;
-      if (cwd) args.push("--cd", cwd);
-      args.push("-");
+      const timeoutMs = request.timeoutMs ?? defaults?.timeoutMs;
+      const sandboxMode = toSandboxMode(defaults?.sandbox);
+      const approvalPolicy = toApprovalPolicy(defaults?.sandbox);
+      const thread = request.sessionId
+        ? codex.resumeThread(request.sessionId, {
+            sandboxMode,
+            workingDirectory: cwd,
+            approvalPolicy,
+          })
+        : codex.startThread({
+            sandboxMode,
+            workingDirectory: cwd,
+            approvalPolicy,
+          });
 
-      const fullPrompt = request.appendSystemPrompt
-        ? `${request.prompt}\n\n---\n${request.appendSystemPrompt}`
-        : request.prompt;
-
-      const result = await spawnWithStdin(
-        "codex", args, fullPrompt, undefined,
-        request.timeoutMs ?? defaults?.timeoutMs,
-      );
-
-      if (logger) logger.logCommand("codex", args, result);
-
-      if (result.exitCode !== 0) {
-        if (/rate|limit|429/i.test(result.stderr)) {
-          throw new RunnerRateLimitError("codex", result.stderr);
+      try {
+        return await runThread(thread, request.prompt, timeoutMs, logger);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/rate|limit|429/i.test(message)) {
+          throw new RunnerRateLimitError("codex", message);
         }
-        throw new HarnessError(`codex exec failed (exit ${result.exitCode}): ${result.stderr}`);
+        throw new HarnessError(`codex sdk run failed: ${message}`);
       }
-
-      return { text: result.stdout } satisfies RunnerResponse;
     },
   };
+}
+
+async function runThread(
+  thread: Thread,
+  prompt: string,
+  timeoutMs: number | undefined,
+  logger?: HarnessLogger,
+): Promise<RunnerResponse> {
+  const signal = timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined;
+  const input: Input = prompt;
+  const streamed = await thread.runStreamed(input, { signal });
+
+  let finalText = "";
+  let usage: {
+    input_tokens: number;
+    cached_input_tokens: number;
+    output_tokens: number;
+    reasoning_output_tokens: number;
+  } | null = null;
+
+  for await (const event of streamed.events) {
+    if (event.type === "item.completed" && event.item.type === "agent_message") {
+      finalText = event.item.text;
+    } else if (event.type === "turn.completed") {
+      usage = event.usage;
+    } else if (event.type === "turn.failed") {
+      throw new HarnessError(event.error.message);
+    } else if (event.type === "error") {
+      throw new HarnessError(event.message);
+    }
+  }
+
+  if (logger) {
+    logger.logCommand("codex-sdk", ["thread.runStreamed"], {
+      stdout: finalText,
+      stderr: "",
+      exitCode: 0,
+    });
+  }
+
+  return {
+    text: finalText,
+    sessionId: thread.id ?? undefined,
+    metadata: usage
+      ? {
+          inputTokens: usage.input_tokens + usage.cached_input_tokens,
+          outputTokens: usage.output_tokens,
+          cacheReadInputTokens: usage.cached_input_tokens,
+        }
+      : undefined,
+  } satisfies RunnerResponse;
 }

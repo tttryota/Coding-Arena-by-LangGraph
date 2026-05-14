@@ -118,9 +118,12 @@ export type BrowserVerificationResult = {
   scenarios: BrowserScenarioResult[];
 };
 
+export type BenchmarkMode = "harness" | "generation";
+
 export type TaskPlan = {
   type?: PlanType;
   profile?: string;
+  benchmarkMode?: BenchmarkMode;
   scope: string;
   specPath: string;
   testCasesPath: string;

@@ -3,7 +3,7 @@ import { resolve, dirname, relative, isAbsolute } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { GuardError } from "./types.ts";
 import type { TaskPlan } from "./types.ts";
-import type { BrowserScenario, PlanDependency, PlanType } from "./types.ts";
+import type { BenchmarkMode, BrowserScenario, PlanDependency, PlanType } from "./types.ts";
 
 /**
  * plan ファイルを Boundary に依存せずパースする。
@@ -41,6 +41,7 @@ export function parsePlan(projectRoot: string, planPath: string): TaskPlan {
   return {
     type: parsePlanType(frontmatter.type),
     profile: frontmatter.profile,
+    benchmarkMode: parseBenchmarkMode(frontmatter.benchmark),
     scope: frontmatter.scope ?? "",
     specPath: frontmatter.spec ?? "",
     testCasesPath: frontmatter.test_cases ?? "",
@@ -108,6 +109,12 @@ function parsePlanType(raw: string | undefined): PlanType | undefined {
   if (!raw) return undefined;
   if (raw === "impl" || raw === "component" || raw === "page") return raw;
   throw new GuardError(`未知の plan type です: "${raw}"。利用可能: impl, component, page`);
+}
+
+function parseBenchmarkMode(raw: string | undefined): BenchmarkMode | undefined {
+  if (!raw) return undefined;
+  if (raw === "harness" || raw === "generation") return raw;
+  throw new GuardError(`未知の benchmark mode です: "${raw}"。利用可能: harness, generation`);
 }
 
 function parseBoolean(raw: string | undefined): boolean | undefined {

@@ -15,7 +15,7 @@ import { loadTemplate, renderTemplate } from "./templates.ts";
 import { runTool } from "./launcher.ts";
 import type { LauncherOptions } from "./launcher.ts";
 import { parsePlan } from "./plan-parser.ts";
-import { applyClaudeStepContext, joinPromptSections } from "./claude-context.ts";
+import { applyStepContext, joinPromptSections } from "./step-context.ts";
 
 const MAX_GREEN_RETRIES = 3;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -141,6 +141,36 @@ export class ImplFlow {
 - テストファイルから import されるパスと一致させる`;
   }
 
+  private isGenerationBenchmark(plan: TaskPlan): boolean {
+    return plan.benchmarkMode === "generation";
+  }
+
+  private handleAlreadyGreen(
+    plan: TaskPlan,
+    logger: HarnessLogger,
+    reviewOrchestrator: ReviewOrchestrator,
+    output: string,
+  ): never | Promise<void> {
+    logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output, benchmarkMode: plan.benchmarkMode });
+    if (this.isGenerationBenchmark(plan)) {
+      this.generateReport(
+        plan,
+        logger,
+        reviewOrchestrator.getRecords(),
+        {
+          greenAttempts: 0,
+          alreadyGreen: true,
+          invalidReason: "already_green",
+        },
+      );
+      throw new GuardError(
+        "generation benchmark は ALREADY_GREEN を許容しません。既存実装ありの検証は benchmark: harness を使用してください。",
+      );
+    }
+    console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
+    return Promise.resolve();
+  }
+
   async run(planPath: string, options?: { resume?: boolean; plan?: import("./types.ts").TaskPlan }): Promise<void> {
     const plan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
     const root = this.boundary.getProjectRoot();
@@ -197,6 +227,17 @@ export class ImplFlow {
 
     logger.log(EVENT.TDD_START, { testCases: plan.targetTestCases });
 
+    if (this.isGenerationBenchmark(plan)) {
+      const existingImplFiles = await this.boundary.findImplementationFiles(plan.scope);
+      const existingTestFiles = await this.boundary.findTestFiles(plan.scope);
+      if (existingImplFiles.length > 0 && existingTestFiles.length > 0) {
+        const precheck = await this.runTests(testPath, { allowCollectionError: true });
+        if (precheck.passed) {
+          await this.handleAlreadyGreen(plan, logger, reviewOrchestrator, precheck.output);
+        }
+      }
+    }
+
     // テストコード一括生成
     if (!this.shouldSkip(resumeFrom, "test_generated")) {
       console.log("テストコードを生成中...");
@@ -210,7 +251,7 @@ export class ImplFlow {
         mswInstructions: this.buildMswInstructions(plan, "test"),
       });
       const testGenResult = await runner.run(
-        applyClaudeStepContext(
+        applyStepContext(
           {
             prompt: testGenPrompt,
             allowedTools: scopeTools,
@@ -222,6 +263,7 @@ export class ImplFlow {
           this.profile,
           FLOW_STEP.TEST_GENERATE,
           root,
+          runner.name,
         ),
         logger,
       );
@@ -253,9 +295,8 @@ export class ImplFlow {
     if (this.shouldSkip(resumeFrom, "red_confirmed") && !this.shouldSkip(resumeFrom, "green_confirmed")) {
       const rerunResult = await this.runTests(testPath, { allowCollectionError: true });
       if (rerunResult.passed) {
-        // resume 時にテストが既に GREEN → 通常経路と同じくレビューのみ実行
-        console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
-        logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: rerunResult.output });
+        // resume 時にテストが既に GREEN → benchmark mode に応じて失格またはレビュー続行
+        await this.handleAlreadyGreen(plan, logger, reviewOrchestrator, rerunResult.output);
         await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
         this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
         logger.clearCheckpoint();
@@ -270,8 +311,7 @@ export class ImplFlow {
       redFailureOutput = redResult.output;
 
       if (redResult.passed) {
-        console.log("警告: テストが既にパスしています。実装生成をスキップしてレビューに進みます。");
-        logger.log(EVENT.TEST_RUN, { result: "ALREADY_GREEN", output: redResult.output });
+        await this.handleAlreadyGreen(plan, logger, reviewOrchestrator, redResult.output);
         await this.runImplReview(reviewOrchestrator, plan, criteriaPaths, testPath);
         this.generateReport(plan, logger, reviewOrchestrator.getRecords(), { greenAttempts: 0, alreadyGreen: true });
         logger.clearCheckpoint();
@@ -305,7 +345,7 @@ export class ImplFlow {
 
       const implRunner = this.registry.getRunner(FLOW_STEP.IMPL_GENERATE);
       const implResult = await implRunner.run(
-        applyClaudeStepContext(
+        applyStepContext(
           {
             prompt: implPrompt,
             allowedTools: scopeTools,
@@ -318,6 +358,7 @@ export class ImplFlow {
           this.profile,
           FLOW_STEP.IMPL_GENERATE,
           root,
+          implRunner.name,
         ),
         logger,
       );
@@ -406,7 +447,7 @@ export class ImplFlow {
             .join("\n");
           const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
           await runner.run(
-            applyClaudeStepContext(
+            applyStepContext(
               {
                 prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
 
@@ -423,6 +464,7 @@ ${issueList}
               this.profile,
               FLOW_STEP.LINT_FIX,
               this.boundary.getProjectRoot(),
+              runner.name,
             ),
             undefined,
           );
@@ -535,7 +577,7 @@ ${issueList}
     plan: TaskPlan,
     logger: HarnessLogger,
     records: ReviewRecord[],
-    tdd: { greenAttempts: number; alreadyGreen: boolean },
+    tdd: { greenAttempts: number; alreadyGreen: boolean; invalidReason?: string },
   ): void {
     const root = this.boundary.getProjectRoot();
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -543,7 +585,16 @@ ${issueList}
     const usageSummary = logger.summarizeRunnerUsage();
 
     // review-data.json を保存
-    logger.saveReviewData({ plan, records, tdd, usageSummary });
+    logger.saveReviewData({
+      plan,
+      benchmark: {
+        mode: plan.benchmarkMode ?? null,
+        invalidReason: tdd.invalidReason ?? null,
+      },
+      records,
+      tdd,
+      usageSummary,
+    });
 
     // MD レポート生成
     // 集計対象: accepted を除いたレビュー実行レコードのみ
@@ -565,9 +616,10 @@ ${issueList}
 **実行日**: ${timestamp}
 **スコープ**: ${plan.scope}
 **結果**: 完了
+**ベンチマーク種別**: ${plan.benchmarkMode ?? "none"}
 **レビューサイクル数**: ${totalCycles}回
 **修正件数**: ${fixCount}件
-**Claude実行回数**: ${usageSummary.total.runs}回
+**LLM実行回数**: ${usageSummary.total.runs}回
 
 ## 対象テストケース
 ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
@@ -579,6 +631,9 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
       md += `- テスト生成後、既に GREEN（実装生成スキップ）\n`;
     } else {
       md += `- 実装生成: ${tdd.greenAttempts}回目で GREEN（最大3回）\n`;
+    }
+    if (tdd.invalidReason) {
+      md += `- benchmark 判定: 無効（${tdd.invalidReason}）\n`;
     }
 
     md += `\n---\n\n## レビュー詳細\n\n`;
@@ -649,14 +704,14 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
     md += `| 通過ステップ数 | ${lgtmRecords.length}件 |\n`;
     md += `| 事前定義の設計判断 | ${designDecisionRecords.length}件 |\n`;
     md += `| レビュー中に許容 | ${reviewAcceptedRecords.length}件 |\n`;
-    md += `| Claude実行回数 | ${usageSummary.total.runs}件 |\n`;
+    md += `| LLM実行回数 | ${usageSummary.total.runs}件 |\n`;
     md += `| Input Tokens | ${usageSummary.total.inputTokens} |\n`;
     md += `| Output Tokens | ${usageSummary.total.outputTokens} |\n`;
     md += `| Cost USD | ${usageSummary.total.costUsd.toFixed(4)} |\n`;
 
     const usageSteps = Object.entries(usageSummary.byStep);
     if (usageSteps.length > 0) {
-      md += `\n### Claude Usage By Step\n\n`;
+      md += `\n### LLM Usage By Step\n\n`;
       md += `| Step | Runs | Input | Output | Cost USD |\n|---|---:|---:|---:|---:|\n`;
       for (const [step, totals] of usageSteps) {
         md += `| ${step} | ${totals.runs} | ${totals.inputTokens} | ${totals.outputTokens} | ${totals.costUsd.toFixed(4)} |\n`;

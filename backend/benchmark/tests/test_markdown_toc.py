@@ -18,7 +18,7 @@ class TestGenerateTableOfContents:
         """
         result = generate_table_of_contents("")
 
-        assert len(result.headings) == 0
+        assert result.headings == ()
         assert result.markdown == ""
 
     def test_generate_table_of_contents_no_headings_empty_result(self) -> None:
@@ -28,7 +28,7 @@ class TestGenerateTableOfContents:
         """
         result = generate_table_of_contents("本文テキストのみ。見出しなし。\n次の行。")
 
-        assert len(result.headings) == 0
+        assert result.headings == ()
         assert result.markdown == ""
 
     def test_generate_table_of_contents_single_h1_correct_fields(self) -> None:
@@ -260,25 +260,23 @@ class TestGenerateTableOfContents:
         assert result.markdown == expected_md
 
     def test_generate_table_of_contents_atx_closing_removed(self) -> None:
-        """検証: ATX 末尾クロージング ## Heading ## がある場合.
+        """検証: ATX 見出しの末尾クロージングがある場合.
 
-        期待: 末尾の # が除去され text="Heading", anchor="heading" が返る.
+        期待: 末尾の ## が除去され、text と anchor が正しく生成される.
         """
-        text = "## Heading ##"
-        result = generate_table_of_contents(text)
+        result = generate_table_of_contents("## Heading ##")
 
         heading = result.headings[0]
         assert heading.text == "Heading"
         assert heading.anchor == "heading"
         assert result.markdown == "- [Heading](#heading)"
 
-    def test_generate_table_of_contents_japanese_duplicates_numbered_anchors(
+    def test_generate_table_of_contents_duplicate_japanese_headings_numbered(
         self,
     ) -> None:
-        """検証: 日本語の重複見出しがある場合.
+        """検証: 日本語見出しが重複する場合.
 
-        期待: 重複しない見出しが間に挟まっても付番が正しく動作し、
-              3件目の anchor が はじめに-1 となる.
+        期待: 3件目の見出しに -1 が付番される.
         """
         text = dedent("""\
             # はじめに
@@ -288,20 +286,96 @@ class TestGenerateTableOfContents:
         result = generate_table_of_contents(text)
 
         assert len(result.headings) == 3
-        assert result.headings[0].anchor == "はじめに"
-        assert result.headings[1].anchor == "概要"
         assert result.headings[2].anchor == "はじめに-1"
-        expected_md = dedent("""\
-            - [はじめに](#はじめに)
-              - [概要](#概要)
-            - [はじめに](#はじめに-1)""")
-        assert result.markdown == expected_md
+        assert result.markdown.splitlines()[2] == "- [はじめに](#はじめに-1)"
 
-    def test_generate_table_of_contents_spec_example_full_integration(self) -> None:
-        """検証: 仕様書の具体例を入力とした統合テスト.
+    def test_generate_table_of_contents_unclosed_code_fence_ignores_rest(self) -> None:
+        """検証: 閉じられていないコードフェンスがある場合.
 
-        期待: headings が6件で各 text/level/anchor が正しく、
-              markdown が仕様書記載の出力と一致する.
+        期待: 開始行以降はすべてコードブロック内として扱われる.
+        """
+        text = dedent("""\
+            # Before
+            ```
+            # Ignored
+        """)
+        result = generate_table_of_contents(text)
+
+        assert len(result.headings) == 1
+        assert result.headings[0].text == "Before"
+        assert result.markdown == "- [Before](#before)"
+
+    def test_generate_table_of_contents_min_level_greater_than_max_empty_result(
+        self,
+    ) -> None:
+        """検証: min_level > max_level の場合.
+
+        期待: 例外ではなく空の目次が返る.
+        """
+        result = generate_table_of_contents("# Title", min_level=4, max_level=3)
+
+        assert result.headings == ()
+        assert result.markdown == ""
+
+    def test_generate_table_of_contents_leading_space_heading_not_recognized(
+        self,
+    ) -> None:
+        """検証: 先頭にスペースがある見出し行がある場合.
+
+        期待: 行頭が # で始まる行だけが見出しとして認識される.
+        """
+        text = " # Not Heading\n# Actual"
+        result = generate_table_of_contents(text)
+
+        assert len(result.headings) == 1
+        assert result.headings[0].text == "Actual"
+        assert result.markdown == "- [Actual](#actual)"
+
+    def test_generate_table_of_contents_seven_hashes_not_recognized(self) -> None:
+        """検証: # が7つ以上の行がある場合.
+
+        期待: max_level のフィルタではなく、Markdown 仕様どおり
+              見出しとして認識されない.
+        """
+        text = "####### Too Many\n# Valid"
+        result = generate_table_of_contents(text, max_level=6)
+
+        assert len(result.headings) == 1
+        assert result.headings[0].text == "Valid"
+        assert result.markdown == "- [Valid](#valid)"
+
+    def test_generate_table_of_contents_empty_slug_heading_kept_empty(self) -> None:
+        """検証: スラッグが空文字列になる見出しの場合.
+
+        期待: anchor は空文字列のままで、リンク先は (#) になる.
+        """
+        result = generate_table_of_contents("## !!!")
+
+        heading = result.headings[0]
+        assert heading.text == "!!!"
+        assert heading.anchor == ""
+        assert result.markdown == "- [!!!](#)"
+
+    def test_generate_table_of_contents_link_with_parenthesis_in_url_uses_known_limitation(
+        self,
+    ) -> None:
+        """検証: URL 内に ) を含むリンクを見出しに含む場合.
+
+        期待: 最初の ) でリンクが閉じた扱いとなる既知制限どおりの text/anchor になる.
+        """
+        result = generate_table_of_contents("# [text](https://example.com/foo_(bar))")
+
+        heading = result.headings[0]
+        assert heading.text == "text)"
+        assert heading.anchor == "text"
+        assert result.markdown == "- [text)](#text)"
+
+    def test_generate_table_of_contents_spec_example_matches_expected_output(
+        self,
+    ) -> None:
+        """検証: 仕様書の具体例全体を入力した場合.
+
+        期待: headings と markdown が仕様書記載の出力に一致する.
         """
         text = dedent("""\
             # はじめに
@@ -318,39 +392,21 @@ class TestGenerateTableOfContents:
 
             ### 応用例
 
-            ## はじめに""")
+            ## はじめに
+        """)
         result = generate_table_of_contents(text, min_level=1, max_level=3)
 
-        assert len(result.headings) == 6
-        assert result.headings[0] == TableOfContentsHeading(
-            text="はじめに",
-            level=1,
-            anchor="はじめに",
-        )
-        assert result.headings[1] == TableOfContentsHeading(
-            text="インストール",
-            level=2,
-            anchor="インストール",
-        )
-        assert result.headings[2] == TableOfContentsHeading(
-            text="使い方",
-            level=2,
-            anchor="使い方",
-        )
-        assert result.headings[3] == TableOfContentsHeading(
-            text="基本的な使い方",
-            level=3,
-            anchor="基本的な使い方",
-        )
-        assert result.headings[4] == TableOfContentsHeading(
-            text="応用例",
-            level=3,
-            anchor="応用例",
-        )
-        assert result.headings[5] == TableOfContentsHeading(
-            text="はじめに",
-            level=2,
-            anchor="はじめに-1",
+        assert result.headings == (
+            TableOfContentsHeading(text="はじめに", level=1, anchor="はじめに"),
+            TableOfContentsHeading(text="インストール", level=2, anchor="インストール"),
+            TableOfContentsHeading(text="使い方", level=2, anchor="使い方"),
+            TableOfContentsHeading(
+                text="基本的な使い方",
+                level=3,
+                anchor="基本的な使い方",
+            ),
+            TableOfContentsHeading(text="応用例", level=3, anchor="応用例"),
+            TableOfContentsHeading(text="はじめに", level=2, anchor="はじめに-1"),
         )
         expected_md = dedent("""\
             - [はじめに](#はじめに)

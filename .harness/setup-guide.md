@@ -10,7 +10,8 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
+- `codex` CLI が PATH に存在（デフォルトの主フローで使用）
+- `claude` CLI が PATH に存在（外部レビューを使う場合）
 - プロジェクトに応じた lint/test ツール
 
 ## 設定ファイル
@@ -26,19 +27,15 @@ profiles:
     test: pytest
     toolRoot: backend
     criteriaPreset: backend
-    claude:
-      defaultAgent: harness-backend-general
-      defaultSkillBundles: [backend-core]
+    context:
+      defaultContextBundles: [backend-core]
       stepOverrides:
         impl_generate:
-          agent: harness-backend-impl
-          skillBundles: [backend-impl, backend-failure-modes]
+          contextBundles: [backend-impl, backend-failure-modes]
         impl_self_criteria:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-criteria]
+          contextBundles: [backend-review-criteria]
         impl_self_quality:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-quality]
+          contextBundles: [backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -83,14 +80,17 @@ profiles:
       scopePattern: "frontend/src/{{category}}/{{name}}/*"
 
 runners:
-  claude:
-    type: claude
   codex:
     type: codex
-    sandbox: read-only
+    sandbox: workspace-write
+  claude:
+    type: claude
+  claude_benchmark_opus:
+    type: claude
+    model: opus
 
-claude:
-  skillBundles:
+context:
+  contextBundles:
     backend-core: [harness-backend-core]
     backend-impl: [harness-backend-impl]
     backend-review-criteria: [harness-backend-review-criteria]
@@ -123,7 +123,7 @@ claude:
 | type | 説明 |
 |---|---|
 | claude | Claude Code CLI (`claude -p`) |
-| codex | OpenAI Codex CLI (`codex exec`) |
+| codex | OpenAI Codex SDK（内部でローカル `codex` CLI を利用） |
 | generic | 任意の CLI コマンド |
 
 ### generic runner の設定
@@ -151,6 +151,7 @@ non-interactive 実行にはツール側の権限設定が必要な場合があ�
 ```markdown
 ---
 profile: backend
+benchmark: generation
 scope: ingestion/chunk-splitter
 spec: docs/spec/ingestion/chunk-splitter.md
 test_cases: tests/test-cases/ingestion/chunk-splitter.md
@@ -175,6 +176,7 @@ test_cases: tests/test-cases/ingestion/chunk-splitter.md
 ```
 
 profile が 1 つだけの場合は frontmatter の `profile:` を省略可能。
+`benchmark:` は任意で、`harness` または `generation` を指定できる。`generation` は開始時点で GREEN なら失格になる。
 
 ## scope の命名規則
 

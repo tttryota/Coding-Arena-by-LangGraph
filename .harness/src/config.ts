@@ -9,7 +9,7 @@ import type { FlowMode, FlowStep } from "./steps.ts";
 // === Runner 型（変更なし） ===
 
 export type RunnerConfig =
-  | { type: "claude"; timeoutMs?: number }
+  | { type: "claude"; timeoutMs?: number; model?: string }
   | { type: "codex"; sandbox?: string; timeoutMs?: number }
   | {
       type: "generic";
@@ -33,6 +33,17 @@ export type UserStorybookConfig = {
   smokeCommand?: string[];
 };
 
+export type UserStepContextOverrideConfig = {
+  contextBundles?: string[];
+  mcpBundles?: string[];
+};
+
+export type UserProfileContextConfig = {
+  defaultContextBundles?: string[];
+  defaultMcpBundles?: string[];
+  stepOverrides?: Partial<Record<FlowStep, UserStepContextOverrideConfig>>;
+};
+
 export type UserClaudeStepOverrideConfig = {
   agent?: string;
   skillBundles?: string[];
@@ -53,6 +64,17 @@ export type SourceLayoutConfig = {
   additionalAllowedPrefixes: string[];
 };
 
+export type StepContextOverrideConfig = {
+  contextBundles: string[];
+  mcpBundles: string[];
+};
+
+export type ProfileContextConfig = {
+  defaultContextBundles: string[];
+  defaultMcpBundles: string[];
+  stepOverrides: Partial<Record<FlowStep, StepContextOverrideConfig>>;
+};
+
 export type ClaudeStepOverrideConfig = {
   agent?: string;
   skillBundles: string[];
@@ -71,8 +93,18 @@ export type UserClaudeConfig = {
   mcpBundles?: Record<string, string[]>;
 };
 
+export type UserContextConfig = {
+  contextBundles?: Record<string, string[]>;
+  mcpBundles?: Record<string, string[]>;
+};
+
 export type ResolvedClaudeConfig = {
   skillBundles: Record<string, string[]>;
+  mcpBundles: Record<string, string[]>;
+};
+
+export type ResolvedContextConfig = {
+  contextBundles: Record<string, string[]>;
   mcpBundles: Record<string, string[]>;
 };
 
@@ -87,6 +119,7 @@ export type UserProfileConfig = {
   toolRoot?: string;
   reviewCriteria?: string[];
   criteriaPreset?: "backend" | "frontend";
+  context?: UserProfileContextConfig;
   claude?: UserProfileClaudeConfig;
 };
 
@@ -104,6 +137,7 @@ export type ResolvedProfileConfig = {
   toolRoot: string;
   reviewCriteria: string[];
   criteriaPreset: "backend" | "frontend" | undefined;
+  context?: ProfileContextConfig;
   claude?: ProfileClaudeConfig;
 };
 
@@ -116,6 +150,7 @@ export type HarnessUserConfig = {
   steps?: Partial<Record<FlowStep, string>>;
   fallbackRunner?: string;
   templates?: Record<string, string | null>;
+  context?: UserContextConfig;
   claude?: UserClaudeConfig;
 };
 
@@ -126,6 +161,7 @@ export type ResolvedConfig = {
   steps: Partial<Record<FlowStep, string>>;
   fallbackRunner: string;
   templates: Record<string, string | null>;
+  context: ResolvedContextConfig;
   claude: ResolvedClaudeConfig;
 };
 
@@ -144,26 +180,26 @@ const CONFIG_FILENAMES = [
 ];
 
 const DEFAULT_STEPS: Partial<Record<FlowStep, string>> = {
-  test_generate: "claude",
-  test_self_quality: "claude",
+  test_generate: "codex",
+  test_self_quality: "codex",
   test_external_review: "claude",
-  impl_generate: "claude",
-  impl_self_criteria: "claude",
-  impl_self_quality: "claude",
+  impl_generate: "codex",
+  impl_self_criteria: "codex",
+  impl_self_quality: "codex",
   impl_external_review: "claude",
-  lint_fix: "claude",
-  apply_fixes: "claude",
-  judgment_summary: "claude",
-  judge_minor: "claude",
-  spec_generate: "claude",
-  test_case_generate: "claude",
-  component_generate: "claude",
-  component_self_review: "claude",
-  page_generate: "claude",
-  page_review_design: "claude",
-  page_review_behavior: "claude",
-  page_review_code: "claude",
-  page_browser_verify: "claude",
+  lint_fix: "codex",
+  apply_fixes: "codex",
+  judgment_summary: "codex",
+  judge_minor: "codex",
+  spec_generate: "codex",
+  test_case_generate: "codex",
+  component_generate: "codex",
+  component_self_review: "codex",
+  page_generate: "codex",
+  page_review_design: "codex",
+  page_review_behavior: "codex",
+  page_review_code: "codex",
+  page_browser_verify: "codex",
 };
 
 // === loadConfig ===
@@ -221,7 +257,8 @@ export function loadConfig(projectRoot: string): ResolvedConfig {
     steps: mergedSteps,
     fallbackRunner: defaultRunner,
     templates: migrated.templates ?? {},
-    claude: resolveClaudeConfig(migrated.claude),
+    context: resolveContextConfig(migrated.context, migrated.claude),
+    claude: resolveClaudeConfig(migrated.claude, migrated.context),
   };
 
   validateConfig(resolved);
@@ -314,6 +351,9 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
       if (profile.toolRoot !== undefined && typeof profile.toolRoot !== "string") {
         throw new GuardError(`profile "${name}".toolRoot は文字列である必要があります。`);
       }
+      if (profile.context !== undefined) {
+        validateProfileContextConfig(profile.context, `profile "${name}".context`);
+      }
       if (profile.claude !== undefined) {
         validateProfileClaudeConfig(profile.claude, `profile "${name}".claude`);
       }
@@ -328,6 +368,10 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
     if (typeof config.templates !== "object" || Array.isArray(config.templates)) {
       throw new GuardError("templates はオブジェクト形式で指定してください。");
     }
+  }
+  if (config.context !== undefined) {
+    validateBundleRecord(config.context.contextBundles, "context.contextBundles");
+    validateBundleRecord(config.context.mcpBundles, "context.mcpBundles");
   }
   if (config.claude !== undefined) {
     validateBundleRecord(config.claude.skillBundles, "claude.skillBundles");
@@ -391,6 +435,11 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
       if (r.timeoutMs !== undefined && (typeof r.timeoutMs !== "number" || r.timeoutMs <= 0)) {
         throw new GuardError(
           `runner "${name}" の timeoutMs は正の数値である必要があります。`,
+        );
+      }
+      if (r.type === "claude" && r.model !== undefined && typeof r.model !== "string") {
+        throw new GuardError(
+          `runner "${name}" (type: claude) の model は文字列である必要があります。`,
         );
       }
       if (r.type === "codex" && r.sandbox !== undefined && typeof r.sandbox !== "string") {
@@ -511,6 +560,7 @@ function resolveOneProfile(
     toolRoot,
     reviewCriteria,
     criteriaPreset: user.criteriaPreset,
+    context: resolveProfileContextConfig(user.context, user.claude),
     claude: resolveProfileClaudeConfig(user.claude),
   };
 }
@@ -565,7 +615,7 @@ function validateConfig(config: ResolvedConfig): void {
   }
 
   for (const [name, profile] of Object.entries(config.profiles)) {
-    validateProfile(name, profile, config.claude);
+    validateProfile(name, profile, config.context);
   }
 
   // runners
@@ -596,7 +646,7 @@ function validateConfig(config: ResolvedConfig): void {
 function validateProfile(
   name: string,
   profile: ResolvedProfileConfig,
-  rootClaudeConfig: ResolvedClaudeConfig,
+  rootContextConfig: ResolvedContextConfig,
 ): void {
   // lint 非空
   if (profile.lint.length === 0) {
@@ -663,8 +713,8 @@ function validateProfile(
     validateResolvedStringArray(profile.storybook.renderCommand, `profile "${name}".storybook.renderCommand`);
     validateResolvedStringArray(profile.storybook.smokeCommand, `profile "${name}".storybook.smokeCommand`);
   }
-  if (profile.claude) {
-    validateResolvedProfileClaudeConfig(name, profile.claude, rootClaudeConfig);
+  if (profile.context) {
+    validateResolvedProfileContextConfig(name, profile.context, rootContextConfig);
   }
 }
 
@@ -735,10 +785,60 @@ function validateProfileClaudeConfig(
   }
 }
 
-function resolveClaudeConfig(user: UserClaudeConfig | undefined): ResolvedClaudeConfig {
+function validateProfileContextConfig(
+  value: UserProfileContextConfig,
+  field: string,
+): void {
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new GuardError(`${field} はオブジェクト形式で指定してください。`);
+  }
+  if (value.defaultContextBundles !== undefined) {
+    validateStringArrayField(value.defaultContextBundles, `${field}.defaultContextBundles`);
+  }
+  if (value.defaultMcpBundles !== undefined) {
+    validateStringArrayField(value.defaultMcpBundles, `${field}.defaultMcpBundles`);
+  }
+  if (value.stepOverrides === undefined) return;
+  if (typeof value.stepOverrides !== "object" || Array.isArray(value.stepOverrides)) {
+    throw new GuardError(`${field}.stepOverrides はオブジェクト形式で指定してください。`);
+  }
+
+  const validStepKeys = new Set(Object.values(FLOW_STEP));
+  for (const [step, override] of Object.entries(value.stepOverrides)) {
+    if (!validStepKeys.has(step as FlowStep)) {
+      throw new GuardError(
+        `${field}.stepOverrides に未知の step "${step}" が指定されています。利用可能: ${[...validStepKeys].join(", ")}`,
+      );
+    }
+    if (!override || typeof override !== "object" || Array.isArray(override)) {
+      throw new GuardError(`${field}.stepOverrides.${step} はオブジェクト形式で指定してください。`);
+    }
+    if (override.contextBundles !== undefined) {
+      validateStringArrayField(override.contextBundles, `${field}.stepOverrides.${step}.contextBundles`);
+    }
+    if (override.mcpBundles !== undefined) {
+      validateStringArrayField(override.mcpBundles, `${field}.stepOverrides.${step}.mcpBundles`);
+    }
+  }
+}
+
+function resolveContextConfig(
+  user: UserContextConfig | undefined,
+  legacy: UserClaudeConfig | undefined,
+): ResolvedContextConfig {
   return {
-    skillBundles: cloneBundleRecord(user?.skillBundles),
-    mcpBundles: cloneBundleRecord(user?.mcpBundles),
+    contextBundles: mergeBundleRecords(legacy?.skillBundles, user?.contextBundles),
+    mcpBundles: mergeBundleRecords(legacy?.mcpBundles, user?.mcpBundles),
+  };
+}
+
+function resolveClaudeConfig(
+  user: UserClaudeConfig | undefined,
+  context: UserContextConfig | undefined,
+): ResolvedClaudeConfig {
+  return {
+    skillBundles: mergeBundleRecords(context?.contextBundles, user?.skillBundles),
+    mcpBundles: mergeBundleRecords(context?.mcpBundles, user?.mcpBundles),
   };
 }
 
@@ -749,6 +849,56 @@ function cloneBundleRecord(
   return Object.fromEntries(
     Object.entries(bundles).map(([name, entries]) => [name, [...entries]]),
   );
+}
+
+function mergeBundleRecords(
+  legacyBundles: Record<string, string[]> | undefined,
+  newBundles: Record<string, string[]> | undefined,
+): Record<string, string[]> {
+  return {
+    ...cloneBundleRecord(legacyBundles),
+    ...cloneBundleRecord(newBundles),
+  };
+}
+
+function resolveProfileContextConfig(
+  user: UserProfileContextConfig | undefined,
+  legacy: UserProfileClaudeConfig | undefined,
+): ProfileContextConfig | undefined {
+  if (!user && !legacy) return undefined;
+
+  const allSteps = new Set<FlowStep>([
+    ...Object.keys(user?.stepOverrides ?? {}) as FlowStep[],
+    ...Object.keys(legacy?.stepOverrides ?? {}) as FlowStep[],
+  ]);
+  const stepOverrides: Partial<Record<FlowStep, StepContextOverrideConfig>> = {};
+
+  for (const step of allSteps) {
+    const override = user?.stepOverrides?.[step];
+    const legacyOverride = legacy?.stepOverrides?.[step];
+    stepOverrides[step] = {
+      contextBundles: uniqueStrings([
+        ...(legacyOverride?.skillBundles ?? []),
+        ...(override?.contextBundles ?? []),
+      ]),
+      mcpBundles: uniqueStrings([
+        ...(legacyOverride?.mcpBundles ?? []),
+        ...(override?.mcpBundles ?? []),
+      ]),
+    };
+  }
+
+  return {
+    defaultContextBundles: uniqueStrings([
+      ...(legacy?.defaultSkillBundles ?? []),
+      ...(user?.defaultContextBundles ?? []),
+    ]),
+    defaultMcpBundles: uniqueStrings([
+      ...(legacy?.defaultMcpBundles ?? []),
+      ...(user?.defaultMcpBundles ?? []),
+    ]),
+    stepOverrides,
+  };
 }
 
 function resolveProfileClaudeConfig(
@@ -773,33 +923,33 @@ function resolveProfileClaudeConfig(
   };
 }
 
-function validateResolvedProfileClaudeConfig(
+function validateResolvedProfileContextConfig(
   profileName: string,
-  claude: ProfileClaudeConfig,
-  rootClaudeConfig: ResolvedClaudeConfig,
+  context: ProfileContextConfig,
+  rootContextConfig: ResolvedContextConfig,
 ): void {
   validateBundleRefs(
-    claude.defaultSkillBundles,
-    rootClaudeConfig.skillBundles,
-    `profile "${profileName}".claude.defaultSkillBundles`,
+    context.defaultContextBundles,
+    rootContextConfig.contextBundles,
+    `profile "${profileName}".context.defaultContextBundles`,
   );
   validateBundleRefs(
-    claude.defaultMcpBundles,
-    rootClaudeConfig.mcpBundles,
-    `profile "${profileName}".claude.defaultMcpBundles`,
+    context.defaultMcpBundles,
+    rootContextConfig.mcpBundles,
+    `profile "${profileName}".context.defaultMcpBundles`,
   );
 
-  for (const [step, override] of Object.entries(claude.stepOverrides)) {
+  for (const [step, override] of Object.entries(context.stepOverrides)) {
     if (!override) continue;
     validateBundleRefs(
-      override.skillBundles,
-      rootClaudeConfig.skillBundles,
-      `profile "${profileName}".claude.stepOverrides.${step}.skillBundles`,
+      override.contextBundles,
+      rootContextConfig.contextBundles,
+      `profile "${profileName}".context.stepOverrides.${step}.contextBundles`,
     );
     validateBundleRefs(
       override.mcpBundles,
-      rootClaudeConfig.mcpBundles,
-      `profile "${profileName}".claude.stepOverrides.${step}.mcpBundles`,
+      rootContextConfig.mcpBundles,
+      `profile "${profileName}".context.stepOverrides.${step}.mcpBundles`,
     );
   }
 }
@@ -816,6 +966,17 @@ function validateBundleRefs(
       );
     }
   }
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
 }
 
 function validateResolvedStringArray(value: string[], field: string): void {

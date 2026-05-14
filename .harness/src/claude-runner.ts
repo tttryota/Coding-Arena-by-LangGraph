@@ -18,6 +18,7 @@ export type ClaudeOptions = {
   timeoutMs?: number;
   agent?: string;
   mcpConfigs?: string[];
+  model?: string;
 };
 
 export async function runClaude(
@@ -66,6 +67,10 @@ function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string |
     args.push("--output-format", options.outputFormat);
   }
 
+  if (options.model) {
+    args.push("--model", options.model);
+  }
+
   if (options.agent) {
     args.push("--agent", options.agent);
   }
@@ -103,9 +108,13 @@ function cleanupTemp(filePath: string): void {
   }
 }
 
-export function createClaudeRunner(defaults?: { timeoutMs?: number }): Runner {
+export function createClaudeRunner(defaults?: {
+  name?: string;
+  timeoutMs?: number;
+  model?: string;
+}): Runner {
   return {
-    name: "claude",
+    name: defaults?.name ?? "claude",
     capabilities: new Set([
       RUNNER_CAPABILITY.SESSION_RESUME,
       RUNNER_CAPABILITY.ALLOWED_TOOLS,
@@ -125,6 +134,7 @@ export function createClaudeRunner(defaults?: { timeoutMs?: number }): Runner {
           timeoutMs: request.timeoutMs ?? defaults?.timeoutMs,
           agent: request.agent,
           mcpConfigs: request.mcpConfigs,
+          model: defaults?.model,
         },
         logger,
       );

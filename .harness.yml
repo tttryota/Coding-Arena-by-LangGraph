@@ -3,36 +3,29 @@ profiles:
     lint: [ruff, mypy]
     test: pytest
     toolRoot: backend
+    exec: [uv, run, --with, pytest, --with, ruff, --with, mypy]
     criteriaPreset: backend
-    claude:
-      defaultAgent: harness-backend-general
-      defaultSkillBundles: [backend-core]
+    context:
+      defaultContextBundles: [backend-core]
       stepOverrides:
         spec_generate:
-          agent: harness-backend-design
+          contextBundles: [backend-impl]
         test_case_generate:
-          agent: harness-backend-design
+          contextBundles: [backend-impl]
         test_generate:
-          agent: harness-backend-test
-          skillBundles: [backend-impl, backend-failure-modes]
+          contextBundles: [backend-impl, backend-failure-modes]
         test_self_quality:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-quality]
+          contextBundles: [backend-review-quality]
         test_external_review:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-quality]
+          contextBundles: [backend-review-quality]
         impl_generate:
-          agent: harness-backend-impl
-          skillBundles: [backend-impl, backend-failure-modes]
+          contextBundles: [backend-impl, backend-failure-modes]
         impl_self_criteria:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-criteria]
+          contextBundles: [backend-review-criteria]
         impl_self_quality:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-quality]
+          contextBundles: [backend-review-quality]
         impl_external_review:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-quality]
+          contextBundles: [backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -50,14 +43,17 @@ profiles:
       additionalAllowedPrefixes: ["docs/reviews/", "frontend/src/mocks/handlers/"]
 
 runners:
-  claude:
-    type: claude
   codex:
     type: codex
-    sandbox: read-only
+    sandbox: workspace-write
+  claude:
+    type: claude
+  claude_benchmark_opus:
+    type: claude
+    model: opus
 
-claude:
-  skillBundles:
+context:
+  contextBundles:
     backend-core:
       - harness-backend-core
     backend-impl:
@@ -70,19 +66,19 @@ claude:
       - harness-backend-failure-modes
 
 flow: full
-fallbackRunner: claude
+fallbackRunner: codex
 
 steps:
-  test_generate: claude
-  test_self_quality: claude
-  test_external_review: claude
-  impl_generate: claude
-  impl_self_criteria: claude
-  impl_self_quality: claude
-  impl_external_review: claude
-  lint_fix: claude
-  apply_fixes: claude
-  judgment_summary: claude
-  judge_minor: claude
-  spec_generate: claude
-  test_case_generate: claude
+  test_generate: codex
+  test_self_quality: codex
+  test_external_review: claude_benchmark_opus
+  impl_generate: codex
+  impl_self_criteria: codex
+  impl_self_quality: codex
+  impl_external_review: claude_benchmark_opus
+  lint_fix: codex
+  apply_fixes: codex
+  judgment_summary: codex
+  judge_minor: codex
+  spec_generate: codex
+  test_case_generate: codex

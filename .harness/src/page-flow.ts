@@ -15,7 +15,7 @@ import { loadTemplate, renderTemplate } from "./templates.ts";
 import { runTool } from "./launcher.ts";
 import type { LauncherOptions } from "./launcher.ts";
 import { parsePlan } from "./plan-parser.ts";
-import { applyClaudeStepContext } from "./claude-context.ts";
+import { applyStepContext } from "./step-context.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_BROWSER_ATTEMPTS = 2;
@@ -294,7 +294,7 @@ export class PageFlow {
 
     const runner = this.registry.getRunner(FLOW_STEP.PAGE_GENERATE);
     await runner.run(
-      applyClaudeStepContext(
+      applyStepContext(
         {
           prompt,
           allowedTools: scopeTools,
@@ -305,6 +305,7 @@ export class PageFlow {
         this.profile,
         FLOW_STEP.PAGE_GENERATE,
         root,
+        runner.name,
       ),
       undefined,
     );
@@ -325,7 +326,7 @@ export class PageFlow {
             .join("\n");
           const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
           await runner.run(
-            applyClaudeStepContext(
+            applyStepContext(
               {
                 prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
 
@@ -342,6 +343,7 @@ ${issueList}
               this.profile,
               FLOW_STEP.LINT_FIX,
               this.boundary.getProjectRoot(),
+              runner.name,
             ),
             undefined,
           );
@@ -402,7 +404,7 @@ ${issueList}
 
     const runner = this.registry.getRunner(FLOW_STEP.PAGE_BROWSER_VERIFY);
     const response = await runner.run(
-      applyClaudeStepContext(
+      applyStepContext(
         {
           prompt,
           cwd: root,
@@ -412,6 +414,7 @@ ${issueList}
         this.profile,
         FLOW_STEP.PAGE_BROWSER_VERIFY,
         root,
+        runner.name,
       ),
       undefined,
     );
@@ -512,7 +515,7 @@ ${issueList}
 
     const runner = this.registry.getRunner(FLOW_STEP.APPLY_FIXES);
     await runner.run(
-      applyClaudeStepContext(
+      applyStepContext(
         {
           prompt,
           allowedTools: scopeTools,
@@ -523,6 +526,7 @@ ${issueList}
         this.profile,
         FLOW_STEP.APPLY_FIXES,
         this.boundary.getProjectRoot(),
+        runner.name,
       ),
       undefined,
     );

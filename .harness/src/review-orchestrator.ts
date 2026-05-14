@@ -8,7 +8,7 @@ import { FLOW_STEP } from "./steps.ts";
 import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT } from "./types.ts";
 import type { ReviewIssue, ReviewResult, ReviewRecord } from "./types.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
-import { applyClaudeStepContext } from "./claude-context.ts";
+import { applyStepContext } from "./step-context.ts";
 
 const MAX_REVIEW_CYCLES = 5;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -997,7 +997,7 @@ ${spec.slice(0, 3000)}
   ): Promise<ReviewResult> {
     const runner = this.registry.getRunner(step);
     const response = await runner.run(
-      applyClaudeStepContext(
+      applyStepContext(
         {
           prompt,
           allowedTools: options?.allowedTools ?? ["Read"],
@@ -1008,6 +1008,7 @@ ${spec.slice(0, 3000)}
         this.profile,
         step,
         this.projectRoot,
+        runner.name,
       ),
       this.logger,
     );
@@ -1026,7 +1027,7 @@ ${spec.slice(0, 3000)}
   ): Promise<string> {
     const runner = this.registry.getRunner(step);
     const response = await runner.run(
-      applyClaudeStepContext(
+      applyStepContext(
         {
           prompt,
           allowedTools: options?.allowedTools,
@@ -1038,6 +1039,7 @@ ${spec.slice(0, 3000)}
         this.profile,
         step,
         this.projectRoot,
+        runner.name,
       ),
       this.logger,
     );

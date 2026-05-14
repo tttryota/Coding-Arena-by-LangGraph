@@ -13,7 +13,8 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提条件:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
+- `codex` CLI が PATH に存在（デフォルトの主フローで使用）
+- `claude` CLI が PATH に存在（外部レビューを使う場合）
 - プロジェクトに応じた lint/test ツール（Python: ruff + mypy + pytest、TypeScript: eslint + tsc + vitest）
 
 セットアップガイドを表示:
@@ -34,19 +35,15 @@ profiles:
     test: pytest
     toolRoot: backend
     criteriaPreset: backend
-    claude:
-      defaultAgent: harness-backend-general
-      defaultSkillBundles: [backend-core]
+    context:
+      defaultContextBundles: [backend-core]
       stepOverrides:
         impl_generate:
-          agent: harness-backend-impl
-          skillBundles: [backend-impl, backend-failure-modes]
+          contextBundles: [backend-impl, backend-failure-modes]
         impl_self_criteria:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-criteria]
+          contextBundles: [backend-review-criteria]
         impl_self_quality:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-quality]
+          contextBundles: [backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -70,19 +67,22 @@ profiles:
 
 ```yaml
 runners:
-  claude:
-    type: claude
   codex:
     type: codex
-    sandbox: read-only
+    sandbox: workspace-write
+  claude:
+    type: claude
+  claude_benchmark_opus:
+    type: claude
+    model: opus
   copilot:
     type: generic
     command: gh
     args: ["copilot"]
     promptFlag: "--prompt"
 
-claude:
-  skillBundles:
+context:
+  contextBundles:
     backend-core: [harness-backend-core]
     backend-impl: [harness-backend-impl]
     backend-review-criteria: [harness-backend-review-criteria]
@@ -90,20 +90,20 @@ claude:
     backend-failure-modes: [harness-backend-failure-modes]
 
 flow: full          # full | light
-fallbackRunner: claude
+fallbackRunner: codex
 
 steps:
-  test_generate: claude
-  test_self_quality: claude
-  test_external_review: claude
-  impl_generate: claude
-  impl_self_criteria: claude
+  test_generate: codex
+  test_self_quality: codex
+  test_external_review: claude_benchmark_opus
+  impl_generate: codex
+  impl_self_criteria: codex
   impl_self_quality: copilot     # ステップごとに差し替え可能
-  impl_external_review: claude
-  lint_fix: claude
-  apply_fixes: claude
-  judgment_summary: claude
-  judge_minor: claude
+  impl_external_review: claude_benchmark_opus
+  lint_fix: codex
+  apply_fixes: codex
+  judgment_summary: codex
+  judge_minor: codex
 ```
 
 `.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
@@ -133,9 +133,9 @@ tdd-harness impl plan/current-task.md
 ```
 フロー: full
 ステップ割り当て:
-  1. test_generate: claude
-  2. test_self_quality: claude
-  3. test_external_review: claude
+  1. test_generate: codex
+  2. test_self_quality: codex
+  3. test_external_review: claude_benchmark_opus
   ...
 
 変更するステップ番号を入力 (Enter でそのまま実行):
@@ -202,6 +202,7 @@ tdd-harness component plan/components-task.md
 ```markdown
 ---
 profile: backend
+benchmark: generation
 scope: ingestion/chunk-splitter
 spec: docs/spec/ingestion/chunk-splitter.md
 test_cases: tests/test-cases/ingestion/chunk-splitter.md
@@ -226,6 +227,8 @@ chunk-splitter の Phase 1 を実装する
 ```
 
 profile が 1 つだけの場合は frontmatter の `profile:` を省略可能。
+
+`benchmark:` は任意で、`harness` または `generation` を指定できる。`generation` は `ALREADY_GREEN` を失格扱いにする。
 
 ## scope の命名規則
 
@@ -257,7 +260,7 @@ harness（CLI エントリポイント）
   ├── config（.harness/harness.yml 優先で読み込み + プロファイル解決）
   ├── runner-registry（ステップ → ランナー解決）
   │   ├── claude-runner（claude -p ラッパー）
-  │   ├── codex-runner（codex exec ラッパー）
+  │   ├── codex-runner（Codex SDK ラッパー）
   │   └── generic-runner（任意 CLI ラッパー）
   ├── interactive（対話的ランナー割り当て）
   ├── boundary（パス検証・スコープ解決・ガード）
@@ -300,7 +303,7 @@ harness（CLI エントリポイント）
 - **fail-closed**: パース失敗・コマンド失敗は全てエラーとして停止
 - **迷走検知**: テストリトライ上限、同一エラー連続検出、タイムアウト、diff 肥大化
 - **ログ redact**: API キー・トークンパターンを自動除去
-- **sandbox**: Codex ランナーのデフォルトは `read-only`
+- **sandbox**: Codex ランナーのデフォルトは `workspace-write`。必要に応じて `read-only` や `danger-full-access` に変更可能
 
 ## レビューレポート
 

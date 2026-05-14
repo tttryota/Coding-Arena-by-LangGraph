@@ -30,11 +30,11 @@ export function createRunnerRegistry(
   for (const [name, rc] of Object.entries(config.runners)) {
     switch (rc.type) {
       case "claude":
-        runners.set(name, createClaudeRunner({ timeoutMs: rc.timeoutMs }));
+        runners.set(name, createClaudeRunner({ name, timeoutMs: rc.timeoutMs, model: rc.model }));
         break;
       case "codex":
         runners.set(name, createCodexRunner({
-          timeoutMs: rc.timeoutMs, sandbox: rc.sandbox, projectRoot,
+          name, timeoutMs: rc.timeoutMs, sandbox: rc.sandbox, projectRoot,
         }));
         break;
       case "generic":

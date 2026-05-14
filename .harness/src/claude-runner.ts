@@ -16,6 +16,8 @@ export type ClaudeOptions = {
   outputFormat?: "json" | "text" | "stream-json";
   cwd?: string;
   timeoutMs?: number;
+  agent?: string;
+  mcpConfigs?: string[];
 };
 
 export async function runClaude(
@@ -64,6 +66,10 @@ function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string |
     args.push("--output-format", options.outputFormat);
   }
 
+  if (options.agent) {
+    args.push("--agent", options.agent);
+  }
+
   if (options.allowedTools && options.allowedTools.length > 0) {
     args.push("--allowedTools", options.allowedTools.join(","));
   }
@@ -78,6 +84,10 @@ function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string |
 
   if (options.resume) {
     args.push("--resume", options.resume);
+  }
+
+  for (const mcpConfig of options.mcpConfigs ?? []) {
+    args.push("--mcp-config", mcpConfig);
   }
 
   return { args, tempFile };
@@ -100,6 +110,8 @@ export function createClaudeRunner(defaults?: { timeoutMs?: number }): Runner {
       RUNNER_CAPABILITY.SESSION_RESUME,
       RUNNER_CAPABILITY.ALLOWED_TOOLS,
       RUNNER_CAPABILITY.SYSTEM_PROMPT,
+      RUNNER_CAPABILITY.AGENT,
+      RUNNER_CAPABILITY.MCP_CONFIG,
     ]),
     async run(request, logger) {
       const result = await runClaude(
@@ -111,6 +123,8 @@ export function createClaudeRunner(defaults?: { timeoutMs?: number }): Runner {
           outputFormat: "json",
           cwd: request.cwd,
           timeoutMs: request.timeoutMs ?? defaults?.timeoutMs,
+          agent: request.agent,
+          mcpConfigs: request.mcpConfigs,
         },
         logger,
       );
@@ -119,8 +133,12 @@ export function createClaudeRunner(defaults?: { timeoutMs?: number }): Runner {
         sessionId: result.session_id,
         metadata: {
           costUsd: result.total_cost_usd,
-          inputTokens: result.usage.input_tokens,
+          inputTokens: result.usage.input_tokens
+            + (result.usage.cache_creation_input_tokens ?? 0)
+            + (result.usage.cache_read_input_tokens ?? 0),
           outputTokens: result.usage.output_tokens,
+          cacheCreationInputTokens: result.usage.cache_creation_input_tokens ?? 0,
+          cacheReadInputTokens: result.usage.cache_read_input_tokens ?? 0,
         },
       } satisfies RunnerResponse;
     },

@@ -1,3 +1,5 @@
+> このファイルは backend 実装レビュー時の詳細観点です。実装生成では backend skill bundle から必要最小限の制約だけを共有します。
+
 ## Python固有
 - dataclass or TypedDict で構造化（dictの直接操作を避ける）
 - async関数とsync関数を混在させない

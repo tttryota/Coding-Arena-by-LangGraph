@@ -8,6 +8,7 @@ import { createCodexRunner } from "./codex-runner.ts";
 import { createGenericRunner } from "./generic-runner.ts";
 import { HarnessError } from "./types.ts";
 import type { HarnessLogger } from "./logger.ts";
+import { EVENT } from "./types.ts";
 
 export type RunnerRegistry = {
   getRunner(step: FlowStep): Runner;
@@ -49,12 +50,24 @@ export function createRunnerRegistry(
     ...config.steps, ...overrides,
   } as Record<string, string>;
 
-  function wrapRunner(runner: Runner): Runner {
+  function wrapRunner(runner: Runner, step?: FlowStep): Runner {
     return {
       name: runner.name,
       capabilities: runner.capabilities,
-      run(request: RunnerRequest, logger?: HarnessLogger): Promise<RunnerResponse> {
-        return runner.run(prepareRequest(runner, request), logger);
+      async run(request: RunnerRequest, logger?: HarnessLogger): Promise<RunnerResponse> {
+        const response = await runner.run(prepareRequest(runner, request), logger);
+        if (logger && response.metadata && step) {
+          logger.log(EVENT.RUNNER_USAGE, {
+            step,
+            runner: runner.name,
+            inputTokens: response.metadata.inputTokens ?? null,
+            outputTokens: response.metadata.outputTokens ?? null,
+            cacheCreationInputTokens: response.metadata.cacheCreationInputTokens ?? null,
+            cacheReadInputTokens: response.metadata.cacheReadInputTokens ?? null,
+            costUsd: response.metadata.costUsd ?? null,
+          });
+        }
+        return response;
       },
     };
   }
@@ -69,7 +82,9 @@ export function createRunnerRegistry(
     getRunner(step: FlowStep): Runner {
       const runnerName = stepMapping[step];
       if (!runnerName) throw new HarnessError(`No runner assigned for step: ${step}`);
-      return resolveRunner(runnerName);
+      const runner = runners.get(runnerName);
+      if (!runner) throw new HarnessError(`Runner not found: ${runnerName}`);
+      return wrapRunner(runner, step);
     },
     getRunnerByName(name: string): Runner {
       return resolveRunner(name);

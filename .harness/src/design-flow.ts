@@ -3,18 +3,22 @@ import { join } from "node:path";
 import type { HarnessLogger } from "./logger.ts";
 import type { Boundary } from "./boundary.ts";
 import type { RunnerRegistry } from "./runner-registry.ts";
+import type { ResolvedProfileConfig } from "./config.ts";
 import { FLOW_STEP } from "./steps.ts";
 import { GuardError } from "./types.ts";
+import { applyClaudeStepContext, joinPromptSections } from "./claude-context.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
 export class DesignFlow {
   private boundary: Boundary;
   private registry: RunnerRegistry;
+  private profile?: ResolvedProfileConfig;
 
-  constructor(boundary: Boundary, registry: RunnerRegistry) {
+  constructor(boundary: Boundary, registry: RunnerRegistry, profile?: ResolvedProfileConfig) {
     this.boundary = boundary;
     this.registry = registry;
+    this.profile = profile;
   }
 
   async run(featureName: string, requirements: string, logger: HarnessLogger): Promise<void> {
@@ -88,8 +92,9 @@ export class DesignFlow {
 
     const runner = this.registry.getRunner(FLOW_STEP.SPEC_GENERATE);
     await runner.run(
-      {
-        prompt: `以下の要件から機能仕様書を作成してください。
+      applyClaudeStepContext(
+        {
+          prompt: `以下の要件から機能仕様書を作成してください。
 
 ## 要件
 ${requirements}
@@ -108,11 +113,16 @@ ${template}
 - 5〜15個のテストケースが書ける粒度にする
 - 他の仕様書を読まなくても実装に着手できる独立性
 - 依存は他コンポーネントのインターフェース参照のみ`,
-        allowedTools,
-        appendSystemPrompt: claudeMd,
-        cwd: root,
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
+          allowedTools,
+          appendSystemPrompt: joinPromptSections([claudeMd]),
+          cwd: root,
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        },
+        this.registry.getConfig(),
+        this.profile,
+        FLOW_STEP.SPEC_GENERATE,
+        root,
+      ),
       logger,
     );
   }
@@ -128,8 +138,9 @@ ${template}
 
     const runner = this.registry.getRunner(FLOW_STEP.TEST_CASE_GENERATE);
     await runner.run(
-      {
-        prompt: `以下の仕様書からテストケースを導出してください。
+      applyClaudeStepContext(
+        {
+          prompt: `以下の仕様書からテストケースを導出してください。
 
 ## 仕様書
 ${spec}
@@ -149,10 +160,16 @@ ${template}
 - Phase分け（最小骨格 → コアロジック → エッジケース → 外部連携）
 - 実装順序を考慮した並び
 - 重複がないこと`,
-        allowedTools,
-        cwd: root,
-        timeoutMs: DEFAULT_TIMEOUT_MS,
-      },
+          allowedTools,
+          appendSystemPrompt: joinPromptSections([this.readClaudeMd()]),
+          cwd: root,
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+        },
+        this.registry.getConfig(),
+        this.profile,
+        FLOW_STEP.TEST_CASE_GENERATE,
+        root,
+      ),
       logger,
     );
   }

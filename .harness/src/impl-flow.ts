@@ -15,6 +15,7 @@ import { loadTemplate, renderTemplate } from "./templates.ts";
 import { runTool } from "./launcher.ts";
 import type { LauncherOptions } from "./launcher.ts";
 import { parsePlan } from "./plan-parser.ts";
+import { applyClaudeStepContext, joinPromptSections } from "./claude-context.ts";
 
 const MAX_GREEN_RETRIES = 3;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -164,7 +165,7 @@ export class ImplFlow {
       return runner?.type === "codex";
     });
     const driftGuard = new DriftGuard(logger, { codexAvailable: hasCodex });
-    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry);
+    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry, this.profile);
 
     // チェックポイント復元
     const checkpoint = options?.resume ? logger.loadCheckpoint() : null;
@@ -191,9 +192,8 @@ export class ImplFlow {
 
     const spec = readFileSync(resolve(root, plan.specPath), "utf-8");
     const criteriaPaths = this.resolveCriteriaPaths();
-    const criteria = criteriaPaths.map((p) => readFileSync(p, "utf-8")).join("\n\n");
     const rules = this.resolveRulesContent(plan);
-    const generationSystemPrompt = [criteria, rules].filter(Boolean).join("\n\n");
+    const generationSystemPrompt = joinPromptSections([rules]);
 
     logger.log(EVENT.TDD_START, { testCases: plan.targetTestCases });
 
@@ -210,13 +210,19 @@ export class ImplFlow {
         mswInstructions: this.buildMswInstructions(plan, "test"),
       });
       const testGenResult = await runner.run(
-        {
-          prompt: testGenPrompt,
-          allowedTools: scopeTools,
-          appendSystemPrompt: generationSystemPrompt,
-          cwd: root,
-          timeoutMs: DEFAULT_TIMEOUT_MS,
-        },
+        applyClaudeStepContext(
+          {
+            prompt: testGenPrompt,
+            allowedTools: scopeTools,
+            appendSystemPrompt: generationSystemPrompt,
+            cwd: root,
+            timeoutMs: DEFAULT_TIMEOUT_MS,
+          },
+          config,
+          this.profile,
+          FLOW_STEP.TEST_GENERATE,
+          root,
+        ),
         logger,
       );
       sessionId = testGenResult.sessionId ?? "";
@@ -299,14 +305,20 @@ export class ImplFlow {
 
       const implRunner = this.registry.getRunner(FLOW_STEP.IMPL_GENERATE);
       const implResult = await implRunner.run(
-        {
-          prompt: implPrompt,
-          allowedTools: scopeTools,
-          appendSystemPrompt: generationSystemPrompt,
-          sessionId,
-          cwd: root,
-          timeoutMs: DEFAULT_TIMEOUT_MS,
-        },
+        applyClaudeStepContext(
+          {
+            prompt: implPrompt,
+            allowedTools: scopeTools,
+            appendSystemPrompt: generationSystemPrompt,
+            sessionId,
+            cwd: root,
+            timeoutMs: DEFAULT_TIMEOUT_MS,
+          },
+          config,
+          this.profile,
+          FLOW_STEP.IMPL_GENERATE,
+          root,
+        ),
         logger,
       );
       sessionId = implResult.sessionId ?? sessionId;
@@ -394,8 +406,9 @@ export class ImplFlow {
             .join("\n");
           const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
           await runner.run(
-            {
-              prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
+            applyClaudeStepContext(
+              {
+                prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
 
 ## 違反一覧
 ${issueList}
@@ -403,9 +416,14 @@ ${issueList}
 ## 制約
 - 指摘された違反のみ修正する
 - 既存のロジックや振る舞いを変更しない`,
-              allowedTools: options.scopeTools,
-              cwd: options.root,
-            },
+                allowedTools: options.scopeTools,
+                cwd: options.root,
+              },
+              this.registry.getConfig(),
+              this.profile,
+              FLOW_STEP.LINT_FIX,
+              this.boundary.getProjectRoot(),
+            ),
             undefined,
           );
         }
@@ -522,9 +540,10 @@ ${issueList}
     const root = this.boundary.getProjectRoot();
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const scopeSlug = plan.scope.replace(/\//g, "_");
+    const usageSummary = logger.summarizeRunnerUsage();
 
     // review-data.json を保存
-    logger.saveReviewData({ plan, records, tdd });
+    logger.saveReviewData({ plan, records, tdd, usageSummary });
 
     // MD レポート生成
     // 集計対象: accepted を除いたレビュー実行レコードのみ
@@ -548,6 +567,7 @@ ${issueList}
 **結果**: 完了
 **レビューサイクル数**: ${totalCycles}回
 **修正件数**: ${fixCount}件
+**Claude実行回数**: ${usageSummary.total.runs}回
 
 ## 対象テストケース
 ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
@@ -629,6 +649,19 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
     md += `| 通過ステップ数 | ${lgtmRecords.length}件 |\n`;
     md += `| 事前定義の設計判断 | ${designDecisionRecords.length}件 |\n`;
     md += `| レビュー中に許容 | ${reviewAcceptedRecords.length}件 |\n`;
+    md += `| Claude実行回数 | ${usageSummary.total.runs}件 |\n`;
+    md += `| Input Tokens | ${usageSummary.total.inputTokens} |\n`;
+    md += `| Output Tokens | ${usageSummary.total.outputTokens} |\n`;
+    md += `| Cost USD | ${usageSummary.total.costUsd.toFixed(4)} |\n`;
+
+    const usageSteps = Object.entries(usageSummary.byStep);
+    if (usageSteps.length > 0) {
+      md += `\n### Claude Usage By Step\n\n`;
+      md += `| Step | Runs | Input | Output | Cost USD |\n|---|---:|---:|---:|---:|\n`;
+      for (const [step, totals] of usageSteps) {
+        md += `| ${step} | ${totals.runs} | ${totals.inputTokens} | ${totals.outputTokens} | ${totals.costUsd.toFixed(4)} |\n`;
+      }
+    }
 
     // 書き出し
     const reportsDir = join(root, "docs/reviews");

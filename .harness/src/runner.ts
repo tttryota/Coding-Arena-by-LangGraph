@@ -4,6 +4,8 @@ export const RUNNER_CAPABILITY = {
   SESSION_RESUME: "session_resume",
   ALLOWED_TOOLS: "allowed_tools",
   SYSTEM_PROMPT: "system_prompt",
+  AGENT: "agent",
+  MCP_CONFIG: "mcp_config",
 } as const;
 
 export type RunnerCapability = (typeof RUNNER_CAPABILITY)[keyof typeof RUNNER_CAPABILITY];
@@ -15,6 +17,8 @@ export type RunnerRequest = {
   allowedTools?: string[];
   appendSystemPrompt?: string;
   sessionId?: string;
+  agent?: string;
+  mcpConfigs?: string[];
 };
 
 export type RunnerResponse = {
@@ -24,6 +28,8 @@ export type RunnerResponse = {
     costUsd?: number | null;
     inputTokens?: number;
     outputTokens?: number;
+    cacheCreationInputTokens?: number;
+    cacheReadInputTokens?: number;
   };
 };
 
@@ -43,6 +49,14 @@ export function prepareRequest(runner: Runner, request: RunnerRequest): RunnerRe
 
   if (prepared.sessionId && !runner.capabilities.has(RUNNER_CAPABILITY.SESSION_RESUME)) {
     prepared.sessionId = undefined;
+  }
+
+  if (prepared.agent && !runner.capabilities.has(RUNNER_CAPABILITY.AGENT)) {
+    prepared.agent = undefined;
+  }
+
+  if (prepared.mcpConfigs && !runner.capabilities.has(RUNNER_CAPABILITY.MCP_CONFIG)) {
+    prepared.mcpConfigs = undefined;
   }
 
   if (prepared.allowedTools && !runner.capabilities.has(RUNNER_CAPABILITY.ALLOWED_TOOLS)) {

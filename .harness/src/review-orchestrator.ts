@@ -2,11 +2,13 @@ import { readFileSync } from "node:fs";
 import type { HarnessLogger } from "./logger.ts";
 import type { LintGuard } from "./lint-guard.ts";
 import type { RunnerRegistry } from "./runner-registry.ts";
+import type { ResolvedProfileConfig } from "./config.ts";
 import type { FlowStep } from "./steps.ts";
 import { FLOW_STEP } from "./steps.ts";
 import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT } from "./types.ts";
 import type { ReviewIssue, ReviewResult, ReviewRecord } from "./types.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
+import { applyClaudeStepContext } from "./claude-context.ts";
 
 const MAX_REVIEW_CYCLES = 5;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -36,6 +38,7 @@ export class ReviewOrchestrator {
   private lintGuard: LintGuard;
   private projectRoot: string;
   private registry: RunnerRegistry;
+  private profile?: ResolvedProfileConfig;
   private records: ReviewRecord[] = [];
 
   constructor(
@@ -43,11 +46,13 @@ export class ReviewOrchestrator {
     lintGuard: LintGuard,
     projectRoot: string,
     registry: RunnerRegistry,
+    profile?: ResolvedProfileConfig,
   ) {
     this.logger = logger;
     this.lintGuard = lintGuard;
     this.projectRoot = projectRoot;
     this.registry = registry;
+    this.profile = profile;
   }
 
   getRecords(): ReviewRecord[] {
@@ -992,12 +997,18 @@ ${spec.slice(0, 3000)}
   ): Promise<ReviewResult> {
     const runner = this.registry.getRunner(step);
     const response = await runner.run(
-      {
-        prompt,
-        allowedTools: options?.allowedTools ?? ["Read"],
-        timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        appendSystemPrompt: options?.appendSystemPrompt,
-      },
+      applyClaudeStepContext(
+        {
+          prompt,
+          allowedTools: options?.allowedTools ?? ["Read"],
+          timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+          appendSystemPrompt: options?.appendSystemPrompt,
+        },
+        this.registry.getConfig(),
+        this.profile,
+        step,
+        this.projectRoot,
+      ),
       this.logger,
     );
     return this.parseReviewResult(reviewer, response.text);
@@ -1015,13 +1026,19 @@ ${spec.slice(0, 3000)}
   ): Promise<string> {
     const runner = this.registry.getRunner(step);
     const response = await runner.run(
-      {
-        prompt,
-        allowedTools: options?.allowedTools,
-        appendSystemPrompt: options?.appendSystemPrompt,
-        cwd: options?.cwd,
-        timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-      },
+      applyClaudeStepContext(
+        {
+          prompt,
+          allowedTools: options?.allowedTools,
+          appendSystemPrompt: options?.appendSystemPrompt,
+          cwd: options?.cwd,
+          timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        },
+        this.registry.getConfig(),
+        this.profile,
+        step,
+        this.projectRoot,
+      ),
       this.logger,
     );
     return response.text;

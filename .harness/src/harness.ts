@@ -15,6 +15,7 @@ import { parsePlan } from "./plan-parser.ts";
 import { resolveLintAdapter, resolveTestAdapter } from "./tool-adapter.ts";
 import type { BaseAdapter } from "./tool-adapter.ts";
 import type { FlowMode, FlowStep } from "./steps.ts";
+import { renderBenchmarkSummary } from "./benchmark-summary.ts";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -25,7 +26,8 @@ async function main(): Promise<void> {
     console.log("  tdd-harness impl <plan-file> [--resume] [--flow full|light] [--no-interactive]");
     console.log("  tdd-harness component <plan-file> [--flow full|light] [--no-interactive]");
     console.log("  tdd-harness page <plan-file> [--flow full|light] [--no-interactive]");
-    console.log('  tdd-harness design <feature-name> "<requirements>"');
+    console.log('  tdd-harness design <feature-name> "<requirements>" [--profile <name>]');
+    console.log("  tdd-harness benchmark-summary <log-dir> [<log-dir>]");
     console.log("  tdd-harness init");
     process.exit(1);
   }
@@ -147,11 +149,27 @@ async function main(): Promise<void> {
         console.error('Error: feature name and requirements required');
         process.exit(1);
       }
+      const profileFlagIndex = args.indexOf("--profile");
+      const profileName = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
       const boundary = new Boundary(projectRoot);
       const registry = createRunnerRegistry(config, projectRoot);
       const logger = new HarnessLogger(`design_${featureName}`, { baseDir: join(projectRoot, "logs") });
-      const designFlow = new DesignFlow(boundary, registry);
+      const profile = profileName
+        ? resolveProfile(config, profileName)
+        : Object.keys(config.profiles).length === 1
+          ? resolveProfile(config, inferProfile(config))
+          : undefined;
+      const designFlow = new DesignFlow(boundary, registry, profile);
       await designFlow.run(featureName, requirements, logger);
+      break;
+    }
+    case "benchmark-summary": {
+      const logDirs = args.slice(1);
+      if (logDirs.length === 0 || logDirs.length > 2) {
+        console.error("Error: benchmark-summary requires one or two log directories");
+        process.exit(1);
+      }
+      console.log(renderBenchmarkSummary(logDirs));
       break;
     }
     case "init": {

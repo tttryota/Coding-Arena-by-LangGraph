@@ -1,3 +1,5 @@
+> このファイルはレビュー時の観点です。実装生成にそのまま渡す前提ではありません。
+
 ## 命名規則
 - 変数名は省略しない（usr → user, msg → message）
 - 関数名は動詞始まり（get_, create_, update_, delete_, is_, has_）

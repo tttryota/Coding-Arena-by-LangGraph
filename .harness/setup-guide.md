@@ -10,12 +10,12 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness.yml` で `runners` と `steps` を明示設定）
+- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
 - プロジェクトに応じた lint/test ツール
 
 ## 設定ファイル
 
-プロジェクトルートに `.harness.yml` を作成。
+設定ファイルは `.harness/harness.yml` を推奨（後方互換で `.harness.yml` も読み込み可）。
 
 ### 例1: Python バックエンド
 
@@ -26,6 +26,19 @@ profiles:
     test: pytest
     toolRoot: backend
     criteriaPreset: backend
+    claude:
+      defaultAgent: harness-backend-general
+      defaultSkillBundles: [backend-core]
+      stepOverrides:
+        impl_generate:
+          agent: harness-backend-impl
+          skillBundles: [backend-impl, backend-failure-modes]
+        impl_self_criteria:
+          agent: harness-backend-reviewer
+          skillBundles: [backend-review-criteria]
+        impl_self_quality:
+          agent: harness-backend-reviewer
+          skillBundles: [backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -42,9 +55,9 @@ profiles:
     toolRoot: .
     criteriaPreset: frontend
     sourceLayout:
-      sourceDir: "src/{{category}}"
-      testDir: "src/{{category}}/__tests__"
-      scopePattern: "src/{{category}}/*"
+      sourceDir: "src/{{category}}/{{name}}"
+      testDir: "src/{{category}}/{{name}}/__tests__"
+      scopePattern: "src/{{category}}/{{name}}/*"
 ```
 
 ### 例3: 複数プロファイル
@@ -65,8 +78,9 @@ profiles:
     toolRoot: frontend
     criteriaPreset: frontend
     sourceLayout:
-      sourceDir: "frontend/src/{{category}}"
-      testDir: "frontend/src/{{category}}/__tests__"
+      sourceDir: "frontend/src/{{category}}/{{name}}"
+      testDir: "frontend/src/{{category}}/{{name}}/__tests__"
+      scopePattern: "frontend/src/{{category}}/{{name}}/*"
 
 runners:
   claude:
@@ -74,6 +88,14 @@ runners:
   codex:
     type: codex
     sandbox: read-only
+
+claude:
+  skillBundles:
+    backend-core: [harness-backend-core]
+    backend-impl: [harness-backend-impl]
+    backend-review-criteria: [harness-backend-review-criteria]
+    backend-review-quality: [harness-backend-review-quality]
+    backend-failure-modes: [harness-backend-failure-modes]
 ```
 
 `profiles` は必須。未定義の場合はエラーになる。`tdd-harness init` でこのガイドを表示できる。

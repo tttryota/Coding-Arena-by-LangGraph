@@ -13,7 +13,7 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提条件:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness.yml` で `runners` と `steps` を明示設定）
+- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
 - プロジェクトに応じた lint/test ツール（Python: ruff + mypy + pytest、TypeScript: eslint + tsc + vitest）
 
 セットアップガイドを表示:
@@ -23,7 +23,7 @@ tdd-harness init
 
 ## 設定
 
-プロジェクトルートに `.harness.yml` を配置:
+設定ファイルは `.harness/harness.yml` を推奨（後方互換で `.harness.yml` も読み込み可）:
 
 ### プロファイル
 
@@ -34,6 +34,19 @@ profiles:
     test: pytest
     toolRoot: backend
     criteriaPreset: backend
+    claude:
+      defaultAgent: harness-backend-general
+      defaultSkillBundles: [backend-core]
+      stepOverrides:
+        impl_generate:
+          agent: harness-backend-impl
+          skillBundles: [backend-impl, backend-failure-modes]
+        impl_self_criteria:
+          agent: harness-backend-reviewer
+          skillBundles: [backend-review-criteria]
+        impl_self_quality:
+          agent: harness-backend-reviewer
+          skillBundles: [backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -68,24 +81,32 @@ runners:
     args: ["copilot"]
     promptFlag: "--prompt"
 
+claude:
+  skillBundles:
+    backend-core: [harness-backend-core]
+    backend-impl: [harness-backend-impl]
+    backend-review-criteria: [harness-backend-review-criteria]
+    backend-review-quality: [harness-backend-review-quality]
+    backend-failure-modes: [harness-backend-failure-modes]
+
 flow: full          # full | light
 fallbackRunner: claude
 
 steps:
   test_generate: claude
   test_self_quality: claude
-  test_external_review: codex
+  test_external_review: claude
   impl_generate: claude
   impl_self_criteria: claude
   impl_self_quality: copilot     # ステップごとに差し替え可能
-  impl_external_review: codex
+  impl_external_review: claude
   lint_fix: claude
   apply_fixes: claude
   judgment_summary: claude
   judge_minor: claude
 ```
 
-`.harness.yml` に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
+`.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
 
 ## 使い方
 
@@ -93,6 +114,7 @@ steps:
 
 ```bash
 tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
+tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能" --profile backend
 ```
 
 1. 仕様書を生成（`docs/spec/{category}/{name}.md`）
@@ -113,7 +135,7 @@ tdd-harness impl plan/current-task.md
 ステップ割り当て:
   1. test_generate: claude
   2. test_self_quality: claude
-  3. test_external_review: codex
+  3. test_external_review: claude
   ...
 
 変更するステップ番号を入力 (Enter でそのまま実行):
@@ -232,7 +254,7 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 
 ```
 harness（CLI エントリポイント）
-  ├── config（.harness.yml 読み込み + プロファイル解決）
+  ├── config（.harness/harness.yml 優先で読み込み + プロファイル解決）
   ├── runner-registry（ステップ → ランナー解決）
   │   ├── claude-runner（claude -p ラッパー）
   │   ├── codex-runner（codex exec ラッパー）
@@ -259,6 +281,7 @@ harness（CLI エントリポイント）
 
 同梱テンプレート:
 - `review-response-format.md` — レビュー回答形式の共通指示
+- `benchmark-summary` — 生成済みログディレクトリから review/token/cost 指標を集計
 - `review-test-quality.md` — テストセルフレビュー
 - `review-impl-quality.md` — 実装品質レビュー
 - `review-impl-criteria.md` — レビュー観点チェック

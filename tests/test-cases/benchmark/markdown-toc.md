@@ -30,7 +30,13 @@ status: approved
 14. （出力形式）`"## Overview\n#### Detail"` に max_level=6 を指定すると、headings が2件で、markdown のインデントが Overview=深さ0、Detail=深さ2（レベル差4-2=2）
 15. （変換ロジック）`"## Heading ##"` を渡すと、headings の text が "Heading"（末尾 ## 除去）、anchor が "heading"、markdown が `"- [Heading](#heading)"`
 16. （変換ロジック）`"# はじめに\n## 概要\n# はじめに"` を渡すと、3件目の anchor が "はじめに-1" で、markdown の3行目のリンクが `"[はじめに](#はじめに-1)"` を含む
+17. （境界条件）未閉鎖コードフェンス ``"# Before\n```\n# Ignored"`` を渡すと、headings は "Before" の1件だけで、フェンス開始以降の見出しは無視される
+18. （境界条件）`min_level=4, max_level=3` を指定すると、headings が空で markdown が空文字列になる
+19. （境界条件）`" # Not Heading\n# Actual"` を渡すと、先頭スペース付き行は無視され、"Actual" だけが headings に入る
+20. （境界条件）`"####### Too Many\n# Valid"` を渡すと、`####### Too Many` は見出しとして認識されず、"Valid" だけが headings に入る
+21. （境界条件）`"## !!!"` を渡すと、headings の text が "!!!"、anchor が空文字列で、markdown が `"- [!!!](#)"` になる
+22. （既知制限）`"# [text](https://example.com/foo_(bar))"` を渡すと、最初の `)` でリンクが閉じた扱いになり、text が `"text)"`、anchor が `"text"` になる
 
 ### Phase 4: ハッピーパス（統合 — 全フィールド検証）
 
-17. 仕様書の具体例を入力として渡す: `"# はじめに\n\n本文テキスト\n\n## インストール\n\n手順の説明\n\n## 使い方\n\n### 基本的な使い方\n\n### 応用例\n\n## はじめに"` に min_level=1, max_level=3 を指定すると、headings が6件で各 text/level/anchor が正しく、markdown が仕様書記載の出力と一致する
+23. （統合）仕様書の具体例全文を渡すと、headings が6件で各 text/level/anchor が仕様どおり、markdown も spec 記載の出力と一致する

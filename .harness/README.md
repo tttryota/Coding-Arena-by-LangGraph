@@ -13,7 +13,8 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提条件:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
+- `codex` CLI が PATH に存在（デフォルトの主フローで使用）
+- `claude` CLI が PATH に存在（外部レビューを使う場合）
 - プロジェクトに応じた lint/test ツール（Python: ruff + mypy + pytest、TypeScript: eslint + tsc + vitest）
 
 セットアップガイドを表示:
@@ -23,90 +24,79 @@ tdd-harness init
 
 ## 設定
 
-設定ファイルは `.harness/harness.yml` を推奨（後方互換で `.harness.yml` も読み込み可）:
+設定ファイルは `.harness/harness.json` を推奨（後方互換で `.harness.json` も読み込み可）:
 
 ### プロファイル
 
-```yaml
-profiles:
-  backend:
-    lint: [ruff, mypy]
-    test: pytest
-    toolRoot: backend
-    criteriaPreset: backend
-    claude:
-      defaultAgent: harness-backend-general
-      defaultSkillBundles: [backend-core]
-      stepOverrides:
-        impl_generate:
-          agent: harness-backend-impl
-          skillBundles: [backend-impl, backend-failure-modes]
-        impl_self_criteria:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-criteria]
-        impl_self_quality:
-          agent: harness-backend-reviewer
-          skillBundles: [backend-review-quality]
-    sourceLayout:
-      sourceDir: "backend/{{category}}"
-      testDir: "backend/{{category}}/tests"
-      scopePattern: "backend/{{category}}/*"
-  frontend:
-    lint: [eslint, tsc]
-    test: vitest
-    toolRoot: frontend
-    criteriaPreset: frontend
-    sourceLayout:
-      sourceDir: "frontend/src/{{category}}/{{name}}"
-      testDir: "frontend/src/{{category}}/{{name}}/__tests__"
-      scopePattern: "frontend/src/{{category}}/{{name}}/*"
-      additionalAllowedPrefixes: ["docs/reviews/", "frontend/src/mocks/handlers/"]
-    storybook:
-      renderCommand: ["pnpm", "storybook", "build", "--test", "--docs", "--output-dir", ".storybook-static-{{target}}"]
-      smokeCommand: ["pnpm", "storybook", "test", "--stories-json", "{{storyFile}}"]
+```json
+{
+  "profiles": {
+    "backend": {
+      "lint": ["ruff", "mypy"],
+      "test": "pytest",
+      "toolRoot": "backend",
+      "allowedSideEffectFiles": ["backend/uv.lock"],
+      "criteriaPreset": "backend",
+      "context": {
+        "defaultContextBundles": ["backend-core"],
+        "stepOverrides": {
+          "test_generate": { "contextBundles": ["backend-test-generate"] },
+          "impl_generate": { "contextBundles": ["backend-impl", "backend-failure-modes"] },
+          "impl_self_criteria": { "contextBundles": ["backend-review-criteria"] },
+          "impl_self_quality": { "contextBundles": ["backend-review-quality"] }
+        }
+      },
+      "stepProviders": {
+        "defaultProvider": "codex",
+        "stepOverrides": {
+          "test_external_review": "claude_opus",
+          "impl_external_review": "claude_opus"
+        }
+      },
+      "sourceLayout": {
+        "sourceDir": "backend/{{category}}",
+        "testDir": "backend/{{category}}/tests",
+        "scopePattern": "backend/{{category}}/*"
+      }
+    }
+  }
+}
 ```
 
-### ランナー・ステップ割り当て
+### プロバイダ・ステップ割り当て
 
-```yaml
-runners:
-  claude:
-    type: claude
-  codex:
-    type: codex
-    sandbox: read-only
-  copilot:
-    type: generic
-    command: gh
-    args: ["copilot"]
-    promptFlag: "--prompt"
-
-claude:
-  skillBundles:
-    backend-core: [harness-backend-core]
-    backend-impl: [harness-backend-impl]
-    backend-review-criteria: [harness-backend-review-criteria]
-    backend-review-quality: [harness-backend-review-quality]
-    backend-failure-modes: [harness-backend-failure-modes]
-
-flow: full          # full | light
-fallbackRunner: claude
-
-steps:
-  test_generate: claude
-  test_self_quality: claude
-  test_external_review: claude
-  impl_generate: claude
-  impl_self_criteria: claude
-  impl_self_quality: copilot     # ステップごとに差し替え可能
-  impl_external_review: claude
-  lint_fix: claude
-  apply_fixes: claude
-  judgment_summary: claude
-  judge_minor: claude
+```json
+{
+  "providers": {
+    "codex": {
+      "type": "codex",
+      "sandbox": "workspace-write"
+    },
+    "claude_opus": {
+      "type": "claude",
+      "model": "opus"
+    }
+  },
+  "context": {
+    "contextBundles": {
+      "backend-core": ["harness-backend-core"],
+      "backend-test-generate": ["harness-backend-test"]
+    }
+  },
+  "flow": "full",
+  "steps": {
+    "test_generate": "codex",
+    "test_self_quality": "codex",
+    "test_external_review": "claude_opus",
+    "impl_generate": "codex",
+    "impl_self_quality": "claude_opus"
+  }
+}
 ```
 
-`.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
+`.harness/harness.json`（または `.harness.json`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
+
+`sourceLayout.additionalAllowedPrefixes` は機能スコープ上の追加 prefix 用です。`backend/uv.lock` のような実行副作用ファイルは profile 直下の `allowedSideEffectFiles` で明示許可します。`uv` を使わない profile では通常不要です。
 
 ## 使い方
 
@@ -128,14 +118,14 @@ tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する
 tdd-harness impl plan/current-task.md
 ```
 
-実行前に対話的にステップごとのランナー割り当てを確認・変更できる:
+実行前に対話的にステップごとのプロバイダ割り当てを確認・変更できる。通常運用では profile を切り替えるだけで provider 構成ごと切り替えられる:
 
 ```
 フロー: full
 ステップ割り当て:
-  1. test_generate: claude
-  2. test_self_quality: claude
-  3. test_external_review: claude
+  1. test_generate: codex
+  2. test_self_quality: codex
+  3. test_external_review: claude_opus
   ...
 
 変更するステップ番号を入力 (Enter でそのまま実行):
@@ -158,6 +148,10 @@ tdd-harness impl plan/current-task.md
 ```bash
 # light フロー
 tdd-harness impl plan/task.md --flow light
+
+# profile 切り替え
+tdd-harness impl plan/task.md --profile backend_codex_only
+tdd-harness impl plan/task.md --profile backend_claude_review
 
 # 対話プロンプトをスキップ
 tdd-harness impl plan/task.md --no-interactive
@@ -202,6 +196,7 @@ tdd-harness component plan/components-task.md
 ```markdown
 ---
 profile: backend
+benchmark: generation
 scope: ingestion/chunk-splitter
 spec: docs/spec/ingestion/chunk-splitter.md
 test_cases: tests/test-cases/ingestion/chunk-splitter.md
@@ -226,6 +221,8 @@ chunk-splitter の Phase 1 を実装する
 ```
 
 profile が 1 つだけの場合は frontmatter の `profile:` を省略可能。
+
+`benchmark:` は任意で、`harness` または `generation` を指定できる。`generation` は `ALREADY_GREEN` を失格扱いにする。
 
 ## scope の命名規則
 
@@ -254,10 +251,10 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 
 ```
 harness（CLI エントリポイント）
-  ├── config（.harness/harness.yml 優先で読み込み + プロファイル解決）
+  ├── config（.harness/harness.json 優先で読み込み + プロファイル解決）
   ├── runner-registry（ステップ → ランナー解決）
   │   ├── claude-runner（claude -p ラッパー）
-  │   ├── codex-runner（codex exec ラッパー）
+  │   ├── codex-runner（Codex SDK ラッパー）
   │   └── generic-runner（任意 CLI ラッパー）
   ├── interactive（対話的ランナー割り当て）
   ├── boundary（パス検証・スコープ解決・ガード）
@@ -300,7 +297,7 @@ harness（CLI エントリポイント）
 - **fail-closed**: パース失敗・コマンド失敗は全てエラーとして停止
 - **迷走検知**: テストリトライ上限、同一エラー連続検出、タイムアウト、diff 肥大化
 - **ログ redact**: API キー・トークンパターンを自動除去
-- **sandbox**: Codex ランナーのデフォルトは `read-only`
+- **sandbox**: Codex ランナーのデフォルトは `workspace-write`。必要に応じて `read-only` や `danger-full-access` に変更可能
 
 ## レビューレポート
 

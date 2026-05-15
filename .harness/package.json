@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "tdd-harness": "./src/harness.ts"
+    "tdd-harness": "./src/cli/harness.ts"
   },
   "files": [
     "src/",
@@ -20,7 +20,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "yaml": "^2.8.3"
+    "@openai/codex-sdk": "^0.130.0"
   },
   "devDependencies": {
     "@types/node": "^22",

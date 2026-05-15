@@ -1,4 +1,6 @@
 ---
+profile: backend
+benchmark: harness
 scope: benchmark/markdown-toc
 spec: docs/spec/benchmark/markdown-toc.md
 test_cases: tests/test-cases/benchmark/markdown-toc.md
@@ -26,6 +28,13 @@ markdown-toc の全 Phase（Phase 1-3）を一括実装する。
 14. H2とH4のみ → 相対インデント（深さ差2）が正しい
 15. ATX末尾クロージング除去 → text/anchor/markdown正しい
 16. 日本語重複見出し → anchor付番 はじめに-1、markdownも対応
+17. 未閉鎖コードフェンス → 開始行以降の見出しはすべて無視
+18. min_level > max_level → headings空リスト、markdown空文字列
+19. 先頭スペース付き見出し → 見出しとして認識しない
+20. `#` 7個以上の行 → 見出しとして認識しない
+21. 空 slug 見出し `## !!!` → anchor空文字列、markdownは `- [!!!](#)`
+22. URL内に `)` を含むリンク → 最初の `)` でリンク終了した既知制限どおりに text/anchor が決まる
+23. 仕様書の具体例全体 → headings/markdown が spec 記載どおり
 
 ## やらないこと
 - Setext 形式の見出し対応
@@ -37,7 +46,7 @@ markdown-toc の全 Phase（Phase 1-3）を一括実装する。
 - 他モジュールとの連携
 
 ## 完了条件
-- 上記17個のテストが GREEN
+- 上記23個のテストが GREEN
 - ruff / mypy がパス
 - レビュー完了
 

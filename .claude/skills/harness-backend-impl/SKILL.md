@@ -6,8 +6,11 @@ description: Implementation guidance for backend harness steps. Use during backe
 # Backend Implementation
 
 - Make the smallest change that turns the current RED state into GREEN for the specified target cases.
+- Treat GREEN plus lint/type safety as the target, not GREEN alone.
 - Start from the failing test output and trace the exact contract mismatch before editing code.
 - Prefer fixing root-cause logic over patching outputs after the fact.
 - Keep parsing, normalization, validation, and rendering responsibilities separated when practical.
 - If you add branching, make the branch condition explicit and testable.
 - If you touch error handling, preserve existing successful paths and narrow the changed surface area.
+- Do not swallow exceptions or use `try`-`except`-`pass` as a shortcut. Failures should stay visible unless the spec defines a fallback contract.
+- Keep edits inside the allowed scope and avoid broad cleanup or speculative refactors.

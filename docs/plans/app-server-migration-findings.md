@@ -68,38 +68,109 @@
 - harness 側が canonical command を固定して返すより、reviewer 自身に実行方法探索をさせている。
 - 2 周目以降も full-file review に近く、差分中心の収束モードに切り替わっていない。
 
-## App Server で強制したいこと
+## App Server に持ち込む内容
 
-- step ごとの read scope を native に制限する。
-  - `test_generate`: target test file、target impl file、approved cases、spec のみ
-  - `test_self_quality`: target test file、approved cases、spec、直近実行結果のみ
-- step ごとの write scope を native に制限する。
-  - `apply_fixes`: target file のみ
-  - side-effect file は profile 設定で明示許可された単一ファイルだけ
-- canonical command を server 側で固定する。
-  - reviewer に `pytest` / `uv run pytest` / `.venv/bin/pytest` を探させない
-  - server が実行して stdout/stderr を渡す
-- target-file-first の順序を server 側で強制する。
-  - `test_generate` は target file 更新前の repo 横断探索を reject する
-- post-step validation を server 側で強制する。
-  - target file rewrite
-  - placeholder 置換
-  - lint/type/test 実行
-  - approved case 件数の heuristic check
-- review の 2 周目以降は diff 中心の再評価モードへ切り替える。
+### 1. step-level execution policy を server の責務にする
 
-## ADR に持ち込むべき論点
+- `test_generate` は
+  - 読み取り可能: spec、approved test cases、target test file、target implementation file、言語設定ファイル
+  - 書き込み可能: target test file のみ
+- `test_self_quality` は
+  - 読み取り可能: target test file、approved test cases、spec、直近実行結果
+  - 書き込み不可
+- `apply_fixes` は
+  - 読み取り可能: target files、spec、approved test cases、直近 review 結果、直近 lint/test 結果
+  - 書き込み可能: target files のみ
+- side-effect file は profile ごとの明示設定で 1 件ずつ許可する。`backend/uv.lock` のようなファイルはこの例外で扱う。
 
-- SDK 側改善で回収できた範囲
-  - side-effect file 設計
-  - test generation fidelity
-  - lint repair
-- それでも残る構造限界
-  - prompt 依存の scope
-  - 実行環境探索の抑止不能
-  - review loop の高トークン化
-- app-server に寄せる理由
-  - モデル変更ではなく execution control の強化が本命だから
+理由:
+- prompt で「探索するな」と書いても、実際には `rg --files backend/benchmark` のような探索が先に走っている。
+- 制御したいのはプロンプト文言ではなく、実行権限そのもの。
+
+### 2. canonical command の決定権をモデルから剥がす
+
+- `pytest` / `ruff` / `mypy` / `uv` / `.venv/bin/pytest` を reviewer に探させない。
+- app-server が profile から canonical command を解決し、実行結果だけをモデルへ渡す。
+- これにより reviewer は
+  - 実行方法探索
+  - pyproject / venv / lockfile の発見
+  を毎周繰り返さずに済む。
+
+理由:
+- 今回の run では review ループが、品質判断よりも実行環境探索に token を使っている。
+- モデルに任せるべきなのは「何が悪いか」「どう直すか」であって、「どう起動するか」ではない。
+
+### 3. target-file-first を native rule として強制する
+
+- `test_generate` は主対象テストファイルに一定時間内で write が発生しなければ reject する。
+- target file に最初の write が起こる前の repo 横断探索は violation として扱う。
+- target implementation file の参照は、import / public contract 確認に必要な最小限に制限する。
+
+理由:
+- benchmark 専用チューニングの中で、唯一そのまま本番に昇格させる価値が高いのがこの規律。
+- 実際に `preTargetExplorationObserved: true` が残っており、これは benchmark だけの問題ではなく通常運用でも無駄。
+
+### 4. post-step validation を app-server 側の固定処理にする
+
+- 各 step の直後に server が以下を実行する。
+  - target file が更新されたか
+  - lint/type/test が通るか
+  - allowed scope 外の変更がないか
+  - approved case 件数から大きく逸脱していないか
+- validation 結果だけを次 step へ渡す。
+
+理由:
+- 今の harness は validation の考え方自体は正しいが、一部が benchmark 専用分岐に埋まっている。
+- validation は benchmark のためではなく、本番でも必要な品質ゲート。
+
+### 5. review loop を full-context 再送から diff-centered 再評価へ変える
+
+- 2 周目以降の review は
+  - 前回指摘
+  - 今回差分
+  - 直近 lint/test 結果
+  のみを主入力にする。
+- spec 全文、criteria 全文、対象ファイル全文を毎周再送する構造はやめる。
+- `judgment_summary` はレポート用途のため、実装修正ループから切り離す。
+
+理由:
+- 現状は `test_self_quality -> apply_fixes -> judgment_summary` の往復が長く、4 回目 `apply_fixes` では `inputTokens: 769102` に達している。
+- 品質ゲートとレポート生成を同じ loop に乗せるべきではない。
+
+## benchmark 専用チューニングの扱い
+
+### 本番フローへ昇格させるもの
+
+- target-file-first の規律
+- post-step validation
+- `primaryTargetFileTouched` / `preTargetExplorationObserved` のような observability
+
+これらは benchmark 固有ではなく、本番でも品質と token 効率の両方に効く。
+
+### benchmark runner の外側へ追い出すもの
+
+- placeholder reset
+- placeholder 置換の強制
+- `ALREADY_GREEN` を benchmark だけ失格にする処理
+- `Generation Benchmark Discipline` のような benchmark 名指しの prompt
+
+これらは採点条件や fixture 準備であって、`impl` フロー本体の責務ではない。
+
+### 結論
+
+- app-server 移行後の本番フローは 1 本にする。
+- benchmark はその同一フローを clean worktree と固定 fixture 上で走らせ、外側の runner が採点する。
+- つまり移行先で強化すべきなのは benchmark 専用分岐ではなく、本番にも効く execution policy である。
+
+## 移行判断
+
+- harness の品質 policy 自体は維持する。
+- ただし execution control は SDK prompt ではなく app-server native control に寄せる。
+- 移行理由は「モデルを変えたいから」ではなく、
+  - prompt 依存の scope 制御では限界が見えた
+  - 実行環境探索を止められない
+  - review loop の token 膨張を execution layer でしか抑えられない
+  ためである。
 
 ## 補足
 

@@ -11,6 +11,8 @@ import type { Boundary } from "./boundary.ts";
 import type { RunnerRegistry } from "./runner-registry.ts";
 import { FLOW_STEP } from "./steps.ts";
 import type { ResolvedProfileConfig, StorybookConfig } from "./config.ts";
+import { assertReadyLikeStatus } from "./domain/plan-readiness.ts";
+import { resolveRequiredHarnessAssetPath } from "./domain/review-assets.ts";
 import type { LintAdapter } from "./tool-adapter.ts";
 import type { ReviewIssue, ReviewResult, TaskPlan } from "./types.ts";
 import { GuardError, EVENT } from "./types.ts";
@@ -139,33 +141,22 @@ export class ComponentFlow {
       }
     }
 
-    const specStatus = this.boundary.readFrontmatter(resolve(root, plan.specPath)).status;
-    if (!this.isReadyLikeStatus(specStatus)) {
-      throw new GuardError(`仕様書が ready ではありません（現在: ${specStatus ?? "なし"}）`);
-    }
-    const componentSpecStatus = this.boundary.readFrontmatter(resolve(root, plan.componentSpecPath)).status;
-    if (!this.isReadyLikeStatus(componentSpecStatus)) {
-      throw new GuardError(`コンポーネント定義書が ready ではありません（現在: ${componentSpecStatus ?? "なし"}）`);
-    }
+    assertReadyLikeStatus(this.boundary.readFrontmatter(resolve(root, plan.specPath)).status, "仕様書");
+    assertReadyLikeStatus(
+      this.boundary.readFrontmatter(resolve(root, plan.componentSpecPath)).status,
+      "コンポーネント定義書",
+    );
 
     if (!this.profile.storybook) {
       throw new GuardError("component フローには profile.storybook.renderCommand / smokeCommand の設定が必要です。");
     }
   }
 
-  private isReadyLikeStatus(status: string | undefined): boolean {
-    return status === "ready" || status === "approved";
-  }
-
   private resolveComponentCriteriaPath(): string {
-    const root = this.boundary.getProjectRoot();
-    const projectPath = join(root, ".harness", "review-criteria-component.md");
-    if (existsSync(projectPath)) return projectPath;
-
-    const packagePath = join(import.meta.dirname ?? "", "..", "review-criteria-component.md");
-    if (existsSync(packagePath)) return packagePath;
-
-    throw new GuardError("review-criteria-component.md が見つかりません。");
+    return resolveRequiredHarnessAssetPath(
+      this.boundary.getProjectRoot(),
+      "review-criteria-component.md",
+    );
   }
 
   private async generateTarget(

@@ -10,6 +10,7 @@ import { FLOW_STEP } from "./steps.ts";
 import { GuardError, HarnessError, ESCALATION_LEVEL, EVENT, STEP_ORDER } from "./types.ts";
 import type { TaskPlan, ReviewRecord, LintViolation, CompletedStep } from "./types.ts";
 import type { ResolvedProfileConfig } from "./config.ts";
+import { readOptionalRulesContent, resolveReviewCriteriaPaths } from "./domain/review-assets.ts";
 import type { LintAdapter, TestAdapter } from "./tool-adapter.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
 import { runTool } from "./launcher.ts";
@@ -47,74 +48,18 @@ export class ImplFlow {
   }
 
   private resolveCriteriaPaths(): string[] {
-    const root = this.boundary.getProjectRoot();
-    const paths: string[] = [];
-
-    // 1. profile.reviewCriteria（ユーザー明示パス）
-    for (const c of this.profile.reviewCriteria) {
-      const fullPath = resolve(root, c);
-      if (!existsSync(fullPath)) {
-        throw new GuardError(`Review criteria not found: ${c}`);
-      }
-      paths.push(fullPath);
-    }
-
-    // 2. profile.criteriaPreset（組み込みプリセット）
-    if (this.profile.criteriaPreset) {
-      const presetNames = [
-        "review-criteria-common",
-        `review-criteria-${this.profile.criteriaPreset}`,
-      ];
-      for (const name of presetNames) {
-        const projectPath = join(root, ".harness", `${name}.md`);
-        if (existsSync(projectPath)) {
-          paths.push(projectPath);
-          continue;
-        }
-        const packagePath = join(import.meta.dirname ?? "", "..", `${name}.md`);
-        if (existsSync(packagePath)) {
-          paths.push(packagePath);
-          continue;
-        }
-        throw new GuardError(`Review criteria not found: ${name}.md`);
-      }
-    }
-
-    // 3. どちらも未指定の場合: common + backend（後方互換）
-    if (this.profile.reviewCriteria.length === 0 && !this.profile.criteriaPreset) {
-      const fallbackNames = ["review-criteria-common", "review-criteria-backend"];
-      for (const name of fallbackNames) {
-        const projectPath = join(root, ".harness", `${name}.md`);
-        if (existsSync(projectPath)) {
-          paths.push(projectPath);
-          continue;
-        }
-        const packagePath = join(import.meta.dirname ?? "", "..", `${name}.md`);
-        if (existsSync(packagePath)) {
-          paths.push(packagePath);
-        }
-      }
-    }
-
-    return paths;
+    return resolveReviewCriteriaPaths(
+      this.boundary.getProjectRoot(),
+      this.profile,
+      "backend",
+    );
   }
 
   private resolveRulesContent(plan: TaskPlan): string {
-    const ruleName = this.resolveRuleName(plan);
-    if (!ruleName) return "";
-
-    const root = this.boundary.getProjectRoot();
-    const projectPath = join(root, ".harness", "rules", `${ruleName}.md`);
-    if (existsSync(projectPath)) {
-      return readFileSync(projectPath, "utf-8");
-    }
-
-    const packagePath = join(import.meta.dirname ?? "", "..", "rules", `${ruleName}.md`);
-    if (existsSync(packagePath)) {
-      return readFileSync(packagePath, "utf-8");
-    }
-
-    return "";
+    return readOptionalRulesContent(
+      this.boundary.getProjectRoot(),
+      this.resolveRuleName(plan),
+    );
   }
 
   private resolveRuleName(plan: TaskPlan): string | undefined {

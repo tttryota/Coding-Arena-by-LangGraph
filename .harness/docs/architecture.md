@@ -23,17 +23,45 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 
 ```
 .harness/src/
-├── types.ts                 # 共有型定義（110行）
-├── claude-runner.ts         # claude -p ラッパー（122行）
-├── logger.ts                # 構造化ログ + redact（96行）
-├── boundary.ts              # パス検証・スコープ解決・ファイル探索（302行）
-├── lint-guard.ts            # リンター強制ガード（181行）
-├── drift-guard.ts           # 迷走検知ガード（156行）
-├── review-orchestrator.ts   # レビューフロー制御（473行）
-├── design-flow.ts           # Design Flow（125行）
-├── impl-flow.ts             # Impl Flow + リトライ（229行）
-└── harness.ts               # CLI エントリポイント（58行）
+├── application/
+│   ├── harness-commands.ts      # CLI から呼ばれる use case 入口
+│   └── plan-flow-environment.ts # plan/profile/boundary/registry の組み立て
+├── domain/
+│   ├── plan-readiness.ts        # ready/approved 判定ポリシー
+│   └── review-assets.ts         # review criteria / rule の解決ポリシー
+├── types.ts                     # 共有型定義
+├── boundary.ts                  # パス検証・スコープ解決・ファイル探索
+├── runner-registry.ts           # provider 解決と usage 記録
+├── claude-runner.ts             # claude -p ラッパー
+├── logger.ts                    # 構造化ログ + redact
+├── lint-guard.ts                # リンター強制ガード
+├── drift-guard.ts               # 迷走検知ガード
+├── review-orchestrator.ts       # レビューフロー制御
+├── design-flow.ts               # Design Flow
+├── impl-flow.ts                 # Impl Flow + リトライ
+├── component-flow.ts            # Component Flow
+├── page-flow.ts                 # Page Flow
+└── harness.ts                   # CLI アダプタ
 ```
+
+## 依存方向
+
+依存は次の一方向に揃える。
+
+1. `harness.ts`
+CLI の引数解釈だけを担当し、application layer の command を呼ぶ。
+2. `application/*`
+use case ごとの組み立てを担当し、domain policy と infrastructure を束ねる。
+3. `domain/*`
+ready 判定や criteria 解決のような、外部実行手段に依存しないポリシーを置く。
+4. 既存の flow / guard / runner / logger / boundary
+外部 I/O、LLM 実行、lint/test 実行、git 差分、ファイル境界のような infrastructure を担う。
+
+禁止したい依存:
+
+- domain から CLI や logger へ依存しない
+- CLI から boundary / runner を直接組み立てない
+- flow ごとに review criteria 解決や ready 判定を重複実装しない
 
 ## コンポーネント詳細
 

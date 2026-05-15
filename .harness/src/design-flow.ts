@@ -4,6 +4,7 @@ import type { HarnessLogger } from "./logger.ts";
 import type { Boundary } from "./boundary.ts";
 import type { RunnerRegistry } from "./runner-registry.ts";
 import type { ResolvedProfileConfig } from "./config.ts";
+import { isReadyLikeStatus } from "./domain/plan-readiness.ts";
 import { FLOW_STEP } from "./steps.ts";
 import { GuardError } from "./types.ts";
 import { applyStepContext, joinPromptSections } from "./step-context.ts";
@@ -51,7 +52,7 @@ export class DesignFlow {
     }
 
     const specFm = this.boundary.readFrontmatter(specPath);
-    if (!this.isReadyLikeStatus(specFm.status)) {
+    if (!isReadyLikeStatus(specFm.status)) {
       console.log("仕様書を確認し、frontmatter の status を ready に更新してから再実行してください。");
       return;
     }
@@ -69,16 +70,12 @@ export class DesignFlow {
     }
 
     const tcFm = this.boundary.readFrontmatter(tcPath);
-    if (!this.isReadyLikeStatus(tcFm.status)) {
+    if (!isReadyLikeStatus(tcFm.status)) {
       console.log("テストケースを確認し、frontmatter の status を ready に更新してください。");
       return;
     }
 
     console.log("仕様書・テストケースともに ready です。impl フローに進めます。");
-  }
-
-  private isReadyLikeStatus(status: string | undefined): boolean {
-    return status === "ready" || status === "approved";
   }
 
   private async generateSpec(

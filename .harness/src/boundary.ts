@@ -2,6 +2,7 @@ import { existsSync, realpathSync, lstatSync, readFileSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { isReadyLikeStatus } from "./domain/plan-readiness.ts";
 import { GuardError } from "./types.ts";
 import type { TaskPlan } from "./types.ts";
 import type { SourceLayoutConfig } from "./config.ts";
@@ -18,12 +19,14 @@ export class Boundary {
   private projectRoot: string;
   private realRoot: string;
   private sourceLayout: SourceLayoutConfig;
+  private allowedSideEffectFiles: readonly string[];
   private fileExtensions: readonly string[];
   private excludeDirs: readonly string[];
 
   constructor(
     projectRoot: string,
     sourceLayout?: SourceLayoutConfig,
+    allowedSideEffectFiles?: readonly string[],
     fileExtensions?: readonly string[],
     excludeDirs?: readonly string[],
   ) {
@@ -36,6 +39,7 @@ export class Boundary {
       scopePattern: "backend/{{category}}/*",
       additionalAllowedPrefixes: ["docs/reviews/"],
     };
+    this.allowedSideEffectFiles = allowedSideEffectFiles ?? [];
     this.fileExtensions = fileExtensions ?? ["py"];
     this.excludeDirs = excludeDirs ?? ["__pycache__", ".venv"];
   }
@@ -159,17 +163,13 @@ export class Boundary {
     }
 
     const specFm = this.readFrontmatter(specFullPath);
-    if (!this.isReadyLikeStatus(specFm.status)) {
+    if (!isReadyLikeStatus(specFm.status)) {
       throw new GuardError(`仕様書が ready ではありません（現在: ${specFm.status ?? "なし"}）`);
     }
     const tcFm = this.readFrontmatter(testCasesFullPath);
-    if (!this.isReadyLikeStatus(tcFm.status)) {
+    if (!isReadyLikeStatus(tcFm.status)) {
       throw new GuardError(`テストケースが ready ではありません（現在: ${tcFm.status ?? "なし"}）`);
     }
-  }
-
-  private isReadyLikeStatus(status: string | undefined): boolean {
-    return status === "ready" || status === "approved";
   }
 
   // === ファイル探索（sourceLayout 駆動） ===
@@ -264,6 +264,10 @@ export class Boundary {
     return this.sourceLayout.additionalAllowedPrefixes.map((prefix) => prefix.endsWith("/") ? prefix : `${prefix}/`);
   }
 
+  private resolvedAllowedSideEffectFiles(): string[] {
+    return [...this.allowedSideEffectFiles];
+  }
+
   scopeAllowedTools(scope: string): string[] {
     const pattern = this.resolvePattern(this.sourceLayout.scopePattern, scope);
     return [
@@ -329,9 +333,11 @@ export class Boundary {
   async stageFiles(scope: string): Promise<void> {
     const dirs = this.scopeDirs(scope);
     const changedExtraFiles = await this.changedFilesUnderPrefixes(this.resolvedAdditionalAllowedPrefixes());
+    const changedSideEffectFiles = await this.changedFilesExact(this.resolvedAllowedSideEffectFiles());
     const stageTargets = [
       ...dirs.map((d) => `${d}/`),
       ...changedExtraFiles,
+      ...changedSideEffectFiles,
     ];
     if (stageTargets.length === 0) return;
     try {
@@ -403,19 +409,29 @@ export class Boundary {
       ...dirs.map((d) => d.endsWith("/") ? d : `${d}/`),
       ...this.resolvedAdditionalAllowedPrefixes(),
     ];
+    const allowedSideEffectFiles = this.resolvedAllowedSideEffectFiles();
 
     const tracked = await this.gitListChangedFiles("git", ["diff", "--name-only", "HEAD"]);
     const untracked = await this.gitListChangedFiles("git", ["ls-files", "--others", "--exclude-standard"]);
     const allChanged = [...tracked, ...untracked];
 
     for (const file of allChanged) {
-      const inScope = allowedPrefixes.some((prefix) => file.startsWith(prefix));
+      const inScope = allowedPrefixes.some((prefix) => file.startsWith(prefix))
+        || allowedSideEffectFiles.includes(file);
       if (!inScope) {
         throw new GuardError(
-          `スコープ外のファイルが変更されています: ${file}\n許可されたプレフィクス: ${allowedPrefixes.join(", ")}`,
+          `スコープ外のファイルが変更されています: ${file}\n許可されたプレフィクス: ${allowedPrefixes.join(", ")}\n許可された副作用ファイル: ${allowedSideEffectFiles.join(", ") || "(なし)"}`,
         );
       }
     }
+  }
+
+  private async changedFilesExact(files: readonly string[]): Promise<string[]> {
+    if (files.length === 0) return [];
+    const tracked = await this.gitListChangedFiles("git", ["diff", "--name-only", "HEAD"]);
+    const untracked = await this.gitListChangedFiles("git", ["ls-files", "--others", "--exclude-standard"]);
+    const allChanged = [...tracked, ...untracked];
+    return allChanged.filter((file) => files.includes(file));
   }
 
   private async gitListChangedFiles(cmd: string, args: string[]): Promise<string[]> {

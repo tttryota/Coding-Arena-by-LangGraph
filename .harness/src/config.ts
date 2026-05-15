@@ -138,6 +138,7 @@ export type UserProfileConfig = {
   lint?: string[];
   test?: string;
   sourceLayout?: UserSourceLayoutConfig;
+  allowedSideEffectFiles?: string[];
   storybook?: UserStorybookConfig;
   exec?: string | string[];
   toolRoot?: string;
@@ -151,6 +152,7 @@ export type ResolvedProfileConfig = {
   lint: string[];
   test: string;
   sourceLayout: SourceLayoutConfig;
+  allowedSideEffectFiles: string[];
   storybook?: StorybookConfig;
   exec: string[];
   toolRoot: string;
@@ -330,6 +332,9 @@ function validateUserProfileConfig(name: string, profile: UserProfileConfig | un
       );
     }
   }
+  if (profile.allowedSideEffectFiles !== undefined) {
+    validateStringArrayField(profile.allowedSideEffectFiles, `profile "${name}".allowedSideEffectFiles`);
+  }
   if (profile.storybook !== undefined) {
     if (typeof profile.storybook !== "object" || Array.isArray(profile.storybook)) {
       throw new GuardError(`profile "${name}".storybook はオブジェクト形式で指定してください。`);
@@ -460,6 +465,7 @@ function resolveOneProfile(user: UserProfileConfig, projectRoot: string): Resolv
     lint,
     test,
     sourceLayout,
+    allowedSideEffectFiles: user.allowedSideEffectFiles ?? [],
     storybook: user.storybook
       ? {
           renderCommand: [...(user.storybook.renderCommand ?? [])],
@@ -630,6 +636,9 @@ function validateProfile(
   validateScopePattern(`profile "${name}".sourceLayout.scopePattern`, profile.sourceLayout.scopePattern);
   for (const prefix of profile.sourceLayout.additionalAllowedPrefixes) {
     validatePathTemplate(`profile "${name}".sourceLayout.additionalAllowedPrefixes`, prefix);
+  }
+  for (const filePath of profile.allowedSideEffectFiles) {
+    validateSingleFilePath(`profile "${name}".allowedSideEffectFiles`, filePath);
   }
   if (profile.storybook) {
     validateResolvedStringArray(profile.storybook.renderCommand, `profile "${name}".storybook.renderCommand`);
@@ -870,6 +879,24 @@ function validateScopePattern(field: string, value: string): void {
   validatePathTemplate(field, trimmed);
   if (!value.endsWith("/*") && !value.endsWith("/**")) {
     throw new GuardError(`${field}: scopePattern の末尾は "/*" または "/**" である必要があります: "${value}"`);
+  }
+}
+
+function validateSingleFilePath(field: string, value: string): void {
+  if (value.startsWith("/")) {
+    throw new GuardError(`${field}: 絶対パスは指定できません: "${value}"`);
+  }
+  if (value.endsWith("/")) {
+    throw new GuardError(`${field}: allowedSideEffectFiles にはディレクトリを指定できません: "${value}"`);
+  }
+  if (value.includes("..")) {
+    throw new GuardError(`${field}: ".." を含むパスは指定できません: "${value}"`);
+  }
+  if (value.includes("{{")) {
+    throw new GuardError(`${field}: プレースホルダは指定できません: "${value}"`);
+  }
+  if (/[,)()*?\\]/.test(value)) {
+    throw new GuardError(`${field}: 特殊文字（, ) ( * ? \\）は許可されていません: "${value}"`);
   }
 }
 

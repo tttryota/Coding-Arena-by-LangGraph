@@ -1,21 +1,15 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { HarnessLogger } from "./logger.ts";
 import { HarnessError } from "./types.ts";
-import { Boundary } from "./boundary.ts";
-import { DesignFlow } from "./design-flow.ts";
-import { ComponentFlow } from "./component-flow.ts";
-import { ImplFlow } from "./impl-flow.ts";
-import { PageFlow } from "./page-flow.ts";
-import { loadConfig, inferProfile, resolveProfile } from "./config.ts";
-import { createRunnerRegistry } from "./runner-registry.ts";
-import { interactiveRunnerAssignment } from "./interactive.ts";
-import { parsePlan } from "./plan-parser.ts";
-import { resolveLintAdapter, resolveTestAdapter } from "./tool-adapter.ts";
-import type { BaseAdapter } from "./tool-adapter.ts";
 import type { FlowMode, FlowStep } from "./steps.ts";
-import { renderBenchmarkSummary } from "./benchmark-summary.ts";
+import {
+  runBenchmarkSummaryCommand,
+  runComponentCommand,
+  runDesignCommand,
+  runImplCommand,
+  runPageCommand,
+} from "./application/harness-commands.ts";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -33,7 +27,6 @@ async function main(): Promise<void> {
   }
 
   const projectRoot = process.cwd();
-  const config = loadConfig(projectRoot);
 
   switch (command) {
     case "impl": {
@@ -49,36 +42,14 @@ async function main(): Promise<void> {
       const profileFlagIndex = args.indexOf("--profile");
       const profileOverride = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
 
-      if (flowFlag) config.flow = flowFlag;
-
-      // 1. plan を先に読む（Boundary 不要）
-      const plan = parsePlan(projectRoot, planPath);
-
-      // 2. profile 解決
-      const profileName = profileOverride ?? plan.profile ?? inferProfile(config);
-      const profile = resolveProfile(config, profileName);
-      plan.profile = profileName;
-
-      // 3. adapter 解決
-      const lintAdapters = profile.lint.map(resolveLintAdapter);
-      const testAdapter = resolveTestAdapter(profile.test);
-      const allAdapters: BaseAdapter[] = [...lintAdapters, testAdapter];
-      const extensions = [...new Set(allAdapters.flatMap((a) => [...a.fileExtensions]))];
-      const excludeDirs = [...new Set(allAdapters.flatMap((a) => [...a.excludeDirs]))];
-
-      // 4. profile-aware な Boundary を組み立て
-      const boundary = new Boundary(projectRoot, profile.sourceLayout, extensions, excludeDirs);
-
-      let overrides: Partial<Record<FlowStep, string>> | null = null;
-      if (!noInteractive && !resume && process.stdin.isTTY) {
-        overrides = await interactiveRunnerAssignment(config, config.flow, profile);
-      }
-
-      const registry = createRunnerRegistry(config, projectRoot, profile, overrides ?? undefined);
-
-      // 5. ImplFlow 実行
-      const implFlow = new ImplFlow(boundary, registry, profile, testAdapter, lintAdapters);
-      await implFlow.run(planPath, { resume, plan });
+      await runImplCommand({
+        projectRoot,
+        planPath,
+        flow: flowFlag,
+        profileOverride,
+        noInteractive,
+        resume,
+      });
       break;
     }
     case "page": {
@@ -93,27 +64,13 @@ async function main(): Promise<void> {
       const profileFlagIndex = args.indexOf("--profile");
       const profileOverride = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
 
-      if (flowFlag) config.flow = flowFlag;
-
-      const plan = parsePlan(projectRoot, planPath);
-      const profileName = profileOverride ?? plan.profile ?? inferProfile(config);
-      const profile = resolveProfile(config, profileName);
-      plan.profile = profileName;
-      const lintAdapters = profile.lint.map(resolveLintAdapter);
-      const testAdapter = resolveTestAdapter(profile.test);
-      const allAdapters: BaseAdapter[] = [...lintAdapters, testAdapter];
-      const extensions = [...new Set(allAdapters.flatMap((a) => [...a.fileExtensions]))];
-      const excludeDirs = [...new Set(allAdapters.flatMap((a) => [...a.excludeDirs]))];
-      const boundary = new Boundary(projectRoot, profile.sourceLayout, extensions, excludeDirs);
-
-      let overrides: Partial<Record<FlowStep, string>> | null = null;
-      if (!noInteractive && process.stdin.isTTY) {
-        overrides = await interactiveRunnerAssignment(config, config.flow, profile);
-      }
-
-      const registry = createRunnerRegistry(config, projectRoot, profile, overrides ?? undefined);
-      const pageFlow = new PageFlow(boundary, registry, profile, testAdapter, lintAdapters);
-      await pageFlow.run(planPath, { plan });
+      await runPageCommand({
+        projectRoot,
+        planPath,
+        flow: flowFlag,
+        profileOverride,
+        noInteractive,
+      });
       break;
     }
     case "component": {
@@ -128,27 +85,13 @@ async function main(): Promise<void> {
       const profileFlagIndex = args.indexOf("--profile");
       const profileOverride = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
 
-      if (flowFlag) config.flow = flowFlag;
-
-      const plan = parsePlan(projectRoot, planPath);
-      const profileName = profileOverride ?? plan.profile ?? inferProfile(config);
-      const profile = resolveProfile(config, profileName);
-      plan.profile = profileName;
-      const lintAdapters = profile.lint.map(resolveLintAdapter);
-      const testAdapter = resolveTestAdapter(profile.test);
-      const allAdapters: BaseAdapter[] = [...lintAdapters, testAdapter];
-      const extensions = [...new Set(allAdapters.flatMap((a) => [...a.fileExtensions]))];
-      const excludeDirs = [...new Set(allAdapters.flatMap((a) => [...a.excludeDirs]))];
-      const boundary = new Boundary(projectRoot, profile.sourceLayout, extensions, excludeDirs);
-
-      let overrides: Partial<Record<FlowStep, string>> | null = null;
-      if (!noInteractive && process.stdin.isTTY) {
-        overrides = await interactiveRunnerAssignment(config, config.flow, profile);
-      }
-
-      const registry = createRunnerRegistry(config, projectRoot, profile, overrides ?? undefined);
-      const componentFlow = new ComponentFlow(boundary, registry, profile, testAdapter, lintAdapters);
-      await componentFlow.run(planPath, { plan });
+      await runComponentCommand({
+        projectRoot,
+        planPath,
+        flow: flowFlag,
+        profileOverride,
+        noInteractive,
+      });
       break;
     }
     case "design": {
@@ -160,16 +103,12 @@ async function main(): Promise<void> {
       }
       const profileFlagIndex = args.indexOf("--profile");
       const profileName = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
-      const boundary = new Boundary(projectRoot);
-      const logger = new HarnessLogger(`design_${featureName}`, { baseDir: join(projectRoot, "logs") });
-      const profile = profileName
-        ? resolveProfile(config, profileName)
-        : Object.keys(config.profiles).length === 1
-          ? resolveProfile(config, inferProfile(config))
-          : undefined;
-      const registry = createRunnerRegistry(config, projectRoot, profile);
-      const designFlow = new DesignFlow(boundary, registry, profile);
-      await designFlow.run(featureName, requirements, logger);
+      await runDesignCommand({
+        projectRoot,
+        featureName,
+        requirements,
+        profileName,
+      });
       break;
     }
     case "benchmark-summary": {
@@ -178,7 +117,7 @@ async function main(): Promise<void> {
         console.error("Error: benchmark-summary requires one or two log directories");
         process.exit(1);
       }
-      console.log(renderBenchmarkSummary(logDirs));
+      console.log(runBenchmarkSummaryCommand(logDirs));
       break;
     }
     case "init": {

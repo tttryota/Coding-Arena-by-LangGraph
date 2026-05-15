@@ -10,6 +10,8 @@ import { FLOW_STEP } from "./steps.ts";
 import type { TaskPlan, BrowserVerificationResult, ReviewIssue, BrowserScenarioResult } from "./types.ts";
 import { DriftError, GuardError, HarnessError, ESCALATION_LEVEL } from "./types.ts";
 import type { ResolvedProfileConfig } from "./config.ts";
+import { assertReadyLikeStatus } from "./domain/plan-readiness.ts";
+import { resolveReviewCriteriaPaths } from "./domain/review-assets.ts";
 import type { LintAdapter, TestAdapter } from "./tool-adapter.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
 import { runTool } from "./launcher.ts";
@@ -200,72 +202,23 @@ export class PageFlow {
       }
     }
 
-    const specStatus = this.boundary.readFrontmatter(resolve(root, plan.specPath)).status;
-    if (!this.isReadyLikeStatus(specStatus)) {
-      throw new GuardError(`仕様書が ready ではありません（現在: ${specStatus ?? "なし"}）`);
-    }
-    const testCasesStatus = this.boundary.readFrontmatter(resolve(root, plan.testCasesPath)).status;
-    if (!this.isReadyLikeStatus(testCasesStatus)) {
-      throw new GuardError(`テストケースが ready ではありません（現在: ${testCasesStatus ?? "なし"}）`);
-    }
-    const componentSpecStatus = this.boundary.readFrontmatter(resolve(root, plan.componentSpecPath)).status;
-    if (!this.isReadyLikeStatus(componentSpecStatus)) {
-      throw new GuardError(`コンポーネント定義書が ready ではありません（現在: ${componentSpecStatus ?? "なし"}）`);
-    }
-  }
-
-  private isReadyLikeStatus(status: string | undefined): boolean {
-    return status === "ready" || status === "approved";
+    assertReadyLikeStatus(this.boundary.readFrontmatter(resolve(root, plan.specPath)).status, "仕様書");
+    assertReadyLikeStatus(
+      this.boundary.readFrontmatter(resolve(root, plan.testCasesPath)).status,
+      "テストケース",
+    );
+    assertReadyLikeStatus(
+      this.boundary.readFrontmatter(resolve(root, plan.componentSpecPath)).status,
+      "コンポーネント定義書",
+    );
   }
 
   private resolveCriteriaPaths(): string[] {
-    const root = this.boundary.getProjectRoot();
-    const paths: string[] = [];
-
-    for (const criteriaPath of this.profile.reviewCriteria) {
-      const fullPath = resolve(root, criteriaPath);
-      if (!existsSync(fullPath)) {
-        throw new GuardError(`Review criteria not found: ${criteriaPath}`);
-      }
-      paths.push(fullPath);
-    }
-
-    if (this.profile.criteriaPreset) {
-      const presetNames = [
-        "review-criteria-common",
-        `review-criteria-${this.profile.criteriaPreset}`,
-      ];
-      for (const name of presetNames) {
-        const projectPath = join(root, ".harness", `${name}.md`);
-        if (existsSync(projectPath)) {
-          paths.push(projectPath);
-          continue;
-        }
-        const packagePath = join(import.meta.dirname ?? "", "..", `${name}.md`);
-        if (existsSync(packagePath)) {
-          paths.push(packagePath);
-          continue;
-        }
-        throw new GuardError(`Review criteria not found: ${name}.md`);
-      }
-    }
-
-    if (paths.length === 0) {
-      const fallbackNames = ["review-criteria-common", "review-criteria-frontend"];
-      for (const name of fallbackNames) {
-        const projectPath = join(root, ".harness", `${name}.md`);
-        if (existsSync(projectPath)) {
-          paths.push(projectPath);
-          continue;
-        }
-        const packagePath = join(import.meta.dirname ?? "", "..", `${name}.md`);
-        if (existsSync(packagePath)) {
-          paths.push(packagePath);
-        }
-      }
-    }
-
-    return paths;
+    return resolveReviewCriteriaPaths(
+      this.boundary.getProjectRoot(),
+      this.profile,
+      "frontend",
+    );
   }
 
   private async generatePage(plan: TaskPlan, scopeTools: string[]): Promise<void> {

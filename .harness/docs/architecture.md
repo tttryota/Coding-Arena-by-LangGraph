@@ -24,16 +24,37 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 ```
 .harness/src/
 ├── application/
+│   ├── component-flow-runtime.ts # component 実行時コンテキストの構築
+│   ├── component-generation-service.ts # component 生成 prompt と step 実行
+│   ├── component-target-service.ts # component target ごとの check / story gate / fix
 │   ├── harness-commands.ts      # CLI から呼ばれる use case 入口
+│   ├── impl-execution-service.ts # impl の TDD 実行シーケンス
+│   ├── impl-flow-runtime.ts     # impl 実行時コンテキストの構築
+│   ├── impl-generation-service.ts # impl test/implementation 生成 step の実行
+│   ├── impl-review-service.ts   # impl review 依頼の組み立て
 │   ├── impl-report-writer.ts    # impl レポート出力
+│   ├── page-browser-service.ts  # browser verification 実行と fix 指示
+│   ├── page-flow-runtime.ts     # page 実行時コンテキストの構築
+│   ├── page-generation-service.ts # page 生成 prompt と step 実行
+│   ├── page-review-service.ts   # page review 依頼の組み立て
 │   ├── plan-flow-environment.ts # plan/profile/boundary/registry の組み立て
+│   ├── review-cycle-service.ts  # review 収束制御と fix/judgment 実行
+│   ├── review-prompt-factory.ts # review prompt / fix prompt の組み立て
 │   ├── review-step-executor.ts  # review step 実行と stall fallback
+│   ├── scoped-lint-service.ts   # scope 単位 lint 実行と自動修正
+│   ├── task-plan-validation.ts  # page/component plan の妥当性検証
 │   └── test-executor.ts         # lint/test ツール実行の共通化
 ├── domain/
+│   ├── artifact-validation-policy.ts # test artifact の純粋検証
+│   ├── browser-verification.ts  # browser verification JSON の解釈ポリシー
+│   ├── harness-run.ts           # harness 実行状態 entity
 │   ├── impl-artifacts.ts        # impl 用 artifact/prompt 補助ポリシー
 │   ├── plan-readiness.ts        # ready/approved 判定ポリシー
+│   ├── review-acceptance-policy.ts # review minor/parse/cycle 判定ポリシー
 │   ├── review-assets.ts         # review criteria / rule の解決ポリシー
-│   └── review-output.ts         # review JSON 出力の解釈ポリシー
+│   ├── review-cycle.ts          # review 収束状態 entity
+│   ├── review-output.ts         # review JSON 出力の解釈ポリシー
+│   └── step-transition-policy.ts # impl step 遷移 / skip 判定
 ├── types.ts                     # 共有型定義
 ├── boundary.ts                  # パス検証・スコープ解決・ファイル探索
 ├── runner-registry.ts           # provider 解決と usage 記録
@@ -51,20 +72,20 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 
 ## 依存方向
 
-依存は次の一方向に揃える。
+依存方向は次に揃える。
 
-1. `harness.ts`
-CLI の引数解釈だけを担当し、application layer の command を呼ぶ。
-2. `application/*`
-use case ごとの組み立てを担当し、domain policy と infrastructure を束ねる。
-3. `domain/*`
-ready 判定や criteria 解決のような、外部実行手段に依存しないポリシーを置く。
-4. 既存の flow / guard / runner / logger / boundary
-外部 I/O、LLM 実行、lint/test 実行、git 差分、ファイル境界のような infrastructure を担う。
+1. `harness.ts -> application/*`
+CLI の引数解釈と composition root を担当する。
+2. `application/* -> domain/*`
+use case ごとの orchestration と execution service を担当し、domain entity / policy を使う。
+3. `application/* -> infrastructure`
+filesystem / git / subprocess / runner / logger / boundary の concrete adapter を使う。
+4. `domain/*`
+外部 I/O を知らず、entity / policy / value object だけを持つ。
 
 禁止したい依存:
 
-- domain から CLI や logger へ依存しない
+- domain から boundary / runner / logger / lintGuard へ依存しない
 - CLI から boundary / runner を直接組み立てない
 - flow ごとに review criteria 解決や ready 判定を重複実装しない
 
@@ -88,7 +109,8 @@ ready 判定や criteria 解決のような、外部実行手段に依存しな�
 - `verifyChangedFilesWithinScope(scope)`: `git diff` + `git ls-files --others` でスコープ外変更を検出。許可プレフィクスは `backend/{category}/` と `docs/reviews/`。git 失敗は fail-closed
 
 **ガード**:
-- `implementationGuard(plan)`: 仕様書・テストケースの存在・承認・scope 妥当性を一括検証
+- boundary は path / scope / file 探索の primitive を担う
+- plan の妥当性検証は `application/task-plan-validation.ts` から呼ぶ
 
 ### claude-runner.ts — Claude CLI ラッパー
 
@@ -164,9 +186,13 @@ ready 判定や criteria 解決のような、外部実行手段に依存しな�
 
 ### review-orchestrator.ts — レビュー制御
 
-レビューのワークフローだけを持ち、step 実行や JSON 解釈は外出ししている。
+レビュー step 定義のファサードだけを持ち、収束制御・fix・judgment・step 実行・prompt 組み立て・JSON 解釈は外出ししている。
 
+- `application/review-cycle-service.ts`: review 収束制御、fix/judgment/lint 再試行、record 生成
 - `application/review-step-executor.ts`: step 実行、provider fallback、`applyStepContext`
+- `application/review-prompt-factory.ts`: review prompt / fix prompt / judgment prompt の組み立て
+- `domain/review-cycle.ts`: review cycle entity
+- `domain/review-acceptance-policy.ts`: minor acceptance / parse failure / cycle over の判定
 - `domain/review-output.ts`: review JSON / minor acceptance JSON の解釈
 
 **テストレビュー（テスト生成後、RED確認前）— 2ステップ:**
@@ -215,12 +241,24 @@ ready 判定や criteria 解決のような、外部実行手段に依存しな�
 
 ### impl-flow.ts — Impl Flow
 
-- 計画ファイル読み込み → ガード → テスト生成 → RED確認 → 実装 → GREEN確認 → レビュー
-- GREEN リトライループ（最大3回、毎回最新の失敗ログを渡す）
-- DriftGuard の `expectedScopeLines` をテストケース数 × 30行で動的推定
-- スコープ外変更の事後検証
-- **レビューレポート自動生成**: impl フロー完了時に `docs/reviews/{date}_{scope}.md` を出力
-- artifact/prompt の純粋ロジックは `domain/impl-artifacts.ts`、テスト実行は `application/test-executor.ts`、レポート出力は `application/impl-report-writer.ts` に外出しする
+- flow 自体は `plan parse -> validation -> runtime prepare -> execution service` の入口だけを持つ
+- `application/impl-execution-service.ts` が `test generate -> test review -> red confirm -> green retry -> impl review -> report` の順序制御を担う
+- `domain/harness-run.ts` が checkpoint / session / completed step / review records を持つ実行状態 entity になる
+- `domain/step-transition-policy.ts` が skip 判定、`domain/artifact-validation-policy.ts` が test artifact の純粋検証を担う
+- DriftGuard の `expectedScopeLines` をテストケース数 × 30行で動的推定する点と、スコープ外変更検証、レビューレポート生成は維持する
+
+### page-flow.ts — Page Flow
+
+- flow 自体は `generate -> static check -> review -> browser verify/fix loop` の順序制御だけを持つ
+- runtime 構築は `application/page-flow-runtime.ts` に、plan 妥当性検証は `application/task-plan-validation.ts` に外出しする
+- page 生成 prompt と step 実行は `application/page-generation-service.ts`、page review 依頼の組み立ては `application/page-review-service.ts`、browser verification 実行と fix 指示は `application/page-browser-service.ts` に外出しする
+- browser verification の JSON 解釈と issue 変換は `domain/browser-verification.ts` に外出しする
+
+### component-flow.ts — Component Flow
+
+- flow 自体は target ごとの `generate -> stage -> target review loop` の順序制御だけを持つ
+- runtime 構築は `application/component-flow-runtime.ts` に、plan 妥当性検証は `application/task-plan-validation.ts` に外出しする
+- component 生成 prompt と step 実行は `application/component-generation-service.ts`、story gate / lint / review / fix の target 単位処理は `application/component-target-service.ts` に外出しする
 
 ### レビューレポート生成
 

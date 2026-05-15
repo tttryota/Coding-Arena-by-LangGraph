@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { stringify as stringifyYaml } from "yaml";
+import { TestExecutor } from "./application/test-executor.ts";
 import { HarnessLogger } from "./logger.ts";
 import { LintGuard } from "./lint-guard.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
@@ -14,8 +15,6 @@ import { assertReadyLikeStatus } from "./domain/plan-readiness.ts";
 import { resolveReviewCriteriaPaths } from "./domain/review-assets.ts";
 import type { LintAdapter, TestAdapter } from "./tool-adapter.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
-import { runTool } from "./launcher.ts";
-import type { LauncherOptions } from "./launcher.ts";
 import { parsePlan } from "./plan-parser.ts";
 import { applyStepContext } from "./step-context.ts";
 
@@ -28,6 +27,7 @@ export class PageFlow {
   private profile: ResolvedProfileConfig;
   private testAdapter: TestAdapter;
   private lintAdapters: LintAdapter[];
+  private testExecutor: TestExecutor;
 
   constructor(
     boundary: Boundary,
@@ -41,6 +41,12 @@ export class PageFlow {
     this.profile = profile;
     this.testAdapter = testAdapter;
     this.lintAdapters = lintAdapters;
+    this.testExecutor = new TestExecutor(testAdapter, {
+      projectRoot: this.boundary.getProjectRoot(),
+      toolRoot: this.profile.toolRoot,
+      execOverride: this.profile.exec,
+      genericFailureMessage: `${testAdapter.frameworkName} がページフロー中に失敗しました。`,
+    });
   }
 
   async run(planPath: string, options?: { plan?: TaskPlan }): Promise<void> {
@@ -313,32 +319,11 @@ ${issueList}
   private async runTests(
     testPath: string,
   ): Promise<{ passed: boolean; output: string }> {
-    const absTestPath = resolve(this.boundary.getProjectRoot(), testPath);
-    const args = this.testAdapter.buildArgs(absTestPath);
-    const launcherOptions: LauncherOptions = {
-      toolRoot: this.profile.toolRoot,
-      execOverride: this.profile.exec,
-    };
-    const result = await runTool(this.testAdapter.name, args, launcherOptions);
-    const testResult = this.testAdapter.parseResult(
-      result.stdout,
-      result.stderr,
-      result.exitCode,
-    );
-
-    switch (testResult.kind) {
-      case "passed":
-        return { passed: true, output: testResult.output };
-      case "failed":
-        return { passed: false, output: testResult.output };
-      case "collection-error":
-      case "no-tests":
-      case "internal-error":
-      case "interrupted":
-        throw new GuardError(
-          `${this.testAdapter.frameworkName} がページフロー中に失敗しました (kind: ${testResult.kind})。\n${testResult.output}`,
-        );
-    }
+    return this.testExecutor.run(testPath, {
+      collectionErrorMessage: `${this.testAdapter.frameworkName} がページフロー中に失敗しました (kind: collection-error)。`,
+      noTestsMessage: `${this.testAdapter.frameworkName} がページフロー中に失敗しました (kind: no-tests)。`,
+      genericFailureMessage: `${this.testAdapter.frameworkName} がページフロー中に失敗しました。`,
+    });
   }
 
   private async runBrowserVerification(

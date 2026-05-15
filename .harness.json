@@ -78,13 +78,15 @@
           "impl_external_review": "claude_opus"
         }
       },
+      "allowedSideEffectFiles": [
+        "backend/uv.lock"
+      ],
       "sourceLayout": {
         "sourceDir": "backend/{{category}}",
         "testDir": "backend/{{category}}/tests",
         "scopePattern": "backend/{{category}}/*",
         "additionalAllowedPrefixes": [
-          "docs/reviews/",
-          "backend/uv.lock"
+          "docs/reviews/"
         ]
       }
     },
@@ -162,13 +164,15 @@
       "stepProviders": {
         "defaultProvider": "codex"
       },
+      "allowedSideEffectFiles": [
+        "backend/uv.lock"
+      ],
       "sourceLayout": {
         "sourceDir": "backend/{{category}}",
         "testDir": "backend/{{category}}/tests",
         "scopePattern": "backend/{{category}}/*",
         "additionalAllowedPrefixes": [
-          "docs/reviews/",
-          "backend/uv.lock"
+          "docs/reviews/"
         ]
       }
     },
@@ -250,13 +254,15 @@
           "impl_external_review": "claude_opus"
         }
       },
+      "allowedSideEffectFiles": [
+        "backend/uv.lock"
+      ],
       "sourceLayout": {
         "sourceDir": "backend/{{category}}",
         "testDir": "backend/{{category}}/tests",
         "scopePattern": "backend/{{category}}/*",
         "additionalAllowedPrefixes": [
-          "docs/reviews/",
-          "backend/uv.lock"
+          "docs/reviews/"
         ]
       }
     },

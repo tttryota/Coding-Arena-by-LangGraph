@@ -27,6 +27,7 @@ pnpm add @tsuryoryo/tdd-harness
       "lint": ["ruff", "mypy"],
       "test": "pytest",
       "toolRoot": "backend",
+      "allowedSideEffectFiles": ["backend/uv.lock"],
       "criteriaPreset": "backend",
       "context": {
         "defaultContextBundles": ["backend-core"],
@@ -152,20 +153,25 @@ pnpm add @tsuryoryo/tdd-harness
 | promptFlag | - | プロンプトを渡すフラグ（例: `-p`）。未指定時は stdin にプロンプトを流す |
 | timeoutMs | - | タイムアウト（ミリ秒） |
 
-```yaml
-providers:
-  copilot:
-    type: generic
-    command: gh
-    args: ["copilot"]
-    promptFlag: "--prompt"
-    capabilities: []
-    capabilityPolicy:
-      session_resume: reject
-      system_prompt: degrade_to_prompt
-      allowed_tools: degrade_to_prompt
-      agent: reject
-      mcp_config: reject
+```json
+{
+  "providers": {
+    "copilot": {
+      "type": "generic",
+      "command": "gh",
+      "args": ["copilot"],
+      "promptFlag": "--prompt",
+      "capabilities": [],
+      "capabilityPolicy": {
+        "session_resume": "reject",
+        "system_prompt": "degrade_to_prompt",
+        "allowed_tools": "degrade_to_prompt",
+        "agent": "reject",
+        "mcp_config": "reject"
+      }
+    }
+  }
+}
 ```
 
 non-interactive 実行にはツール側の権限設定が必要な場合があります（例: Copilot CLI の `--allow-all-tools`）。
@@ -236,6 +242,7 @@ tdd-harness impl plan/task.md --no-interactive # 対話プロンプトスキッ�
 | exec | string[] | ツール実行時のプレフィクス（例: `[poetry, run]`） |
 | criteriaPreset | "backend" \| "frontend" | レビュー観点のプリセット |
 | reviewCriteria | string[] | カスタムレビュー観点ファイルパス |
+| allowedSideEffectFiles | string[] | 実行副作用で変更を許可する単一ファイル |
 | sourceLayout | object | ソースコードのディレクトリ構成 |
 | stepProviders | object | profile 単位の provider 切り替え設定 |
 
@@ -249,3 +256,4 @@ tdd-harness impl plan/task.md --no-interactive # 対話プロンプトスキッ�
 | additionalAllowedPrefixes | 追加の許可パス | `["docs/reviews/"]` |
 
 `{{category}}` と `{{name}}` がスコープの値で置換される。
+`additionalAllowedPrefixes` は機能スコープ上の追加 prefix 用で、`backend/uv.lock` のような単一ファイル副作用は `allowedSideEffectFiles` に入れる。`uv` を使わない profile では通常不要。

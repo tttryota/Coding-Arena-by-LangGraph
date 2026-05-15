@@ -4,6 +4,9 @@
 - SDK ベースの harness 運用で残る制御限界を検証結果として確定する
 - 検証完了後に、app-server 移行判断の ADR を起票する
 
+関連メモ:
+- [app-server-migration-findings.md](/Users/tsuryoryo/Desktop/repo/obsidian/docs/plans/app-server-migration-findings.md)
+
 ステータス:
 - [ ] backend benchmark の現行 run が終了している
 - [ ] run 結果の事実確認が完了している

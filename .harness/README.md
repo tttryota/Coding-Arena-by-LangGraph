@@ -35,6 +35,7 @@ tdd-harness init
       "lint": ["ruff", "mypy"],
       "test": "pytest",
       "toolRoot": "backend",
+      "allowedSideEffectFiles": ["backend/uv.lock"],
       "criteriaPreset": "backend",
       "context": {
         "defaultContextBundles": ["backend-core"],
@@ -94,6 +95,8 @@ tdd-harness init
 ```
 
 `.harness/harness.json`（または `.harness.json`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
+
+`sourceLayout.additionalAllowedPrefixes` は機能スコープ上の追加 prefix 用です。`backend/uv.lock` のような実行副作用ファイルは profile 直下の `allowedSideEffectFiles` で明示許可します。`uv` を使わない profile では通常不要です。
 
 ## 使い方
 

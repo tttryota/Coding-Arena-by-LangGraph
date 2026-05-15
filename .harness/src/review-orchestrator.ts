@@ -5,13 +5,13 @@ import type { RunnerRegistry } from "./runner-registry.ts";
 import type { ResolvedProfileConfig } from "./config.ts";
 import type { FlowStep } from "./steps.ts";
 import { FLOW_STEP } from "./steps.ts";
-import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT } from "./types.ts";
+import { DriftError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT } from "./types.ts";
 import type { ReviewIssue, ReviewResult, ReviewRecord } from "./types.ts";
+import { ReviewStepExecutor } from "./application/review-step-executor.ts";
+import { parseMinorAcceptanceVerdict, parseReviewResult } from "./domain/review-output.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
-import { applyStepContext } from "./step-context.ts";
 
 const MAX_REVIEW_CYCLES = 5;
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
 type ReviewParams = {
   targetFiles: string[];
@@ -34,26 +34,11 @@ type PageReviewParams = ReviewParams & {
 };
 
 export class ReviewOrchestrator {
-  private static readonly STALL_FALLBACK_STEPS = new Set<FlowStep>([
-    FLOW_STEP.TEST_SELF_QUALITY,
-    FLOW_STEP.TEST_EXTERNAL_REVIEW,
-    FLOW_STEP.IMPL_SELF_CRITERIA,
-    FLOW_STEP.IMPL_SELF_QUALITY,
-    FLOW_STEP.IMPL_EXTERNAL_REVIEW,
-    FLOW_STEP.APPLY_FIXES,
-    FLOW_STEP.JUDGMENT_SUMMARY,
-    FLOW_STEP.JUDGE_MINOR,
-    FLOW_STEP.PAGE_REVIEW_DESIGN,
-    FLOW_STEP.PAGE_REVIEW_BEHAVIOR,
-    FLOW_STEP.PAGE_REVIEW_CODE,
-    FLOW_STEP.COMPONENT_SELF_REVIEW,
-  ]);
-
   private logger: HarnessLogger;
   private lintGuard: LintGuard;
   private projectRoot: string;
   private registry: RunnerRegistry;
-  private profile?: ResolvedProfileConfig;
+  private stepExecutor: ReviewStepExecutor;
   private records: ReviewRecord[] = [];
 
   constructor(
@@ -67,7 +52,7 @@ export class ReviewOrchestrator {
     this.lintGuard = lintGuard;
     this.projectRoot = projectRoot;
     this.registry = registry;
-    this.profile = profile;
+    this.stepExecutor = new ReviewStepExecutor(logger, projectRoot, registry, profile);
   }
 
   getRecords(): ReviewRecord[] {
@@ -711,77 +696,7 @@ export class ReviewOrchestrator {
   }
 
   private parseReviewResult(reviewer: string, output: string): ReviewResult {
-    try {
-      // コードフェンス（```json ... ```）を除去
-      const cleaned = output.replace(/```(?:json)?\s*\n([\s\S]*?)```/g, "$1");
-
-      // JSON.parse を直接試行し、失敗したら正規表現で抽出（非 greedy）
-      let parsed: Record<string, unknown>;
-      try {
-        parsed = JSON.parse(cleaned) as Record<string, unknown>;
-      } catch {
-        // 非 greedy: "issues" を含む最初の {...} を抽出
-        const jsonMatch = /\{[^{}]*"issues"\s*:\s*\[[\s\S]*?\]\s*\}/.exec(cleaned);
-        if (!jsonMatch) {
-          throw new HarnessError(`レビュー出力からJSONを抽出できませんでした (reviewer: ${reviewer})`);
-        }
-        parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
-      }
-
-      // schema validation: issues が配列であることを確認
-      if (!Array.isArray(parsed.issues)) {
-        throw new HarnessError(`issues フィールドが配列ではありません (reviewer: ${reviewer})`);
-      }
-
-      // 各 issue の最低限の形状を検証
-      const validatedIssues: ReviewIssue[] = [];
-      let invalidCount = 0;
-      for (const item of parsed.issues) {
-        if (
-          typeof item === "object" && item !== null &&
-          typeof (item as Record<string, unknown>).description === "string" &&
-          typeof (item as Record<string, unknown>).severity === "string" &&
-          typeof (item as Record<string, unknown>).file === "string"
-        ) {
-          const i = item as Record<string, unknown>;
-          validatedIssues.push({
-            description: i.description as string,
-            severity: (["critical", "major", "minor"].includes(i.severity as string)
-              ? i.severity : "major") as "critical" | "major" | "minor",
-            file: i.file as string,
-            line: typeof i.line === "number" ? i.line : undefined,
-          });
-        } else {
-          invalidCount++;
-        }
-      }
-
-      // 不正要素がある場合: fail-closed
-      if (invalidCount > 0) {
-        throw new HarnessError(
-          `レビュー出力に ${invalidCount} 件の不正な issue が含まれています (reviewer: ${reviewer})。有効: ${validatedIssues.length} 件`,
-        );
-      }
-
-      return {
-        reviewer,
-        issues: validatedIssues,
-        isLgtm: validatedIssues.length === 0,
-      };
-    } catch {
-      // fail-closed: パース失敗時は LGTM にしない
-      return {
-        reviewer,
-        issues: [
-          {
-            description: `レビュー結果のパースに失敗しました。出力を手動確認してください。`,
-            severity: "critical",
-            file: "",
-          },
-        ],
-        isLgtm: false,
-      };
-    }
+    return parseReviewResult(reviewer, output);
   }
 
   private async generateJudgmentSummary(
@@ -846,13 +761,7 @@ ${spec.slice(0, 3000)}
 {"safe": false, "reason": "判断理由"}`;
 
       const rawResult = await this.executeRun(FLOW_STEP.JUDGE_MINOR, prompt, { allowedTools: ["Read"] });
-
-      const cleaned = rawResult.replace(/```(?:json)?\s*\n([\s\S]*?)```/g, "$1");
-      const parsed = JSON.parse(cleaned) as { safe?: boolean; reason?: string };
-      return {
-        safe: parsed.safe ?? true,
-        reason: parsed.reason ?? "（判断理由なし）",
-      };
+      return parseMinorAcceptanceVerdict(rawResult);
     } catch {
       // フォールバック: 判断失敗時は safe=true（ハーネスを止めない）
       return { safe: true, reason: "（第三者判断の生成に失敗。許容として扱う）" };
@@ -878,11 +787,11 @@ ${spec.slice(0, 3000)}
       timeoutMs?: number;
     },
   ): Promise<ReviewResult> {
-    const response = await this.executeStepWithFallback(step, {
+    const response = await this.stepExecutor.execute(step, {
       prompt,
       allowedTools: options?.allowedTools ?? ["Read"],
-      timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       appendSystemPrompt: options?.appendSystemPrompt,
+      timeoutMs: options?.timeoutMs,
     });
     return this.parseReviewResult(reviewer, response.text);
   }
@@ -897,99 +806,13 @@ ${spec.slice(0, 3000)}
       timeoutMs?: number;
     },
   ): Promise<string> {
-    const response = await this.executeStepWithFallback(step, {
+    const response = await this.stepExecutor.execute(step, {
       prompt,
       allowedTools: options?.allowedTools,
       appendSystemPrompt: options?.appendSystemPrompt,
       cwd: options?.cwd,
-      timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      timeoutMs: options?.timeoutMs,
     });
     return response.text;
-  }
-
-  private async executeStepWithFallback(
-    step: FlowStep,
-    request: {
-      prompt: string;
-      allowedTools?: string[];
-      appendSystemPrompt?: string;
-      cwd?: string;
-      timeoutMs?: number;
-    },
-  ): Promise<{ text: string }> {
-    const primaryRunner = this.registry.getRunner(step);
-    const config = this.registry.getConfig();
-
-    try {
-      return await primaryRunner.run(
-        applyStepContext(
-          {
-            prompt: request.prompt,
-            allowedTools: request.allowedTools,
-            appendSystemPrompt: request.appendSystemPrompt,
-            cwd: request.cwd,
-            timeoutMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-          },
-          config,
-          this.profile,
-          step,
-          this.projectRoot,
-          primaryRunner.name,
-        ),
-        this.logger,
-      );
-    } catch (error: unknown) {
-      const fallbackRunner = this.resolveStallFallbackRunner(step, primaryRunner.name);
-      if (!fallbackRunner || !this.isCodexStallError(error)) {
-        throw error;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.log(EVENT.FALLBACK_REVIEW, {
-        step,
-        reason: "codex_stall_timeout",
-        primaryRunner: primaryRunner.name,
-        fallbackRunner: fallbackRunner.name,
-        message,
-      });
-      return fallbackRunner.run(
-        applyStepContext(
-          {
-            prompt: request.prompt,
-            allowedTools: request.allowedTools,
-            appendSystemPrompt: request.appendSystemPrompt,
-            cwd: request.cwd,
-            timeoutMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-          },
-          config,
-          this.profile,
-          step,
-          this.projectRoot,
-          fallbackRunner.name,
-        ),
-        this.logger,
-      );
-    }
-  }
-
-  private resolveStallFallbackRunner(step: FlowStep, primaryRunnerName: string) {
-    if (!ReviewOrchestrator.STALL_FALLBACK_STEPS.has(step)) return null;
-    const providers = this.registry.getConfig().providers;
-    const primaryProvider = providers[primaryRunnerName];
-    if (!primaryProvider || primaryProvider.type !== "codex") return null;
-
-    for (const candidate of ["claude_opus", "claude"]) {
-      const provider = providers[candidate];
-      if (provider?.type === "claude") {
-        return this.registry.getRunnerByName(candidate);
-      }
-    }
-    return null;
-  }
-
-  private isCodexStallError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return /codex sdk run failed: codex turn stalled/i.test(message)
-      || /codex turn stalled/i.test(message)
-      || /stall_timeout/i.test(message);
   }
 }

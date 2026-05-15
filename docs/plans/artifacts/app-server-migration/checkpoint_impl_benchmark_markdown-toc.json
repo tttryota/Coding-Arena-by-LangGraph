@@ -1,0 +1,9 @@
+{
+  "planPath": "plan/benchmark-markdown-toc-generation.md",
+  "completedStep": "test_generated",
+  "sessionId": "019e2af1-be5d-7700-b5bd-aa90641bf934",
+  "records": [],
+  "greenAttempt": 0,
+  "timestamp": "2026-05-15T09:26:17.276Z",
+  "logDir": "/private/tmp/obsidian-harness-run/logs/2026-05-15T09-22-25_impl_benchmark_markdown-toc"
+}

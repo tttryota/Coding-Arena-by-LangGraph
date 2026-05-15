@@ -25,10 +25,15 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 .harness/src/
 ├── application/
 │   ├── harness-commands.ts      # CLI から呼ばれる use case 入口
-│   └── plan-flow-environment.ts # plan/profile/boundary/registry の組み立て
+│   ├── impl-report-writer.ts    # impl レポート出力
+│   ├── plan-flow-environment.ts # plan/profile/boundary/registry の組み立て
+│   ├── review-step-executor.ts  # review step 実行と stall fallback
+│   └── test-executor.ts         # lint/test ツール実行の共通化
 ├── domain/
+│   ├── impl-artifacts.ts        # impl 用 artifact/prompt 補助ポリシー
 │   ├── plan-readiness.ts        # ready/approved 判定ポリシー
-│   └── review-assets.ts         # review criteria / rule の解決ポリシー
+│   ├── review-assets.ts         # review criteria / rule の解決ポリシー
+│   └── review-output.ts         # review JSON 出力の解釈ポリシー
 ├── types.ts                     # 共有型定義
 ├── boundary.ts                  # パス検証・スコープ解決・ファイル探索
 ├── runner-registry.ts           # provider 解決と usage 記録
@@ -159,6 +164,11 @@ ready 判定や criteria 解決のような、外部実行手段に依存しな�
 
 ### review-orchestrator.ts — レビュー制御
 
+レビューのワークフローだけを持ち、step 実行や JSON 解釈は外出ししている。
+
+- `application/review-step-executor.ts`: step 実行、provider fallback、`applyStepContext`
+- `domain/review-output.ts`: review JSON / minor acceptance JSON の解釈
+
 **テストレビュー（テスト生成後、RED確認前）— 2ステップ:**
 1. テスト品質チェック（テストケース文書との整合性、テスト膨張チェック）
 2. Codex レビュー（テストデータの妥当性）
@@ -210,6 +220,7 @@ ready 判定や criteria 解決のような、外部実行手段に依存しな�
 - DriftGuard の `expectedScopeLines` をテストケース数 × 30行で動的推定
 - スコープ外変更の事後検証
 - **レビューレポート自動生成**: impl フロー完了時に `docs/reviews/{date}_{scope}.md` を出力
+- artifact/prompt の純粋ロジックは `domain/impl-artifacts.ts`、テスト実行は `application/test-executor.ts`、レポート出力は `application/impl-report-writer.ts` に外出しする
 
 ### レビューレポート生成
 

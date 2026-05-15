@@ -23,58 +23,83 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 
 ```
 .harness/src/
+├── cli/
+│   ├── harness.ts
+│   └── interactive.ts
 ├── application/
-│   ├── component-flow-runtime.ts # component 実行時コンテキストの構築
-│   ├── component-generation-service.ts # component 生成 prompt と step 実行
-│   ├── component-target-service.ts # component target ごとの check / story gate / fix
-│   ├── harness-commands.ts      # CLI から呼ばれる use case 入口
-│   ├── impl-execution-service.ts # impl の TDD 実行シーケンス
-│   ├── impl-flow-runtime.ts     # impl 実行時コンテキストの構築
-│   ├── impl-generation-service.ts # impl test/implementation 生成 step の実行
-│   ├── impl-review-service.ts   # impl review 依頼の組み立て
-│   ├── impl-report-writer.ts    # impl レポート出力
-│   ├── page-browser-service.ts  # browser verification 実行と fix 指示
-│   ├── page-flow-runtime.ts     # page 実行時コンテキストの構築
-│   ├── page-generation-service.ts # page 生成 prompt と step 実行
-│   ├── page-review-service.ts   # page review 依頼の組み立て
-│   ├── plan-flow-environment.ts # plan/profile/boundary/registry の組み立て
-│   ├── review-cycle-service.ts  # review 収束制御と fix/judgment 実行
-│   ├── review-prompt-factory.ts # review prompt / fix prompt の組み立て
-│   ├── review-step-executor.ts  # review step 実行と stall fallback
-│   ├── scoped-lint-service.ts   # scope 単位 lint 実行と自動修正
-│   ├── task-plan-validation.ts  # page/component plan の妥当性検証
-│   └── test-executor.ts         # lint/test ツール実行の共通化
+│   ├── commands/
+│   │   └── harness-commands.ts
+│   ├── flows/
+│   │   ├── component-flow.ts
+│   │   ├── design-flow.ts
+│   │   ├── impl-flow.ts
+│   │   └── page-flow.ts
+│   ├── review/
+│   │   ├── impl-review-service.ts
+│   │   ├── page-review-service.ts
+│   │   ├── review-cycle-service.ts
+│   │   ├── review-orchestrator.ts
+│   │   ├── review-prompt-factory.ts
+│   │   └── review-step-executor.ts
+│   ├── runtime/
+│   │   ├── component-flow-runtime.ts
+│   │   ├── impl-flow-runtime.ts
+│   │   ├── page-flow-runtime.ts
+│   │   └── plan-flow-environment.ts
+│   └── services/
+│       ├── component-generation-service.ts
+│       ├── component-target-service.ts
+│       ├── impl-execution-service.ts
+│       ├── impl-generation-service.ts
+│       ├── impl-report-writer.ts
+│       ├── page-browser-service.ts
+│       ├── page-generation-service.ts
+│       ├── scoped-lint-service.ts
+│       ├── task-plan-validation.ts
+│       └── test-executor.ts
 ├── domain/
-│   ├── artifact-validation-policy.ts # test artifact の純粋検証
-│   ├── browser-verification.ts  # browser verification JSON の解釈ポリシー
-│   ├── harness-run.ts           # harness 実行状態 entity
-│   ├── impl-artifacts.ts        # impl 用 artifact/prompt 補助ポリシー
-│   ├── plan-readiness.ts        # ready/approved 判定ポリシー
-│   ├── review-acceptance-policy.ts # review minor/parse/cycle 判定ポリシー
-│   ├── review-assets.ts         # review criteria / rule の解決ポリシー
-│   ├── review-cycle.ts          # review 収束状態 entity
-│   ├── review-output.ts         # review JSON 出力の解釈ポリシー
-│   └── step-transition-policy.ts # impl step 遷移 / skip 判定
-├── types.ts                     # 共有型定義
-├── boundary.ts                  # パス検証・スコープ解決・ファイル探索
-├── runner-registry.ts           # provider 解決と usage 記録
-├── claude-runner.ts             # claude -p ラッパー
-├── logger.ts                    # 構造化ログ + redact
-├── lint-guard.ts                # リンター強制ガード
-├── drift-guard.ts               # 迷走検知ガード
-├── review-orchestrator.ts       # レビューフロー制御
-├── design-flow.ts               # Design Flow
-├── impl-flow.ts                 # Impl Flow + リトライ
-├── component-flow.ts            # Component Flow
-├── page-flow.ts                 # Page Flow
-└── harness.ts                   # CLI アダプタ
+│   ├── entities/
+│   │   ├── harness-run.ts
+│   │   └── review-cycle.ts
+│   └── policies/
+│       ├── artifact-validation-policy.ts
+│       ├── browser-verification.ts
+│       ├── impl-artifacts.ts
+│       ├── plan-readiness.ts
+│       ├── review-acceptance-policy.ts
+│       ├── review-output.ts
+│       └── step-transition-policy.ts
+├── infrastructure/
+│   ├── assets/review-assets.ts
+│   ├── lint/lint-guard.ts
+│   ├── logging/logger.ts
+│   ├── process/
+│   │   ├── launcher.ts
+│   │   └── spawn.ts
+│   ├── reporting/benchmark-summary.ts
+│   ├── runners/
+│   │   ├── claude-runner.ts
+│   │   ├── codex-runner.ts
+│   │   ├── generic-runner.ts
+│   │   ├── runner-registry.ts
+│   │   └── runner.ts
+│   ├── boundary.ts
+│   ├── config.ts
+│   ├── drift-guard.ts
+│   └── templates.ts
+└── shared/
+    ├── plan-parser.ts
+    ├── step-context.ts
+    ├── steps.ts
+    ├── tool-adapter.ts
+    └── types.ts
 ```
 
 ## 依存方向
 
 依存方向は次に揃える。
 
-1. `harness.ts -> application/*`
+1. `cli/* -> application/*`
 CLI の引数解釈と composition root を担当する。
 2. `application/* -> domain/*`
 use case ごとの orchestration と execution service を担当し、domain entity / policy を使う。
@@ -91,7 +116,7 @@ filesystem / git / subprocess / runner / logger / boundary の concrete adapter 
 
 ## コンポーネント詳細
 
-### boundary.ts — 境界制御
+### infrastructure/boundary.ts — 境界制御
 
 全てのパス検証・ファイル探索はこのモジュールを通す。
 
@@ -110,23 +135,23 @@ filesystem / git / subprocess / runner / logger / boundary の concrete adapter 
 
 **ガード**:
 - boundary は path / scope / file 探索の primitive を担う
-- plan の妥当性検証は `application/task-plan-validation.ts` から呼ぶ
+- plan の妥当性検証は `application/services/task-plan-validation.ts` から呼ぶ
 
-### claude-runner.ts — Claude CLI ラッパー
+### infrastructure/runners/claude-runner.ts — Claude CLI ラッパー
 
 `claude -p` を spawn で呼び出す。prompt は stdin 経由、system prompt は一時ファイル経由（E2BIG 防止）。
 
 - `is_error` フィールドをチェック（exit 0 でも内部エラーを検出）
 - 一時ファイルは親ディレクトリごと `rmSync` で削除
 
-### logger.ts — 構造化ログ
+### infrastructure/logging/logger.ts — 構造化ログ
 
 - JSONL 形式でイベントを記録
 - `taskName` のパストラバーサル防止（`.` `/` `\` を `_` に置換）
 - redact パターン: Anthropic, OpenAI, GitHub PAT, AWS, Slack トークン等
 - `baseDir` は呼び出し側から絶対パスで指定（cwd 依存を排除）
 
-### lint-guard.ts — リンター強制
+### infrastructure/lint/lint-guard.ts — リンター強制
 
 - `ruff format` → `ruff check --fix` → `ruff check` → `mypy --strict`
 - ゼロ違反を強制。3回リトライで収束しなければ DriftError
@@ -169,7 +194,7 @@ filesystem / git / subprocess / runner / logger / boundary の concrete adapter 
 2. LLM レビューの責務を絞ることで、1 回のレビューでの網羅性が向上する
 3. 機械チェックで弾けるものを LLM に渡すと、指摘の小出し → 収束遅延の原因になる
 
-### drift-guard.ts — 迷走検知
+### infrastructure/drift-guard.ts — 迷走検知
 
 | シグナル | 閾値 |
 |---|---|
@@ -184,16 +209,16 @@ filesystem / git / subprocess / runner / logger / boundary の concrete adapter 
 2. Level 2: Codex に相談（レート制限時スキップ）
 3. Level 3: DriftError を throw → 人間にエスカレーション
 
-### review-orchestrator.ts — レビュー制御
+### application/review/review-orchestrator.ts — レビュー制御
 
 レビュー step 定義のファサードだけを持ち、収束制御・fix・judgment・step 実行・prompt 組み立て・JSON 解釈は外出ししている。
 
-- `application/review-cycle-service.ts`: review 収束制御、fix/judgment/lint 再試行、record 生成
-- `application/review-step-executor.ts`: step 実行、provider fallback、`applyStepContext`
-- `application/review-prompt-factory.ts`: review prompt / fix prompt / judgment prompt の組み立て
-- `domain/review-cycle.ts`: review cycle entity
-- `domain/review-acceptance-policy.ts`: minor acceptance / parse failure / cycle over の判定
-- `domain/review-output.ts`: review JSON / minor acceptance JSON の解釈
+- `application/review/review-cycle-service.ts`: review 収束制御、fix/judgment/lint 再試行、record 生成
+- `application/review/review-step-executor.ts`: step 実行、provider fallback、`applyStepContext`
+- `application/review/review-prompt-factory.ts`: review prompt / fix prompt / judgment prompt の組み立て
+- `domain/entities/review-cycle.ts`: review cycle entity
+- `domain/policies/review-acceptance-policy.ts`: minor acceptance / parse failure / cycle over の判定
+- `domain/policies/review-output.ts`: review JSON / minor acceptance JSON の解釈
 
 **テストレビュー（テスト生成後、RED確認前）— 2ステップ:**
 1. テスト品質チェック（テストケース文書との整合性、テスト膨張チェック）
@@ -232,40 +257,40 @@ filesystem / git / subprocess / runner / logger / boundary の concrete adapter 
 - critical/major: 片方でも指摘すれば修正対象
 - minor: 両方が同じ description で指摘した場合のみ修正対象
 
-### design-flow.ts — Design Flow
+### application/flows/design-flow.ts — Design Flow
 
 - 仕様書・テストケースの生成
 - 既に存在するファイルはスキップ（冪等性）
 - allowedTools をディレクトリ限定（`Write(docs/spec/{category}/*)` 等）
 - プロンプトに出力先パスと featureName を明示
 
-### impl-flow.ts — Impl Flow
+### application/flows/impl-flow.ts — Impl Flow
 
 - flow 自体は `plan parse -> validation -> runtime prepare -> execution service` の入口だけを持つ
-- `application/impl-execution-service.ts` が `test generate -> test review -> red confirm -> green retry -> impl review -> report` の順序制御を担う
-- `domain/harness-run.ts` が checkpoint / session / completed step / review records を持つ実行状態 entity になる
-- `domain/step-transition-policy.ts` が skip 判定、`domain/artifact-validation-policy.ts` が test artifact の純粋検証を担う
+- `application/services/impl-execution-service.ts` が `test generate -> test review -> red confirm -> green retry -> impl review -> report` の順序制御を担う
+- `domain/entities/harness-run.ts` が checkpoint / session / completed step / review records を持つ実行状態 entity になる
+- `domain/policies/step-transition-policy.ts` が skip 判定、`domain/policies/artifact-validation-policy.ts` が test artifact の純粋検証を担う
 - DriftGuard の `expectedScopeLines` をテストケース数 × 30行で動的推定する点と、スコープ外変更検証、レビューレポート生成は維持する
 
-### page-flow.ts — Page Flow
+### application/flows/page-flow.ts — Page Flow
 
 - flow 自体は `generate -> static check -> review -> browser verify/fix loop` の順序制御だけを持つ
-- runtime 構築は `application/page-flow-runtime.ts` に、plan 妥当性検証は `application/task-plan-validation.ts` に外出しする
-- page 生成 prompt と step 実行は `application/page-generation-service.ts`、page review 依頼の組み立ては `application/page-review-service.ts`、browser verification 実行と fix 指示は `application/page-browser-service.ts` に外出しする
-- browser verification の JSON 解釈と issue 変換は `domain/browser-verification.ts` に外出しする
+- runtime 構築は `application/runtime/page-flow-runtime.ts` に、plan 妥当性検証は `application/services/task-plan-validation.ts` に外出しする
+- page 生成 prompt と step 実行は `application/services/page-generation-service.ts`、page review 依頼の組み立ては `application/review/page-review-service.ts`、browser verification 実行と fix 指示は `application/services/page-browser-service.ts` に外出しする
+- browser verification の JSON 解釈と issue 変換は `domain/policies/browser-verification.ts` に外出しする
 
-### component-flow.ts — Component Flow
+### application/flows/component-flow.ts — Component Flow
 
 - flow 自体は target ごとの `generate -> stage -> target review loop` の順序制御だけを持つ
-- runtime 構築は `application/component-flow-runtime.ts` に、plan 妥当性検証は `application/task-plan-validation.ts` に外出しする
-- component 生成 prompt と step 実行は `application/component-generation-service.ts`、story gate / lint / review / fix の target 単位処理は `application/component-target-service.ts` に外出しする
+- runtime 構築は `application/runtime/component-flow-runtime.ts` に、plan 妥当性検証は `application/services/task-plan-validation.ts` に外出しする
+- component 生成 prompt と step 実行は `application/services/component-generation-service.ts`、story gate / lint / review / fix の target 単位処理は `application/services/component-target-service.ts` に外出しする
 
 ### レビューレポート生成
 
 impl フロー完了時に、レビューサイクルの全記録から人間が読める MD レポートを自動生成する。
 
 **データ収集**:
-- `review-orchestrator.ts` がレビュー中に `ReviewRecord[]` をメモリに蓄積
+- `application/review/review-orchestrator.ts` がレビュー中に `ReviewRecord[]` をメモリに蓄積
 - 各レコードに `diffBefore` / `diffAfter`（git diff）と `judgmentSummary`（claude -p 要約）を含む
 
 **判断理由の生成**:

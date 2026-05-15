@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "tdd-harness": "./src/harness.ts"
+    "tdd-harness": "./src/cli/harness.ts"
   },
   "files": [
     "src/",

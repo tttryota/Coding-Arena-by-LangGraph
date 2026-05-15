@@ -1,6 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { parse as parseYaml } from "yaml";
 import {
   CAPABILITY_POLICY_MODE,
   EXECUTION_CAPABILITY,
@@ -181,12 +180,16 @@ export type ResolvedConfig = {
 
 export type HarnessConfig = ResolvedConfig;
 
-const PREFERRED_CONFIG_PATH = ".harness/harness.yml";
-const LEGACY_CONFIG_PATH = ".harness.yml";
+const PREFERRED_CONFIG_PATH = ".harness/harness.json";
+const LEGACY_CONFIG_PATH = ".harness.json";
 const CONFIG_FILENAMES = [
   PREFERRED_CONFIG_PATH,
-  ".harness/harness.yaml",
   LEGACY_CONFIG_PATH,
+];
+const LEGACY_YAML_FILENAMES = [
+  ".harness/harness.yml",
+  ".harness/harness.yaml",
+  ".harness.yml",
   ".harness.yaml",
 ];
 
@@ -222,12 +225,12 @@ export function loadConfig(projectRoot: string): ResolvedConfig {
 
   if (configPath) {
     const raw = readFileSync(configPath, "utf-8");
-    const parsed = parseYaml(raw);
+    const parsed = parseJsonConfig(raw, configPath, projectRoot);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       userConfig = parsed as HarnessUserConfig;
     } else {
       throw new GuardError(
-        `設定ファイルの形式が不正です: ${relativeConfigPath(projectRoot, configPath)}。YAML オブジェクトを記述してください。`,
+        `設定ファイルの形式が不正です: ${relativeConfigPath(projectRoot, configPath)}。JSON オブジェクトを記述してください。`,
       );
     }
   }
@@ -889,6 +892,14 @@ function findConfigPath(projectRoot: string): string | null {
     const configPath = join(projectRoot, name);
     if (existsSync(configPath)) return configPath;
   }
+  for (const name of LEGACY_YAML_FILENAMES) {
+    const configPath = join(projectRoot, name);
+    if (existsSync(configPath)) {
+      throw new GuardError(
+        `YAML 設定ファイル ${relativeConfigPath(projectRoot, configPath)} はサポート対象外になりました。${PREFERRED_CONFIG_PATH} へ JSON 形式で移行してください。`,
+      );
+    }
+  }
   return null;
 }
 
@@ -899,4 +910,19 @@ function relativeConfigPath(projectRoot: string, filePath: string): string {
 
 function configLocationMessage(): string {
   return `${PREFERRED_CONFIG_PATH}（後方互換で ${LEGACY_CONFIG_PATH} も可）`;
+}
+
+function parseJsonConfig(
+  raw: string,
+  configPath: string,
+  projectRoot: string,
+): unknown {
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new GuardError(
+      `設定ファイルの JSON 解析に失敗しました: ${relativeConfigPath(projectRoot, configPath)}\n${detail}`,
+    );
+  }
 }

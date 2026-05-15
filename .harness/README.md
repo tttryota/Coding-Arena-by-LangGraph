@@ -24,126 +24,76 @@ tdd-harness init
 
 ## 設定
 
-設定ファイルは `.harness/harness.yml` を推奨（後方互換で `.harness.yml` も読み込み可）:
+設定ファイルは `.harness/harness.json` を推奨（後方互換で `.harness.json` も読み込み可）:
 
 ### プロファイル
 
-```yaml
-profiles:
-  backend:
-    lint: [ruff, mypy]
-    test: pytest
-    toolRoot: backend
-    criteriaPreset: backend
-    context:
-      defaultContextBundles: [backend-core]
-      stepOverrides:
-        test_generate:
-          contextBundles: [backend-test-generate]
-        impl_generate:
-          contextBundles: [backend-impl, backend-failure-modes]
-        impl_self_criteria:
-          contextBundles: [backend-review-criteria]
-        impl_self_quality:
-          contextBundles: [backend-review-quality]
-    stepProviders:
-      defaultProvider: codex
-      stepOverrides:
-        test_external_review: claude_opus
-        impl_external_review: claude_opus
-    sourceLayout:
-      sourceDir: "backend/{{category}}"
-      testDir: "backend/{{category}}/tests"
-      scopePattern: "backend/{{category}}/*"
-  frontend:
-    lint: [eslint, tsc]
-    test: vitest
-    toolRoot: frontend
-    criteriaPreset: frontend
-    sourceLayout:
-      sourceDir: "frontend/src/{{category}}/{{name}}"
-      testDir: "frontend/src/{{category}}/{{name}}/__tests__"
-      scopePattern: "frontend/src/{{category}}/{{name}}/*"
-      additionalAllowedPrefixes: ["docs/reviews/", "frontend/src/mocks/handlers/"]
-    storybook:
-      renderCommand: ["pnpm", "storybook", "build", "--test", "--docs", "--output-dir", ".storybook-static-{{target}}"]
-      smokeCommand: ["pnpm", "storybook", "test", "--stories-json", "{{storyFile}}"]
+```json
+{
+  "profiles": {
+    "backend": {
+      "lint": ["ruff", "mypy"],
+      "test": "pytest",
+      "toolRoot": "backend",
+      "criteriaPreset": "backend",
+      "context": {
+        "defaultContextBundles": ["backend-core"],
+        "stepOverrides": {
+          "test_generate": { "contextBundles": ["backend-test-generate"] },
+          "impl_generate": { "contextBundles": ["backend-impl", "backend-failure-modes"] },
+          "impl_self_criteria": { "contextBundles": ["backend-review-criteria"] },
+          "impl_self_quality": { "contextBundles": ["backend-review-quality"] }
+        }
+      },
+      "stepProviders": {
+        "defaultProvider": "codex",
+        "stepOverrides": {
+          "test_external_review": "claude_opus",
+          "impl_external_review": "claude_opus"
+        }
+      },
+      "sourceLayout": {
+        "sourceDir": "backend/{{category}}",
+        "testDir": "backend/{{category}}/tests",
+        "scopePattern": "backend/{{category}}/*"
+      }
+    }
+  }
+}
 ```
 
 ### プロバイダ・ステップ割り当て
 
-```yaml
-providers:
-  codex:
-    type: codex
-    sandbox: workspace-write
-    heartbeatMs: 15000
-    stallTimeoutMs: 180000
-    capabilities: [session_resume]
-    capabilityPolicy:
-      session_resume: native
-      system_prompt: degrade_to_prompt
-      allowed_tools: degrade_to_prompt
-      agent: reject
-      mcp_config: reject
-  claude:
-    type: claude
-    capabilities: [session_resume, system_prompt, allowed_tools, agent, mcp_config]
-    capabilityPolicy:
-      session_resume: native
-      system_prompt: native
-      allowed_tools: native
-      agent: native
-      mcp_config: native
-  claude_opus:
-    type: claude
-    model: opus
-    capabilities: [session_resume, system_prompt, allowed_tools, agent, mcp_config]
-    capabilityPolicy:
-      session_resume: native
-      system_prompt: native
-      allowed_tools: native
-      agent: native
-      mcp_config: native
-  copilot:
-    type: generic
-    command: gh
-    args: ["copilot"]
-    promptFlag: "--prompt"
-    capabilities: []
-    capabilityPolicy:
-      session_resume: reject
-      system_prompt: degrade_to_prompt
-      allowed_tools: degrade_to_prompt
-      agent: reject
-      mcp_config: reject
-
-context:
-  contextBundles:
-    backend-core: [harness-backend-core]
-    backend-test-generate: [harness-backend-test]
-    backend-impl: [harness-backend-impl]
-    backend-review-criteria: [harness-backend-review-criteria]
-    backend-review-quality: [harness-backend-review-quality]
-    backend-failure-modes: [harness-backend-failure-modes]
-
-flow: full          # full | light
-
-steps:
-  test_generate: codex
-  test_self_quality: codex
-  test_external_review: claude_opus
-  impl_generate: codex
-  impl_self_criteria: codex
-  impl_self_quality: copilot     # ステップごとに差し替え可能
-  impl_external_review: claude_opus
-  lint_fix: codex
-  apply_fixes: codex
-  judgment_summary: codex
-  judge_minor: codex
+```json
+{
+  "providers": {
+    "codex": {
+      "type": "codex",
+      "sandbox": "workspace-write"
+    },
+    "claude_opus": {
+      "type": "claude",
+      "model": "opus"
+    }
+  },
+  "context": {
+    "contextBundles": {
+      "backend-core": ["harness-backend-core"],
+      "backend-test-generate": ["harness-backend-test"]
+    }
+  },
+  "flow": "full",
+  "steps": {
+    "test_generate": "codex",
+    "test_self_quality": "codex",
+    "test_external_review": "claude_opus",
+    "impl_generate": "codex",
+    "impl_self_quality": "claude_opus"
+  }
+}
 ```
 
-`.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
+`.harness/harness.json`（または `.harness.json`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
 
 ## 使い方
 
@@ -298,7 +248,7 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 
 ```
 harness（CLI エントリポイント）
-  ├── config（.harness/harness.yml 優先で読み込み + プロファイル解決）
+  ├── config（.harness/harness.json 優先で読み込み + プロファイル解決）
   ├── runner-registry（ステップ → ランナー解決）
   │   ├── claude-runner（claude -p ラッパー）
   │   ├── codex-runner（Codex SDK ラッパー）

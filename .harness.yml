@@ -13,7 +13,7 @@ profiles:
         test_case_generate:
           contextBundles: [backend-impl]
         test_generate:
-          contextBundles: [backend-impl, backend-failure-modes]
+          contextBundles: [backend-test-generate]
         test_self_quality:
           contextBundles: [backend-review-quality]
         test_external_review:
@@ -26,6 +26,82 @@ profiles:
           contextBundles: [backend-review-quality]
         impl_external_review:
           contextBundles: [backend-review-quality]
+    stepProviders:
+      defaultProvider: codex
+      stepOverrides:
+        test_external_review: claude_opus
+        impl_external_review: claude_opus
+    sourceLayout:
+      sourceDir: "backend/{{category}}"
+      testDir: "backend/{{category}}/tests"
+      scopePattern: "backend/{{category}}/*"
+      additionalAllowedPrefixes: ["docs/reviews/"]
+  backend_codex_only:
+    lint: [ruff, mypy]
+    test: pytest
+    toolRoot: backend
+    exec: [uv, run, --with, pytest, --with, ruff, --with, mypy]
+    criteriaPreset: backend
+    context:
+      defaultContextBundles: [backend-core]
+      stepOverrides:
+        spec_generate:
+          contextBundles: [backend-impl]
+        test_case_generate:
+          contextBundles: [backend-impl]
+        test_generate:
+          contextBundles: [backend-test-generate]
+        test_self_quality:
+          contextBundles: [backend-review-quality]
+        test_external_review:
+          contextBundles: [backend-review-quality]
+        impl_generate:
+          contextBundles: [backend-impl, backend-failure-modes]
+        impl_self_criteria:
+          contextBundles: [backend-review-criteria]
+        impl_self_quality:
+          contextBundles: [backend-review-quality]
+        impl_external_review:
+          contextBundles: [backend-review-quality]
+    stepProviders:
+      defaultProvider: codex
+    sourceLayout:
+      sourceDir: "backend/{{category}}"
+      testDir: "backend/{{category}}/tests"
+      scopePattern: "backend/{{category}}/*"
+      additionalAllowedPrefixes: ["docs/reviews/"]
+  backend_claude_review:
+    lint: [ruff, mypy]
+    test: pytest
+    toolRoot: backend
+    exec: [uv, run, --with, pytest, --with, ruff, --with, mypy]
+    criteriaPreset: backend
+    context:
+      defaultContextBundles: [backend-core]
+      stepOverrides:
+        spec_generate:
+          contextBundles: [backend-impl]
+        test_case_generate:
+          contextBundles: [backend-impl]
+        test_generate:
+          contextBundles: [backend-test-generate]
+        test_self_quality:
+          contextBundles: [backend-review-quality]
+        test_external_review:
+          contextBundles: [backend-review-quality]
+        impl_generate:
+          contextBundles: [backend-impl, backend-failure-modes]
+        impl_self_criteria:
+          contextBundles: [backend-review-criteria]
+        impl_self_quality:
+          contextBundles: [backend-review-quality]
+        impl_external_review:
+          contextBundles: [backend-review-quality]
+    stepProviders:
+      defaultProvider: codex
+      stepOverrides:
+        test_external_review: claude_opus
+        impl_external_review: claude_opus
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -42,20 +118,45 @@ profiles:
       scopePattern: "frontend/src/{{category}}/{{name}}/*"
       additionalAllowedPrefixes: ["docs/reviews/", "frontend/src/mocks/handlers/"]
 
-runners:
+providers:
   codex:
     type: codex
     sandbox: workspace-write
+    heartbeatMs: 15000
+    stallTimeoutMs: 180000
+    capabilities: [session_resume]
+    capabilityPolicy:
+      session_resume: native
+      system_prompt: degrade_to_prompt
+      allowed_tools: degrade_to_prompt
+      agent: reject
+      mcp_config: reject
   claude:
     type: claude
-  claude_benchmark_opus:
+    capabilities: [session_resume, system_prompt, allowed_tools, agent, mcp_config]
+    capabilityPolicy:
+      session_resume: native
+      system_prompt: native
+      allowed_tools: native
+      agent: native
+      mcp_config: native
+  claude_opus:
     type: claude
     model: opus
+    capabilities: [session_resume, system_prompt, allowed_tools, agent, mcp_config]
+    capabilityPolicy:
+      session_resume: native
+      system_prompt: native
+      allowed_tools: native
+      agent: native
+      mcp_config: native
 
 context:
   contextBundles:
     backend-core:
       - harness-backend-core
+    backend-test-generate:
+      - harness-backend-test
     backend-impl:
       - harness-backend-impl
     backend-review-criteria:
@@ -66,16 +167,15 @@ context:
       - harness-backend-failure-modes
 
 flow: full
-fallbackRunner: codex
 
 steps:
   test_generate: codex
   test_self_quality: codex
-  test_external_review: claude_benchmark_opus
+  test_external_review: claude_opus
   impl_generate: codex
   impl_self_criteria: codex
   impl_self_quality: codex
-  impl_external_review: claude_benchmark_opus
+  impl_external_review: claude_opus
   lint_fix: codex
   apply_fixes: codex
   judgment_summary: codex

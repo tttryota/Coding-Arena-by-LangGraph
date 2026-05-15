@@ -38,12 +38,19 @@ profiles:
     context:
       defaultContextBundles: [backend-core]
       stepOverrides:
+        test_generate:
+          contextBundles: [backend-test-generate]
         impl_generate:
           contextBundles: [backend-impl, backend-failure-modes]
         impl_self_criteria:
           contextBundles: [backend-review-criteria]
         impl_self_quality:
           contextBundles: [backend-review-quality]
+    stepProviders:
+      defaultProvider: codex
+      stepOverrides:
+        test_external_review: claude_opus
+        impl_external_review: claude_opus
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -63,43 +70,73 @@ profiles:
       smokeCommand: ["pnpm", "storybook", "test", "--stories-json", "{{storyFile}}"]
 ```
 
-### ランナー・ステップ割り当て
+### プロバイダ・ステップ割り当て
 
 ```yaml
-runners:
+providers:
   codex:
     type: codex
     sandbox: workspace-write
+    heartbeatMs: 15000
+    stallTimeoutMs: 180000
+    capabilities: [session_resume]
+    capabilityPolicy:
+      session_resume: native
+      system_prompt: degrade_to_prompt
+      allowed_tools: degrade_to_prompt
+      agent: reject
+      mcp_config: reject
   claude:
     type: claude
-  claude_benchmark_opus:
+    capabilities: [session_resume, system_prompt, allowed_tools, agent, mcp_config]
+    capabilityPolicy:
+      session_resume: native
+      system_prompt: native
+      allowed_tools: native
+      agent: native
+      mcp_config: native
+  claude_opus:
     type: claude
     model: opus
+    capabilities: [session_resume, system_prompt, allowed_tools, agent, mcp_config]
+    capabilityPolicy:
+      session_resume: native
+      system_prompt: native
+      allowed_tools: native
+      agent: native
+      mcp_config: native
   copilot:
     type: generic
     command: gh
     args: ["copilot"]
     promptFlag: "--prompt"
+    capabilities: []
+    capabilityPolicy:
+      session_resume: reject
+      system_prompt: degrade_to_prompt
+      allowed_tools: degrade_to_prompt
+      agent: reject
+      mcp_config: reject
 
 context:
   contextBundles:
     backend-core: [harness-backend-core]
+    backend-test-generate: [harness-backend-test]
     backend-impl: [harness-backend-impl]
     backend-review-criteria: [harness-backend-review-criteria]
     backend-review-quality: [harness-backend-review-quality]
     backend-failure-modes: [harness-backend-failure-modes]
 
 flow: full          # full | light
-fallbackRunner: codex
 
 steps:
   test_generate: codex
   test_self_quality: codex
-  test_external_review: claude_benchmark_opus
+  test_external_review: claude_opus
   impl_generate: codex
   impl_self_criteria: codex
   impl_self_quality: copilot     # ステップごとに差し替え可能
-  impl_external_review: claude_benchmark_opus
+  impl_external_review: claude_opus
   lint_fix: codex
   apply_fixes: codex
   judgment_summary: codex
@@ -128,14 +165,14 @@ tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する
 tdd-harness impl plan/current-task.md
 ```
 
-実行前に対話的にステップごとのランナー割り当てを確認・変更できる:
+実行前に対話的にステップごとのプロバイダ割り当てを確認・変更できる。通常運用では profile を切り替えるだけで provider 構成ごと切り替えられる:
 
 ```
 フロー: full
 ステップ割り当て:
   1. test_generate: codex
   2. test_self_quality: codex
-  3. test_external_review: claude_benchmark_opus
+  3. test_external_review: claude_opus
   ...
 
 変更するステップ番号を入力 (Enter でそのまま実行):
@@ -158,6 +195,10 @@ tdd-harness impl plan/current-task.md
 ```bash
 # light フロー
 tdd-harness impl plan/task.md --flow light
+
+# profile 切り替え
+tdd-harness impl plan/task.md --profile backend_codex_only
+tdd-harness impl plan/task.md --profile backend_claude_review
 
 # 対話プロンプトをスキップ
 tdd-harness impl plan/task.md --no-interactive

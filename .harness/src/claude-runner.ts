@@ -5,8 +5,16 @@ import { HarnessError } from "./types.ts";
 import type { ClaudeResult } from "./types.ts";
 import type { HarnessLogger } from "./logger.ts";
 import { spawnWithStdin } from "./spawn.ts";
-import { RUNNER_CAPABILITY } from "./runner.ts";
-import type { Runner, RunnerResponse } from "./runner.ts";
+import type { ExecutionCapability, ExecutionRequest, ExecutionResult, ExecutionService } from "./runner.ts";
+import { EXECUTION_CAPABILITY } from "./runner.ts";
+
+export const CLAUDE_SUPPORTED_CAPABILITIES = new Set<ExecutionCapability>([
+  EXECUTION_CAPABILITY.SESSION_RESUME,
+  EXECUTION_CAPABILITY.ALLOWED_TOOLS,
+  EXECUTION_CAPABILITY.SYSTEM_PROMPT,
+  EXECUTION_CAPABILITY.AGENT,
+  EXECUTION_CAPABILITY.MCP_CONFIG,
+]);
 
 export type ClaudeOptions = {
   prompt: string;
@@ -48,7 +56,6 @@ export async function runClaude(
     );
   }
 
-  // Claude が exit 0 でも内部エラーを報告する場合がある
   if (parsed.is_error) {
     throw new HarnessError(
       `claude -p returned is_error=true: ${parsed.result}`,
@@ -59,7 +66,6 @@ export async function runClaude(
 }
 
 function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string | null } {
-  // prompt は stdin 経由で渡すので "-p" に "-" を指定
   const args = ["-p", "-"];
   let tempFile: string | null = null;
 
@@ -80,7 +86,6 @@ function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string |
   }
 
   if (options.appendSystemPrompt) {
-    // 大きな system prompt は一時ファイル経由で渡す（E2BIG 防止）
     const dir = mkdtempSync(join(tmpdir(), "harness-"));
     tempFile = join(dir, "system-prompt.txt");
     writeFileSync(tempFile, options.appendSystemPrompt, "utf-8");
@@ -100,7 +105,6 @@ function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string |
 
 function cleanupTemp(filePath: string): void {
   try {
-    // ファイルと親ディレクトリ（mkdtempSync で作成）を両方削除
     const dir = join(filePath, "..");
     rmSync(dir, { recursive: true, force: true });
   } catch {
@@ -108,21 +112,15 @@ function cleanupTemp(filePath: string): void {
   }
 }
 
-export function createClaudeRunner(defaults?: {
+export function createClaudeExecutionService(defaults?: {
   name?: string;
   timeoutMs?: number;
   model?: string;
-}): Runner {
+}): ExecutionService {
   return {
     name: defaults?.name ?? "claude",
-    capabilities: new Set([
-      RUNNER_CAPABILITY.SESSION_RESUME,
-      RUNNER_CAPABILITY.ALLOWED_TOOLS,
-      RUNNER_CAPABILITY.SYSTEM_PROMPT,
-      RUNNER_CAPABILITY.AGENT,
-      RUNNER_CAPABILITY.MCP_CONFIG,
-    ]),
-    async run(request, logger) {
+    capabilities: CLAUDE_SUPPORTED_CAPABILITIES,
+    async execute(request, logger) {
       const result = await runClaude(
         {
           prompt: request.prompt,
@@ -150,7 +148,7 @@ export function createClaudeRunner(defaults?: {
           cacheCreationInputTokens: result.usage.cache_creation_input_tokens ?? 0,
           cacheReadInputTokens: result.usage.cache_read_input_tokens ?? 0,
         },
-      } satisfies RunnerResponse;
+      } satisfies ExecutionResult;
     },
   };
 }

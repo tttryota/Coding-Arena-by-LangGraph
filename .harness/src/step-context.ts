@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ProfileClaudeConfig, ProfileContextConfig, ResolvedConfig, ResolvedProfileConfig } from "./config.ts";
-import type { RunnerRequest } from "./runner.ts";
+import type { ProfileContextConfig, ResolvedConfig, ResolvedProfileConfig } from "./config.ts";
+import type { ExecutionRequest } from "./runner.ts";
 import type { FlowStep } from "./steps.ts";
 import { GuardError } from "./types.ts";
 
@@ -11,21 +11,20 @@ export type StepContext = {
   mcpBundles: string[];
   mcpConfigs: string[];
   rolePrompt?: string;
-  legacyClaudeAgent?: string;
 };
 
 const STEP_ROLE_PROMPTS: Partial<Record<FlowStep, string>> = {
   spec_generate: "Draft a concise, implementable spec. Capture behavior, constraints, and concrete acceptance criteria without hand-waving.",
   test_case_generate: "Write task-facing test cases that make edge conditions explicit and verifiable.",
-  test_generate: "Generate tests first. Encode the approved test cases faithfully and avoid implementation leakage.",
+  test_generate: "Generate tests first. Encode only the approved test cases faithfully, avoid speculative coverage, and keep the output lint-safe.",
   test_self_quality: "Review generated tests for gaps, ambiguity, and weak assertions. Strengthen coverage without changing scope.",
   test_external_review: "Review the tests as an external reviewer. Focus on missing cases, false positives, and spec mismatch.",
-  impl_generate: "Implement only what is required to satisfy the approved tests and spec. Prefer straightforward, maintainable code over cleverness.",
+  impl_generate: "Implement only what is required to satisfy the approved tests and spec. Prefer straightforward, maintainable, lint-safe code over cleverness.",
   impl_self_criteria: "Review the implementation against hard requirements and clear failure modes. Flag only concrete contract violations.",
   impl_self_quality: "Review the implementation for maintainability, regression risk, edge handling, and test adequacy.",
   impl_external_review: "Review the implementation as an external reviewer. Focus on correctness, boundary conditions, and non-obvious regressions.",
   lint_fix: "Fix only the reported lint or type issues without broad refactors.",
-  apply_fixes: "Apply the requested review fixes exactly and keep the scope tight.",
+  apply_fixes: "Apply the requested review fixes exactly, keep the scope tight, and leave the touched files lint-safe.",
   judgment_summary: "Summarize review findings and fix outcomes precisely for a human reader.",
   judge_minor: "Judge whether the remaining minor findings are safe to accept. Be conservative and evidence-based.",
   component_generate: "Implement the requested component and story files with the agreed scope only.",
@@ -44,24 +43,25 @@ const SCOPE_DISCIPLINE_PROMPT = `## Scope Discipline
 - For benchmark tasks, exact fidelity to the written contract beats generic best-practice completeness.`;
 
 export function applyStepContext(
-  request: RunnerRequest,
+  request: ExecutionRequest,
   config: ResolvedConfig,
   profile: ResolvedProfileConfig | undefined,
   step: FlowStep,
   projectRoot: string,
-  runnerName?: string,
-): RunnerRequest {
+  _providerName?: string,
+): ExecutionRequest {
   const context = resolveStepContext(config, profile, step);
+  const mcpConfigs = uniqueStrings([...(request.mcpConfigs ?? []), ...context.mcpConfigs]);
+  const appendSystemPrompt = joinPromptSections([
+    SCOPE_DISCIPLINE_PROMPT,
+    context.rolePrompt ? `## Step Role\n${context.rolePrompt}` : "",
+    context.skillNames.length > 0 ? loadSkillPrompt(projectRoot, context.skillNames) : "",
+    request.appendSystemPrompt,
+  ]);
   return {
     ...request,
-    agent: runnerName === "claude" ? (context.legacyClaudeAgent ?? request.agent) : request.agent,
-    mcpConfigs: uniqueStrings([...(request.mcpConfigs ?? []), ...context.mcpConfigs]),
-    appendSystemPrompt: joinPromptSections([
-      SCOPE_DISCIPLINE_PROMPT,
-      context.rolePrompt ? `## Step Role\n${context.rolePrompt}` : "",
-      context.skillNames.length > 0 ? loadSkillPrompt(projectRoot, context.skillNames) : "",
-      request.appendSystemPrompt,
-    ]),
+    mcpConfigs: mcpConfigs.length > 0 ? mcpConfigs : undefined,
+    appendSystemPrompt,
   };
 }
 
@@ -71,9 +71,7 @@ export function resolveStepContext(
   step: FlowStep,
 ): StepContext {
   const profileContext = profile?.context;
-  const profileClaude = profile?.claude;
   const stepOverride = profileContext?.stepOverrides[step];
-  const legacyStepOverride = profileClaude?.stepOverrides[step];
   const contextBundles = uniqueStrings([
     ...(profileContext?.defaultContextBundles ?? []),
     ...(stepOverride?.contextBundles ?? []),
@@ -89,7 +87,6 @@ export function resolveStepContext(
     mcpBundles,
     mcpConfigs: expandBundles(mcpBundles, config.context.mcpBundles),
     rolePrompt: STEP_ROLE_PROMPTS[step],
-    legacyClaudeAgent: legacyStepOverride?.agent ?? profileClaude?.defaultAgent,
   };
 }
 

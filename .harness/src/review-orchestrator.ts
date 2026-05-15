@@ -34,6 +34,21 @@ type PageReviewParams = ReviewParams & {
 };
 
 export class ReviewOrchestrator {
+  private static readonly STALL_FALLBACK_STEPS = new Set<FlowStep>([
+    FLOW_STEP.TEST_SELF_QUALITY,
+    FLOW_STEP.TEST_EXTERNAL_REVIEW,
+    FLOW_STEP.IMPL_SELF_CRITERIA,
+    FLOW_STEP.IMPL_SELF_QUALITY,
+    FLOW_STEP.IMPL_EXTERNAL_REVIEW,
+    FLOW_STEP.APPLY_FIXES,
+    FLOW_STEP.JUDGMENT_SUMMARY,
+    FLOW_STEP.JUDGE_MINOR,
+    FLOW_STEP.PAGE_REVIEW_DESIGN,
+    FLOW_STEP.PAGE_REVIEW_BEHAVIOR,
+    FLOW_STEP.PAGE_REVIEW_CODE,
+    FLOW_STEP.COMPONENT_SELF_REVIEW,
+  ]);
+
   private logger: HarnessLogger;
   private lintGuard: LintGuard;
   private projectRoot: string;
@@ -173,7 +188,7 @@ export class ReviewOrchestrator {
         minorOnlyCycles = 0;
       }
 
-      await this.applyFixes(combinedIssues, params);
+      await this.applyFixes(combinedIssues, params, diffBefore);
       const diffAfter = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
         : "";
@@ -242,9 +257,12 @@ export class ReviewOrchestrator {
         results.push(step2Result);
       } catch (error: unknown) {
         if (error instanceof RunnerRateLimitError) {
-          this.logger.log(EVENT.RUNNER_RATE_LIMITED, { fallback: "dual_fallback", runner: error.runnerName });
-          const dualResult = await this.runDualStep(params);
-          results.push(...dualResult);
+          this.logger.log(EVENT.RUNNER_RATE_LIMITED, {
+            fallback: "none",
+            runner: error.runnerName,
+            step: FLOW_STEP.TEST_EXTERNAL_REVIEW,
+          });
+          throw error;
         } else {
           throw error;
         }
@@ -288,9 +306,12 @@ export class ReviewOrchestrator {
         results.push(step3Result);
       } catch (error: unknown) {
         if (error instanceof RunnerRateLimitError) {
-          this.logger.log(EVENT.RUNNER_RATE_LIMITED, { fallback: "dual_fallback", runner: error.runnerName });
-          const dualResult = await this.runDualStep(params);
-          results.push(...dualResult);
+          this.logger.log(EVENT.RUNNER_RATE_LIMITED, {
+            fallback: "none",
+            runner: error.runnerName,
+            step: FLOW_STEP.IMPL_EXTERNAL_REVIEW,
+          });
+          throw error;
         } else {
           throw error;
         }
@@ -314,101 +335,6 @@ export class ReviewOrchestrator {
     }
 
     return results;
-  }
-
-  private async runDualStep(params: ReviewParams): Promise<ReviewResult[]> {
-    const results: ReviewResult[] = [];
-    let cycle = 0;
-
-    while (cycle < MAX_REVIEW_CYCLES) {
-      cycle++;
-      const diffBefore = params.getFileDiff
-        ? await params.getFileDiff(params.targetFiles)
-        : "";
-
-      const [reviewA, reviewB] = await this.dualFallbackReview(
-        params.targetFiles,
-        params.specPath,
-        params.reviewMode === "test" ? params.testCasesPath : undefined,
-      );
-
-      this.logger.log(EVENT.FALLBACK_REVIEW, {
-        agent: "A",
-        issues: reviewA.issues.length,
-      });
-      this.logger.log(EVENT.FALLBACK_REVIEW, {
-        agent: "B",
-        issues: reviewB.issues.length,
-      });
-
-      // パース失敗チェック（両エージェント）
-      const hasParseFailure = [...reviewA.issues, ...reviewB.issues].some(
-        (i) => i.file === "" && i.severity === "critical",
-      );
-      if (hasParseFailure) {
-        this.records.push({
-          step: "dual_fallback",
-          cycle,
-          reviewer: "fallback_a+fallback_b",
-          findings: [...reviewA.issues, ...reviewB.issues],
-          decision: "escalated",
-          diffBefore,
-          diffAfter: "",
-          judgmentSummary: "2体レビューの結果パースに失敗。人間のエスカレーションが必要。",
-        });
-        throw new DriftError(
-          ESCALATION_LEVEL.LEVEL_3,
-          "review_parse_failure",
-          `2体レビューの結果パースに失敗しました。人間の確認が必要です。`,
-        );
-      }
-
-      const toFix = this.reconcileReviews(reviewA, reviewB);
-
-      if (toFix.length === 0) {
-        this.records.push({
-          step: "dual_fallback",
-          cycle,
-          reviewer: "fallback_a+fallback_b",
-          findings: [],
-          decision: "lgtm",
-          diffBefore,
-          diffAfter: "",
-          judgmentSummary: "指摘なし",
-        });
-        results.push(reviewA, reviewB);
-        return results;
-      }
-
-      this.logger.log(EVENT.REVIEW_RECONCILED, {
-        toFix: toFix.length,
-        cycle,
-      });
-
-      await this.applyFixes(toFix, params);
-
-      const diffAfter = params.getFileDiff
-        ? await params.getFileDiff(params.targetFiles)
-        : "";
-      const judgmentSummary = await this.generateJudgmentSummary(toFix, diffBefore, diffAfter);
-
-      this.records.push({
-        step: "dual_fallback",
-        cycle,
-        reviewer: "fallback_a+fallback_b",
-        findings: toFix,
-        decision: "fixed",
-        diffBefore,
-        diffAfter,
-        judgmentSummary,
-      });
-    }
-
-    throw new DriftError(
-      ESCALATION_LEVEL.LEVEL_1,
-      "review_cycle",
-      `レビューが ${MAX_REVIEW_CYCLES} サイクルで収束しませんでした`,
-    );
   }
 
   private async selfReviewTestQuality(
@@ -557,86 +483,6 @@ export class ReviewOrchestrator {
     );
   }
 
-  private async dualFallbackReview(
-    targetFiles: string[],
-    specPath: string,
-    testCasesPath?: string,
-  ): Promise<[ReviewResult, ReviewResult]> {
-    const fileContents = this.readFiles(targetFiles);
-    const spec = readFileSync(specPath, "utf-8");
-    const config = this.registry.getConfig();
-    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
-
-    let prompt: string;
-    if (testCasesPath) {
-      const testCases = readFileSync(testCasesPath, "utf-8");
-      const template = loadTemplate("review-codex-test", this.projectRoot, config.templates);
-      prompt = renderTemplate(template, { fileContents, testCases, spec, responseFormat });
-    } else {
-      const template = loadTemplate("review-dual-fallback", this.projectRoot, config.templates);
-      prompt = renderTemplate(template, { fileContents, spec, responseFormat });
-    }
-
-    const fallback = this.registry.getFallbackRunner();
-    const request = {
-      prompt,
-      allowedTools: ["Read"],
-      timeoutMs: DEFAULT_TIMEOUT_MS,
-    };
-    const [responseA, responseB] = await Promise.all([
-      fallback.run(request, this.logger),
-      fallback.run(request, this.logger),
-    ]);
-    return [
-      this.parseReviewResult("fallback_a", responseA.text),
-      this.parseReviewResult("fallback_b", responseB.text),
-    ];
-  }
-
-  reconcileReviews(
-    a: ReviewResult,
-    b: ReviewResult,
-  ): ReviewIssue[] {
-    // 全件残す方式: 両エージェントの指摘を統合し severity で判断
-    // - critical/major: 常に修正対象
-    // - minor: 両方が指摘した場合のみ修正対象
-    const toFix: ReviewIssue[] = [];
-
-    const allIssues = [
-      ...a.issues.map((i) => ({ ...i, source: "A" as const })),
-      ...b.issues.map((i) => ({ ...i, source: "B" as const })),
-    ];
-
-    for (const issue of allIssues) {
-      if (issue.severity === "critical" || issue.severity === "major") {
-        toFix.push(issue);
-      } else {
-        // minor: 相手側にも似た指摘があれば修正対象
-        const otherIssues = issue.source === "A" ? b.issues : a.issues;
-        const confirmedByOther = otherIssues.some(
-          (other) => other.file === issue.file && other.description === issue.description,
-        );
-        if (confirmedByOther) {
-          toFix.push(issue);
-        } else {
-          // 片方のみの minor → 対応不要として記録
-          this.records.push({
-            step: "dual_fallback",
-            cycle: 0,
-            reviewer: issue.source === "A" ? "fallback_a" : "fallback_b",
-            findings: [issue],
-            decision: "accepted",
-            diffBefore: "",
-            diffAfter: "",
-            judgmentSummary: `片方のエージェントのみが指摘した minor 指摘のため対応不要と判断`,
-          });
-        }
-      }
-    }
-
-    return toFix;
-  }
-
   private async reviewStep(
     reviewFn: () => Promise<ReviewResult>,
     params: ReviewParams,
@@ -714,7 +560,7 @@ export class ReviewOrchestrator {
             return result;
           }
           // unsafe → 修正を再試行（1回のみ）
-          await this.applyFixes(result.issues, params);
+          await this.applyFixes(result.issues, params, diffBefore);
           const retryResult = await reviewFn();
           const diffAfterRetry = params.getFileDiff
             ? await params.getFileDiff(params.targetFiles)
@@ -749,7 +595,7 @@ export class ReviewOrchestrator {
         minorOnlyCycles = 0;
       }
 
-      await this.applyFixes(result.issues, params);
+      await this.applyFixes(result.issues, params, diffBefore);
 
       const diffAfter = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
@@ -780,6 +626,7 @@ export class ReviewOrchestrator {
   private async applyFixes(
     issues: ReviewIssue[],
     params: ReviewParams,
+    diffBefore = "",
   ): Promise<void> {
     const issueList = issues
       .map(
@@ -787,6 +634,12 @@ export class ReviewOrchestrator {
           `${idx + 1}. [${i.severity}] ${i.file}:${i.line ?? "?"} - ${i.description}`,
       )
       .join("\n");
+    const fileContents = this.readFiles(params.targetFiles);
+    const spec = readFileSync(params.specPath, "utf-8");
+    const testCases = params.testCasesPath ? readFileSync(params.testCasesPath, "utf-8") : "";
+    const criteria = params.criteriaPaths.length > 0
+      ? params.criteriaPaths.map((p) => readFileSync(p, "utf-8")).join("\n\n")
+      : "";
 
     const hasBugFix = issues.some(
       (i) => i.severity === "critical" || i.severity === "major",
@@ -799,29 +652,59 @@ export class ReviewOrchestrator {
 - 既存テストを壊さない
 - 振る舞いを変えない（リファクタリングのみ）`;
 
-    const prompt = `以下のレビュー指摘を修正してください。
-
-## 指摘一覧
-${issueList}
-
-## 制約
-${constraint}`;
+    const sections = [
+      "以下のレビュー指摘を修正してください。",
+      "## 指摘一覧",
+      issueList,
+      "## 現在の対象ファイル",
+      fileContents,
+      "## 仕様書",
+      spec,
+      testCases ? `## 承認済みテストケース\n${testCases}` : "",
+      criteria ? `## レビュー観点\n${criteria}` : "",
+      diffBefore ? `## 直前の差分\n${diffBefore}` : "",
+      "## 制約",
+      constraint,
+      "- issue 解消だけでなく、今回触ったファイルの lint/type も通る状態にする",
+      "- repo 全体の探索や pytest 実行方法の探索は始めず、対象ファイルの修正に集中する",
+      "- 明らかな lint/type 違反を新たに作らない",
+    ].filter((section) => section !== "");
+    const prompt = sections.join("\n\n");
 
     await this.executeRun(FLOW_STEP.APPLY_FIXES, prompt, {
       allowedTools: params.scopeAllowedTools,
       cwd: this.projectRoot,
     });
 
-    // 修正でファイルが追加された可能性があるので再スキャン
     if (params.rescanFiles) {
       params.targetFiles = await params.rescanFiles();
     }
 
-    // 対象ファイルが空ならリントをスキップ（全体に広がるのを防止）
     if (params.targetFiles.length > 0) {
-      await this.lintGuard.check(params.targetFiles);
+      await this.lintGuard.check(params.targetFiles, {
+        claudeFix: async (violations) => {
+          const lintIssueList = violations
+            .map((v, idx) => `${idx + 1}. ${v.tool}: ${v.file}:${v.line} - ${v.message}`)
+            .join("\n");
+          const lintPrompt = [
+            "以下の lint/type 違反を修正してください。",
+            "## 違反一覧",
+            lintIssueList,
+            "## 現在の対象ファイル",
+            this.readFiles(params.targetFiles),
+            "## 制約",
+            "- 違反が出ている対象ファイルだけを修正する",
+            "- レビュー指摘で直した契約や振る舞いを壊さない",
+            "- `try`-`except`-`pass` や例外握り潰しで違反を回避しない",
+          ].join("\n\n");
+          await this.executeRun(FLOW_STEP.LINT_FIX, lintPrompt, {
+            allowedTools: params.scopeAllowedTools,
+            cwd: this.projectRoot,
+          });
+        },
+        rescanFiles: params.rescanFiles,
+      });
     }
-    // テストレビュー時は実装が未生成のためテスト実行をスキップ
     if (params.reviewMode !== "test" && params.runTests) {
       await params.runTests();
     }
@@ -995,23 +878,12 @@ ${spec.slice(0, 3000)}
       timeoutMs?: number;
     },
   ): Promise<ReviewResult> {
-    const runner = this.registry.getRunner(step);
-    const response = await runner.run(
-      applyStepContext(
-        {
-          prompt,
-          allowedTools: options?.allowedTools ?? ["Read"],
-          timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-          appendSystemPrompt: options?.appendSystemPrompt,
-        },
-        this.registry.getConfig(),
-        this.profile,
-        step,
-        this.projectRoot,
-        runner.name,
-      ),
-      this.logger,
-    );
+    const response = await this.executeStepWithFallback(step, {
+      prompt,
+      allowedTools: options?.allowedTools ?? ["Read"],
+      timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      appendSystemPrompt: options?.appendSystemPrompt,
+    });
     return this.parseReviewResult(reviewer, response.text);
   }
 
@@ -1025,24 +897,99 @@ ${spec.slice(0, 3000)}
       timeoutMs?: number;
     },
   ): Promise<string> {
-    const runner = this.registry.getRunner(step);
-    const response = await runner.run(
-      applyStepContext(
-        {
-          prompt,
-          allowedTools: options?.allowedTools,
-          appendSystemPrompt: options?.appendSystemPrompt,
-          cwd: options?.cwd,
-          timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        },
-        this.registry.getConfig(),
-        this.profile,
-        step,
-        this.projectRoot,
-        runner.name,
-      ),
-      this.logger,
-    );
+    const response = await this.executeStepWithFallback(step, {
+      prompt,
+      allowedTools: options?.allowedTools,
+      appendSystemPrompt: options?.appendSystemPrompt,
+      cwd: options?.cwd,
+      timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    });
     return response.text;
+  }
+
+  private async executeStepWithFallback(
+    step: FlowStep,
+    request: {
+      prompt: string;
+      allowedTools?: string[];
+      appendSystemPrompt?: string;
+      cwd?: string;
+      timeoutMs?: number;
+    },
+  ): Promise<{ text: string }> {
+    const primaryRunner = this.registry.getRunner(step);
+    const config = this.registry.getConfig();
+
+    try {
+      return await primaryRunner.run(
+        applyStepContext(
+          {
+            prompt: request.prompt,
+            allowedTools: request.allowedTools,
+            appendSystemPrompt: request.appendSystemPrompt,
+            cwd: request.cwd,
+            timeoutMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+          },
+          config,
+          this.profile,
+          step,
+          this.projectRoot,
+          primaryRunner.name,
+        ),
+        this.logger,
+      );
+    } catch (error: unknown) {
+      const fallbackRunner = this.resolveStallFallbackRunner(step, primaryRunner.name);
+      if (!fallbackRunner || !this.isCodexStallError(error)) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.log(EVENT.FALLBACK_REVIEW, {
+        step,
+        reason: "codex_stall_timeout",
+        primaryRunner: primaryRunner.name,
+        fallbackRunner: fallbackRunner.name,
+        message,
+      });
+      return fallbackRunner.run(
+        applyStepContext(
+          {
+            prompt: request.prompt,
+            allowedTools: request.allowedTools,
+            appendSystemPrompt: request.appendSystemPrompt,
+            cwd: request.cwd,
+            timeoutMs: request.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+          },
+          config,
+          this.profile,
+          step,
+          this.projectRoot,
+          fallbackRunner.name,
+        ),
+        this.logger,
+      );
+    }
+  }
+
+  private resolveStallFallbackRunner(step: FlowStep, primaryRunnerName: string) {
+    if (!ReviewOrchestrator.STALL_FALLBACK_STEPS.has(step)) return null;
+    const providers = this.registry.getConfig().providers;
+    const primaryProvider = providers[primaryRunnerName];
+    if (!primaryProvider || primaryProvider.type !== "codex") return null;
+
+    for (const candidate of ["claude_opus", "claude"]) {
+      const provider = providers[candidate];
+      if (provider?.type === "claude") {
+        return this.registry.getRunnerByName(candidate);
+      }
+    }
+    return null;
+  }
+
+  private isCodexStallError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /codex sdk run failed: codex turn stalled/i.test(message)
+      || /codex turn stalled/i.test(message)
+      || /stall_timeout/i.test(message);
   }
 }

@@ -23,9 +23,9 @@ async function main(): Promise<void> {
 
   if (!command) {
     console.log("Usage:");
-    console.log("  tdd-harness impl <plan-file> [--resume] [--flow full|light] [--no-interactive]");
-    console.log("  tdd-harness component <plan-file> [--flow full|light] [--no-interactive]");
-    console.log("  tdd-harness page <plan-file> [--flow full|light] [--no-interactive]");
+    console.log("  tdd-harness impl <plan-file> [--profile <name>] [--resume] [--flow full|light] [--no-interactive]");
+    console.log("  tdd-harness component <plan-file> [--profile <name>] [--flow full|light] [--no-interactive]");
+    console.log("  tdd-harness page <plan-file> [--profile <name>] [--flow full|light] [--no-interactive]");
     console.log('  tdd-harness design <feature-name> "<requirements>" [--profile <name>]');
     console.log("  tdd-harness benchmark-summary <log-dir> [<log-dir>]");
     console.log("  tdd-harness init");
@@ -46,6 +46,8 @@ async function main(): Promise<void> {
       const noInteractive = args.includes("--no-interactive");
       const flowFlagIndex = args.indexOf("--flow");
       const flowFlag = flowFlagIndex !== -1 ? args[flowFlagIndex + 1] as FlowMode | undefined : undefined;
+      const profileFlagIndex = args.indexOf("--profile");
+      const profileOverride = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
 
       if (flowFlag) config.flow = flowFlag;
 
@@ -53,8 +55,9 @@ async function main(): Promise<void> {
       const plan = parsePlan(projectRoot, planPath);
 
       // 2. profile 解決
-      const profileName = plan.profile ?? inferProfile(config);
+      const profileName = profileOverride ?? plan.profile ?? inferProfile(config);
       const profile = resolveProfile(config, profileName);
+      plan.profile = profileName;
 
       // 3. adapter 解決
       const lintAdapters = profile.lint.map(resolveLintAdapter);
@@ -68,10 +71,10 @@ async function main(): Promise<void> {
 
       let overrides: Partial<Record<FlowStep, string>> | null = null;
       if (!noInteractive && !resume && process.stdin.isTTY) {
-        overrides = await interactiveRunnerAssignment(config, config.flow);
+        overrides = await interactiveRunnerAssignment(config, config.flow, profile);
       }
 
-      const registry = createRunnerRegistry(config, projectRoot, overrides ?? undefined);
+      const registry = createRunnerRegistry(config, projectRoot, profile, overrides ?? undefined);
 
       // 5. ImplFlow 実行
       const implFlow = new ImplFlow(boundary, registry, profile, testAdapter, lintAdapters);
@@ -87,12 +90,15 @@ async function main(): Promise<void> {
       const noInteractive = args.includes("--no-interactive");
       const flowFlagIndex = args.indexOf("--flow");
       const flowFlag = flowFlagIndex !== -1 ? args[flowFlagIndex + 1] as FlowMode | undefined : undefined;
+      const profileFlagIndex = args.indexOf("--profile");
+      const profileOverride = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
 
       if (flowFlag) config.flow = flowFlag;
 
       const plan = parsePlan(projectRoot, planPath);
-      const profileName = plan.profile ?? inferProfile(config);
+      const profileName = profileOverride ?? plan.profile ?? inferProfile(config);
       const profile = resolveProfile(config, profileName);
+      plan.profile = profileName;
       const lintAdapters = profile.lint.map(resolveLintAdapter);
       const testAdapter = resolveTestAdapter(profile.test);
       const allAdapters: BaseAdapter[] = [...lintAdapters, testAdapter];
@@ -102,10 +108,10 @@ async function main(): Promise<void> {
 
       let overrides: Partial<Record<FlowStep, string>> | null = null;
       if (!noInteractive && process.stdin.isTTY) {
-        overrides = await interactiveRunnerAssignment(config, config.flow);
+        overrides = await interactiveRunnerAssignment(config, config.flow, profile);
       }
 
-      const registry = createRunnerRegistry(config, projectRoot, overrides ?? undefined);
+      const registry = createRunnerRegistry(config, projectRoot, profile, overrides ?? undefined);
       const pageFlow = new PageFlow(boundary, registry, profile, testAdapter, lintAdapters);
       await pageFlow.run(planPath, { plan });
       break;
@@ -119,12 +125,15 @@ async function main(): Promise<void> {
       const noInteractive = args.includes("--no-interactive");
       const flowFlagIndex = args.indexOf("--flow");
       const flowFlag = flowFlagIndex !== -1 ? args[flowFlagIndex + 1] as FlowMode | undefined : undefined;
+      const profileFlagIndex = args.indexOf("--profile");
+      const profileOverride = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
 
       if (flowFlag) config.flow = flowFlag;
 
       const plan = parsePlan(projectRoot, planPath);
-      const profileName = plan.profile ?? inferProfile(config);
+      const profileName = profileOverride ?? plan.profile ?? inferProfile(config);
       const profile = resolveProfile(config, profileName);
+      plan.profile = profileName;
       const lintAdapters = profile.lint.map(resolveLintAdapter);
       const testAdapter = resolveTestAdapter(profile.test);
       const allAdapters: BaseAdapter[] = [...lintAdapters, testAdapter];
@@ -134,10 +143,10 @@ async function main(): Promise<void> {
 
       let overrides: Partial<Record<FlowStep, string>> | null = null;
       if (!noInteractive && process.stdin.isTTY) {
-        overrides = await interactiveRunnerAssignment(config, config.flow);
+        overrides = await interactiveRunnerAssignment(config, config.flow, profile);
       }
 
-      const registry = createRunnerRegistry(config, projectRoot, overrides ?? undefined);
+      const registry = createRunnerRegistry(config, projectRoot, profile, overrides ?? undefined);
       const componentFlow = new ComponentFlow(boundary, registry, profile, testAdapter, lintAdapters);
       await componentFlow.run(planPath, { plan });
       break;
@@ -152,13 +161,13 @@ async function main(): Promise<void> {
       const profileFlagIndex = args.indexOf("--profile");
       const profileName = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
       const boundary = new Boundary(projectRoot);
-      const registry = createRunnerRegistry(config, projectRoot);
       const logger = new HarnessLogger(`design_${featureName}`, { baseDir: join(projectRoot, "logs") });
       const profile = profileName
         ? resolveProfile(config, profileName)
         : Object.keys(config.profiles).length === 1
           ? resolveProfile(config, inferProfile(config))
           : undefined;
+      const registry = createRunnerRegistry(config, projectRoot, profile);
       const designFlow = new DesignFlow(boundary, registry, profile);
       await designFlow.run(featureName, requirements, logger);
       break;

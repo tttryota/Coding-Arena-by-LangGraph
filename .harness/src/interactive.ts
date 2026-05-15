@@ -1,16 +1,27 @@
 import { createInterface } from "node:readline/promises";
-import type { HarnessConfig } from "./config.ts";
+import type { HarnessConfig, ResolvedProfileConfig } from "./config.ts";
 import type { FlowMode, FlowStep } from "./steps.ts";
 import { LIGHT_SKIP_STEPS } from "./steps.ts";
 
 export async function interactiveRunnerAssignment(
   config: HarnessConfig,
   flowMode: FlowMode,
+  profile?: ResolvedProfileConfig,
 ): Promise<Partial<Record<FlowStep, string>> | null> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const runnerNames = Object.keys(config.runners);
+  const providerNames = Object.keys(config.providers);
 
-  const steps = Object.entries(config.steps)
+  const effectiveSteps = { ...config.steps } as Partial<Record<FlowStep, string>>;
+  if (profile?.stepProviders?.defaultProvider) {
+    for (const step of Object.keys(effectiveSteps) as FlowStep[]) {
+      effectiveSteps[step] = profile.stepProviders.defaultProvider;
+    }
+  }
+  for (const [step, providerName] of Object.entries(profile?.stepProviders?.stepOverrides ?? {})) {
+    effectiveSteps[step as FlowStep] = providerName;
+  }
+
+  const steps = Object.entries(effectiveSteps)
     .filter(([step]) => !(flowMode === "light" && LIGHT_SKIP_STEPS.has(step as FlowStep)))
     .map(([step, runner], i) => ({ index: i + 1, step: step as FlowStep, runner: runner as string }));
 
@@ -33,13 +44,13 @@ export async function interactiveRunnerAssignment(
       continue;
     }
 
-    const runnerAnswer = await rl.question(`${target.step} のランナー [${runnerNames.join("/")}]: `);
-    if (runnerNames.includes(runnerAnswer.trim())) {
+    const runnerAnswer = await rl.question(`${target.step} のプロバイダ [${providerNames.join("/")}]: `);
+    if (providerNames.includes(runnerAnswer.trim())) {
       overrides[target.step] = runnerAnswer.trim();
       target.runner = runnerAnswer.trim();
       console.log(`  ${target.index}. ${target.step}: ${target.runner}`);
     } else {
-      console.log(`無効なランナー名です。`);
+      console.log(`無効なプロバイダ名です。`);
     }
   }
 

@@ -254,6 +254,10 @@ export class Boundary {
     return this.resolvePattern(this.sourceLayout.testDir, scope);
   }
 
+  sourcePathForScope(scope: string): string {
+    return this.resolvePattern(this.sourceLayout.sourceDir, scope);
+  }
+
   // === allowedTools（sourceLayout 駆動） ===
 
   private resolvedAdditionalAllowedPrefixes(): string[] {
@@ -373,6 +377,23 @@ export class Boundary {
         throw new GuardError("git が見つかりません。");
       }
       throw new GuardError("git diff の実行に失敗しました。差分サイズを検証できません。");
+    }
+  }
+
+  async hasWorkingTreeChange(repoRelativePath: string): Promise<boolean> {
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["status", "--short", "--", repoRelativePath],
+        { cwd: this.projectRoot, timeout: LOCAL_CMD_TIMEOUT_MS },
+      );
+      return stdout.trim().length > 0;
+    } catch (error: unknown) {
+      const execError = error as { code?: string };
+      if (execError.code === "ENOENT") {
+        throw new GuardError("git が見つかりません。");
+      }
+      throw new GuardError(`git status の実行に失敗しました: ${repoRelativePath}`);
     }
   }
 

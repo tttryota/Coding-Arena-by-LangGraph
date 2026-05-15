@@ -30,12 +30,19 @@ profiles:
     context:
       defaultContextBundles: [backend-core]
       stepOverrides:
+        test_generate:
+          contextBundles: [backend-test-generate]
         impl_generate:
           contextBundles: [backend-impl, backend-failure-modes]
         impl_self_criteria:
           contextBundles: [backend-review-criteria]
         impl_self_quality:
           contextBundles: [backend-review-quality]
+    stepProviders:
+      defaultProvider: codex
+      stepOverrides:
+        test_external_review: claude_opus
+        impl_external_review: claude_opus
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -79,19 +86,43 @@ profiles:
       testDir: "frontend/src/{{category}}/{{name}}/__tests__"
       scopePattern: "frontend/src/{{category}}/{{name}}/*"
 
-runners:
+providers:
   codex:
     type: codex
     sandbox: workspace-write
+    heartbeatMs: 15000
+    stallTimeoutMs: 180000
+    capabilities: [session_resume]
+    capabilityPolicy:
+      session_resume: native
+      system_prompt: degrade_to_prompt
+      allowed_tools: degrade_to_prompt
+      agent: reject
+      mcp_config: reject
   claude:
     type: claude
-  claude_benchmark_opus:
+    capabilities: [session_resume, system_prompt, allowed_tools, agent, mcp_config]
+    capabilityPolicy:
+      session_resume: native
+      system_prompt: native
+      allowed_tools: native
+      agent: native
+      mcp_config: native
+  claude_opus:
     type: claude
     model: opus
+    capabilities: [session_resume, system_prompt, allowed_tools, agent, mcp_config]
+    capabilityPolicy:
+      session_resume: native
+      system_prompt: native
+      allowed_tools: native
+      agent: native
+      mcp_config: native
 
 context:
   contextBundles:
     backend-core: [harness-backend-core]
+    backend-test-generate: [harness-backend-test]
     backend-impl: [harness-backend-impl]
     backend-review-criteria: [harness-backend-review-criteria]
     backend-review-quality: [harness-backend-review-quality]
@@ -118,7 +149,7 @@ context:
 | pytest | python | Python テストフレームワーク |
 | vitest | node | JavaScript/TypeScript テストフレームワーク |
 
-## ランナー
+## プロバイダ
 
 | type | 説明 |
 |---|---|
@@ -126,7 +157,7 @@ context:
 | codex | OpenAI Codex SDK（内部でローカル `codex` CLI を利用） |
 | generic | 任意の CLI コマンド |
 
-### generic runner の設定
+### generic provider の設定
 
 | フィールド | 必須 | 説明 |
 |---|---|---|
@@ -136,12 +167,19 @@ context:
 | timeoutMs | - | タイムアウト（ミリ秒） |
 
 ```yaml
-runners:
+providers:
   copilot:
     type: generic
     command: gh
     args: ["copilot"]
     promptFlag: "--prompt"
+    capabilities: []
+    capabilityPolicy:
+      session_resume: reject
+      system_prompt: degrade_to_prompt
+      allowed_tools: degrade_to_prompt
+      agent: reject
+      mcp_config: reject
 ```
 
 non-interactive 実行にはツール側の権限設定が必要な場合があります（例: Copilot CLI の `--allow-all-tools`）。
@@ -195,6 +233,8 @@ tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する
 
 ```bash
 tdd-harness impl plan/task.md
+tdd-harness impl plan/task.md --profile backend_codex_only
+tdd-harness impl plan/task.md --profile backend_claude_review
 tdd-harness impl plan/task.md --flow light    # 外部レビュー省略
 tdd-harness impl plan/task.md --resume        # チェックポイントから再開
 tdd-harness impl plan/task.md --no-interactive # 対話プロンプトスキップ
@@ -211,6 +251,7 @@ tdd-harness impl plan/task.md --no-interactive # 対話プロンプトスキッ�
 | criteriaPreset | "backend" \| "frontend" | レビュー観点のプリセット |
 | reviewCriteria | string[] | カスタムレビュー観点ファイルパス |
 | sourceLayout | object | ソースコードのディレクトリ構成 |
+| stepProviders | object | profile 単位の provider 切り替え設定 |
 
 ### sourceLayout
 

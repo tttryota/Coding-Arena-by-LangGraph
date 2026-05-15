@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { dirname, resolve, join } from "node:path";
 import { HarnessLogger, redact } from "./logger.ts";
 import { LintGuard } from "./lint-guard.ts";
 import { DriftGuard } from "./drift-guard.ts";
@@ -145,6 +145,229 @@ export class ImplFlow {
     return plan.benchmarkMode === "generation";
   }
 
+  private scopeModuleName(scope: string): string {
+    return this.boundary.extractName(scope).replace(/-/g, "_");
+  }
+
+  private suggestedTestFilePath(scope: string): string {
+    const testDir = this.boundary.testPathForScope(scope);
+    const moduleName = this.scopeModuleName(scope);
+    if (this.testAdapter.name === "pytest") {
+      return `${testDir}/test_${moduleName}.py`;
+    }
+    if (this.testAdapter.name === "vitest") {
+      return `${testDir}/${this.boundary.extractName(scope)}.test.ts`;
+    }
+    return `${testDir}/`;
+  }
+
+  private suggestedImplementationPath(scope: string): string {
+    const sourceDir = this.boundary.sourcePathForScope(scope);
+    const moduleName = this.scopeModuleName(scope);
+    if (this.testAdapter.name === "pytest") {
+      return `${sourceDir}/${moduleName}.py`;
+    }
+    if (this.testAdapter.name === "vitest") {
+      return `${sourceDir}/${this.boundary.extractName(scope)}.ts`;
+    }
+    return `${sourceDir}/`;
+  }
+
+  private buildArtifactInstructions(plan: TaskPlan, mode: "test" | "impl"): string {
+    const generationBenchmarkDiscipline = this.isGenerationBenchmark(plan)
+      ? [
+          "## Generation Benchmark Discipline",
+          "- 既に置かれている placeholder ファイルをそのまま置換すること",
+          "- 参照してよい一次情報は spec、approved test cases、対象の placeholder ファイル、および言語設定ファイルまでに限定すること",
+          "- docs/reviews や過去の benchmark レポートは参照しないこと",
+          "- 最低限の確認が済んだらすぐに対象ファイルへ書き込みを開始すること",
+        ].join("\n")
+      : "";
+    const generationTestDiscipline = this.isGenerationBenchmark(plan) && mode === "test"
+      ? [
+          "- 最初に主対象のテストファイルを placeholder から置換すること",
+          "- この step で書き込む先は主対象のテストファイルに限定すること",
+          "- repo 全体の充足確認や既存 concrete test の監査だけで終わらないこと",
+          "- 実装内容の探索は import や公開インターフェース確認に必要な最小限に留めること",
+        ].join("\n")
+      : "";
+
+    if (mode === "test") {
+      return [
+        "## 生成物の配置",
+        `- この step では workspace 上のテストファイルを直接作成または更新すること`,
+        `- 主対象のテストファイル候補: ${this.suggestedTestFilePath(plan.scope)}`,
+        `- 少なくとも 1 件は pytest/vitest が収集できる実テストケースを含めること`,
+        "- 回答本文だけでコードを返さず、ファイルへ反映すること",
+        generationBenchmarkDiscipline,
+        generationTestDiscipline,
+      ].join("\n");
+    }
+
+    return [
+      "## 生成物の配置",
+      `- この step では workspace 上の実装ファイルを直接作成または更新すること`,
+      `- 主対象の実装ファイル候補: ${this.suggestedImplementationPath(plan.scope)}`,
+      `- テストが import できる配置・モジュール名に合わせること`,
+      "- 回答本文だけでコードを返さず、ファイルへ反映すること",
+      generationBenchmarkDiscipline,
+    ].join("\n");
+  }
+
+  private buildTestPlaceholderContent(): string {
+    if (this.testAdapter.name === "pytest") {
+      return [
+        '"""Harness placeholder: replace with concrete pytest cases for this scope."""',
+        "",
+        "def test_harness_placeholder() -> None:",
+        '    raise AssertionError("Replace this placeholder with concrete benchmark tests.")',
+        "",
+      ].join("\n");
+    }
+    if (this.testAdapter.name === "vitest") {
+      return [
+        'import { describe, it, expect } from "vitest";',
+        "",
+        'describe("harness placeholder", () => {',
+        '  it("must be replaced with concrete benchmark tests", () => {',
+        '    expect(false, "replace placeholder tests").toBe(true);',
+        "  });",
+        "});",
+        "",
+      ].join("\n");
+    }
+    return [
+      "# Harness placeholder: replace with concrete tests for this scope.",
+      "",
+    ].join("\n");
+  }
+
+  private buildImplementationPlaceholderContent(): string {
+    if (this.testAdapter.name === "pytest") {
+      return [
+        '"""Harness placeholder: replace with the concrete implementation for this scope."""',
+        "",
+      ].join("\n");
+    }
+    return "// Harness placeholder: replace with the concrete implementation for this scope.\n";
+  }
+
+  private resetGenerationBenchmarkArtifacts(scope: string, logger?: HarnessLogger): void {
+    const targetTestFile = this.suggestedTestFilePath(scope);
+    const targetImplementationFile = this.suggestedImplementationPath(scope);
+    this.writeArtifactFile(targetTestFile, this.buildTestPlaceholderContent());
+    this.writeArtifactFile(targetImplementationFile, this.buildImplementationPlaceholderContent());
+    logger?.log(EVENT.BENCHMARK_ARTIFACT_RESET, {
+      scope,
+      targetTestFile,
+      targetImplementationFile,
+      benchmarkMode: "generation",
+    });
+  }
+
+  private writeArtifactFile(repoRelativePath: string, content: string): void {
+    const absolutePath = resolve(this.boundary.getProjectRoot(), repoRelativePath);
+    mkdirSync(dirname(absolutePath), { recursive: true });
+    writeFileSync(absolutePath, content, "utf-8");
+  }
+
+  private fileDiffersFromContent(repoRelativePath: string, expectedContent: string): boolean {
+    const absolutePath = resolve(this.boundary.getProjectRoot(), repoRelativePath);
+    if (!existsSync(absolutePath)) return false;
+    return readFileSync(absolutePath, "utf-8") !== expectedContent;
+  }
+
+  private logPromptPrepared(
+    logger: HarnessLogger,
+    step: string,
+    prompt: string,
+    options?: {
+      appendSystemPrompt?: string;
+      allowedTools?: string[];
+      primaryTargetFile?: string;
+    },
+  ): void {
+    logger.log(EVENT.PROMPT_PREPARED, {
+      step,
+      promptChars: prompt.length,
+      promptBytes: Buffer.byteLength(prompt, "utf-8"),
+      appendSystemPromptChars: options?.appendSystemPrompt?.length ?? 0,
+      appendSystemPromptBytes: Buffer.byteLength(options?.appendSystemPrompt ?? "", "utf-8"),
+      allowedToolCount: options?.allowedTools?.length ?? 0,
+      primaryTargetFile: options?.primaryTargetFile ?? null,
+    });
+  }
+
+  private async ensureConcreteTestFilesExist(
+    scope: string,
+    options?: { requireTargetRewrite?: boolean; approvedCaseCount?: number },
+  ): Promise<{
+    concreteTestFileCount: number;
+    targetTestFileMaterialized: boolean;
+    targetTestFileChanged: boolean;
+    targetTestIntentCount: number | null;
+    approvedCaseCount: number;
+  }> {
+    const testFiles = await this.boundary.findTestFiles(scope);
+    const concrete = testFiles.filter((file) => !file.endsWith("/__init__.py"));
+    const targetTestFile = this.suggestedTestFilePath(scope);
+    const targetTestFileAbsolute = resolve(this.boundary.getProjectRoot(), targetTestFile);
+    const targetTestFileMaterialized = this.fileDiffersFromContent(
+      targetTestFile,
+      this.buildTestPlaceholderContent(),
+    );
+    const targetTestFileChanged = await this.boundary.hasWorkingTreeChange(targetTestFile);
+    const approvedCaseCount = options?.approvedCaseCount ?? 0;
+    const targetTestIntentCount = existsSync(targetTestFileAbsolute)
+      ? this.countTestIntents(readFileSync(targetTestFileAbsolute, "utf-8"))
+      : null;
+    if (concrete.length === 0) {
+      throw new GuardError(
+        `テスト生成後も収集対象のテストファイルが存在しません。少なくとも ${this.suggestedTestFilePath(scope)} のようなテストファイルを生成してください。`,
+      );
+    }
+    if (options?.requireTargetRewrite) {
+      if (!testFiles.includes(targetTestFileAbsolute)) {
+        throw new GuardError(
+          `generation benchmark の test_generate が主対象のテストファイル ${targetTestFile} を生成していません。対象ファイルを直接更新してください。`,
+        );
+      }
+      if (!targetTestFileMaterialized) {
+        throw new GuardError(
+          `generation benchmark の test_generate が ${targetTestFile} の placeholder を置換していません。既存テストの監査で終わらず、対象ファイルを具体的なテストで更新してください。`,
+        );
+      }
+    }
+    if (
+      approvedCaseCount > 0 &&
+      targetTestIntentCount !== null &&
+      targetTestIntentCount > approvedCaseCount + 2
+    ) {
+      throw new GuardError(
+        `生成テストの test intent 数 (${targetTestIntentCount}) が承認済みテストケース数 (${approvedCaseCount}) から大きく逸脱しています。approved cases にない独自追加や不要分割をやめてください。`,
+      );
+    }
+    return {
+      concreteTestFileCount: concrete.length,
+      targetTestFileMaterialized,
+      targetTestFileChanged,
+      targetTestIntentCount,
+      approvedCaseCount,
+    };
+  }
+
+  private countTestIntents(fileContents: string): number {
+    if (this.testAdapter.name === "pytest") {
+      const matches = fileContents.match(/^\s*def\s+test_[A-Za-z0-9_]+\s*\(/gm);
+      return matches?.length ?? 0;
+    }
+    if (this.testAdapter.name === "vitest") {
+      const matches = fileContents.match(/\b(?:it|test)\s*\(/g);
+      return matches?.length ?? 0;
+    }
+    return 0;
+  }
+
   private handleAlreadyGreen(
     plan: TaskPlan,
     logger: HarnessLogger,
@@ -191,8 +414,8 @@ export class ImplFlow {
       if (this.registry.isStepSkipped(step)) return false;
       const runnerName = stepMapping[step];
       if (!runnerName) return false;
-      const runner = runnerConfig.runners[runnerName];
-      return runner?.type === "codex";
+      const provider = runnerConfig.providers[runnerName];
+      return provider?.type === "codex";
     });
     const driftGuard = new DriftGuard(logger, { codexAvailable: hasCodex });
     const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry, this.profile);
@@ -219,6 +442,13 @@ export class ImplFlow {
     driftGuard.startTask(plan.scope, expectedLines);
     const scopeTools = this.boundary.scopeAllowedTools(plan.scope);
     const testPath = this.boundary.testPathForScope(plan.scope);
+    const targetTestFile = this.suggestedTestFilePath(plan.scope);
+    const targetImplementationFile = this.suggestedImplementationPath(plan.scope);
+    const testGenerateTools = [
+      "Read",
+      `Write(${targetTestFile})`,
+      `Edit(${targetTestFile})`,
+    ];
 
     const spec = readFileSync(resolve(root, plan.specPath), "utf-8");
     const criteriaPaths = this.resolveCriteriaPaths();
@@ -228,13 +458,26 @@ export class ImplFlow {
     logger.log(EVENT.TDD_START, { testCases: plan.targetTestCases });
 
     if (this.isGenerationBenchmark(plan)) {
-      const existingImplFiles = await this.boundary.findImplementationFiles(plan.scope);
-      const existingTestFiles = await this.boundary.findTestFiles(plan.scope);
-      if (existingImplFiles.length > 0 && existingTestFiles.length > 0) {
-        const precheck = await this.runTests(testPath, { allowCollectionError: true });
-        if (precheck.passed) {
-          await this.handleAlreadyGreen(plan, logger, reviewOrchestrator, precheck.output);
-        }
+      this.resetGenerationBenchmarkArtifacts(plan.scope, logger);
+      const precheck = await this.runTests(testPath, { allowCollectionError: true });
+      logger.log(EVENT.BENCHMARK_ARTIFACT_STATUS, {
+        step: FLOW_STEP.TEST_GENERATE,
+        phase: "precheck",
+        benchmarkMode: "generation",
+        targetTestFile,
+        targetImplementationFile,
+        targetTestFileMaterialized: this.fileDiffersFromContent(
+          targetTestFile,
+          this.buildTestPlaceholderContent(),
+        ),
+        targetImplementationFileMaterialized: this.fileDiffersFromContent(
+          targetImplementationFile,
+          this.buildImplementationPlaceholderContent(),
+        ),
+        precheckPassed: precheck.passed,
+      });
+      if (precheck.passed) {
+        await this.handleAlreadyGreen(plan, logger, reviewOrchestrator, precheck.output);
       }
     }
 
@@ -249,15 +492,29 @@ export class ImplFlow {
         spec,
         frameworkName: this.testAdapter.frameworkName,
         mswInstructions: this.buildMswInstructions(plan, "test"),
+        artifactInstructions: this.buildArtifactInstructions(plan, "test"),
+        targetTestFile,
+        targetImplementationFile,
+      });
+      this.logPromptPrepared(logger, FLOW_STEP.TEST_GENERATE, testGenPrompt, {
+        appendSystemPrompt: generationSystemPrompt,
+        allowedTools: testGenerateTools,
+        primaryTargetFile: targetTestFile,
       });
       const testGenResult = await runner.run(
         applyStepContext(
           {
             prompt: testGenPrompt,
-            allowedTools: scopeTools,
+            allowedTools: testGenerateTools,
             appendSystemPrompt: generationSystemPrompt,
             cwd: root,
             timeoutMs: DEFAULT_TIMEOUT_MS,
+            observability: {
+              step: FLOW_STEP.TEST_GENERATE,
+              benchmarkMode: plan.benchmarkMode,
+              primaryTargetFile: targetTestFile,
+              relatedFiles: [targetImplementationFile],
+            },
           },
           config,
           this.profile,
@@ -269,10 +526,42 @@ export class ImplFlow {
       );
       sessionId = testGenResult.sessionId ?? "";
       await this.boundary.stageFiles(plan.scope);
-      await this.lintCheck(lintGuard, plan.scope, "テスト生成後", {
-        scopeTools: scopeTools,
-        root,
+      const postGenerateStatus = await this.ensureConcreteTestFilesExist(plan.scope, {
+        requireTargetRewrite: this.isGenerationBenchmark(plan),
+        approvedCaseCount: plan.targetTestCases.length,
       });
+      logger.log(EVENT.BENCHMARK_ARTIFACT_STATUS, {
+        step: FLOW_STEP.TEST_GENERATE,
+        phase: "post_generate_validation",
+        benchmarkMode: plan.benchmarkMode ?? "harness",
+        targetTestFile,
+        targetTestFileChanged: postGenerateStatus.targetTestFileChanged,
+        targetTestFileMaterialized: postGenerateStatus.targetTestFileMaterialized,
+        concreteTestFileCount: postGenerateStatus.concreteTestFileCount,
+        targetTestIntentCount: postGenerateStatus.targetTestIntentCount,
+        approvedCaseCount: postGenerateStatus.approvedCaseCount,
+      });
+      let postGenerateLintPassed = false;
+      try {
+        await this.lintCheck(lintGuard, plan.scope, "テスト生成後", {
+          scopeTools: testGenerateTools,
+          root,
+        });
+        postGenerateLintPassed = true;
+      } finally {
+        logger.log(EVENT.BENCHMARK_ARTIFACT_STATUS, {
+          step: FLOW_STEP.TEST_GENERATE,
+          phase: "post_generate",
+          benchmarkMode: plan.benchmarkMode ?? "harness",
+          targetTestFile,
+          targetTestFileChanged: postGenerateStatus.targetTestFileChanged,
+          targetTestFileMaterialized: postGenerateStatus.targetTestFileMaterialized,
+          concreteTestFileCount: postGenerateStatus.concreteTestFileCount,
+          targetTestIntentCount: postGenerateStatus.targetTestIntentCount,
+          approvedCaseCount: postGenerateStatus.approvedCaseCount,
+          postGenerateLintPassed,
+        });
+      }
       logger.saveCheckpoint({
         planPath, completedStep: "test_generated", sessionId,
         records: [], greenAttempt: 0, timestamp: new Date().toISOString(),
@@ -341,6 +630,9 @@ export class ImplFlow {
         testOutput: lastFailureOutput,
         spec,
         mswInstructions: this.buildMswInstructions(plan, "impl"),
+        artifactInstructions: this.buildArtifactInstructions(plan, "impl"),
+        targetTestFile,
+        targetImplementationFile,
       });
 
       const implRunner = this.registry.getRunner(FLOW_STEP.IMPL_GENERATE);

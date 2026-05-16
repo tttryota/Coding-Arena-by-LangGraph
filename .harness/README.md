@@ -285,23 +285,21 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 
 ```
 harness（CLI エントリポイント）
-  ├── config（.harness/harness.yml 優先で読み込み + プロファイル解決）
-  ├── runner-registry（ステップ → ランナー解決）
-  │   ├── claude-runner（claude -p ラッパー）
-  │   ├── codex-runner（Codex App Server adapter）
-  │   ├── codex-app-server/（transport / service / protocol）
-  │   └── generic-runner（任意 CLI ラッパー）
-  ├── interactive（対話的ランナー割り当て）
-  ├── boundary（パス検証・スコープ解決・ガード）
-  ├── design-flow（仕様書・テストケース生成）
-  ├── impl-flow（TDD 実装サイクル + リトライ）
-  ├── page-flow（Page UI 実装 + ブラウザ検証）
-  │   ├── lint-guard（lint adapter ゼロ違反強制）
-  │   ├── drift-guard（迷走検知 + エスカレーション）
-  │   └── review-orchestrator（レビューサイクル管理）
-  ├── templates（プロンプトテンプレート）
-  ├── logger（JSONL 構造化ログ + redact）
-  └── types（共有型定義）
+  ├── cli/（entrypoint と対話 UI）
+  ├── application/
+  │   ├── flows/（design / impl / component / page）
+  │   ├── review/（lint-guard / drift-guard / review-orchestrator）
+  │   └── diagnostics/（benchmark-summary / benchmark-diagnose）
+  ├── domain/
+  │   ├── model/（steps / types）
+  │   └── services/（boundary / plan-parser）
+  └── infrastructure/
+      ├── config/（.harness/harness.yml 読み込み + profile 解決）
+      ├── runners/（claude / codex / generic / registry / codex-app-server）
+      ├── logging/（JSONL 構造化ログ + redact）
+      ├── process/（spawn / launcher）
+      ├── templates/（プロンプトテンプレート）
+      └── tooling/（lint / test adapter）
 ```
 
 ## レビュー観点のカスタマイズ

@@ -23,16 +23,23 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 
 ```
 .harness/src/
-├── types.ts                 # 共有型定義（110行）
-├── claude-runner.ts         # claude -p ラッパー（122行）
-├── logger.ts                # 構造化ログ + redact（96行）
-├── boundary.ts              # パス検証・スコープ解決・ファイル探索（302行）
-├── lint-guard.ts            # リンター強制ガード（181行）
-├── drift-guard.ts           # 迷走検知ガード（156行）
-├── review-orchestrator.ts   # レビューフロー制御（473行）
-├── design-flow.ts           # Design Flow（125行）
-├── impl-flow.ts             # Impl Flow + リトライ（229行）
-└── harness.ts               # CLI エントリポイント（58行）
+├── cli/
+│   ├── harness.ts           # CLI エントリポイント
+│   └── interactive.ts       # 対話的ランナー割り当て
+├── application/
+│   ├── diagnostics/         # benchmark-summary / benchmark-diagnose
+│   ├── flows/               # design / impl / component / page
+│   └── review/              # lint-guard / drift-guard / review-orchestrator
+├── domain/
+│   ├── model/               # steps / types
+│   └── services/            # boundary / plan-parser
+└── infrastructure/
+    ├── config/              # 設定読み込み・検証
+    ├── logging/             # JSONL ログ
+    ├── process/             # spawn / launcher
+    ├── runners/             # claude / codex / generic / registry / step-context
+    ├── templates/           # プロンプトテンプレート解決
+    └── tooling/             # lint / test adapter
 ```
 
 ## コンポーネント詳細

@@ -1,26 +1,23 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ResolvedConfig, ResolvedProfileConfig } from "./config.ts";
+import type { ResolvedProfileConfig } from "./config.ts";
 import type { RunnerRequest } from "./runner.ts";
 import type { FlowStep } from "./steps.ts";
 import { GuardError } from "./types.ts";
 
-export type ClaudeStepContext = {
+export type StepContext = {
   agent?: string;
-  skillBundles: string[];
   skillNames: string[];
-  mcpBundles: string[];
   mcpConfigs: string[];
 };
 
-export function applyClaudeStepContext(
+export function applyStepContext(
   request: RunnerRequest,
-  config: ResolvedConfig,
   profile: ResolvedProfileConfig | undefined,
   step: FlowStep,
   projectRoot: string,
 ): RunnerRequest {
-  const context = resolveClaudeStepContext(config, profile, step, projectRoot);
+  const context = resolveStepContext(profile, step);
   return {
     ...request,
     agent: context.agent ?? request.agent,
@@ -32,29 +29,22 @@ export function applyClaudeStepContext(
   };
 }
 
-export function resolveClaudeStepContext(
-  config: ResolvedConfig,
+export function resolveStepContext(
   profile: ResolvedProfileConfig | undefined,
   step: FlowStep,
-  projectRoot: string,
-): ClaudeStepContext {
-  const profileClaude = profile?.claude;
-  const stepOverride = profileClaude?.stepOverrides[step];
-  const skillBundles = uniqueStrings([
-    ...(profileClaude?.defaultSkillBundles ?? []),
-    ...(stepOverride?.skillBundles ?? []),
-  ]);
-  const mcpBundles = uniqueStrings([
-    ...(profileClaude?.defaultMcpBundles ?? []),
-    ...(stepOverride?.mcpBundles ?? []),
-  ]);
-
+): StepContext {
+  const profileContext = profile?.context;
+  const stepOverride = profileContext?.stepOverrides[step];
   return {
-    agent: stepOverride?.agent ?? profileClaude?.defaultAgent,
-    skillBundles,
-    skillNames: expandBundles(skillBundles, config.claude.skillBundles),
-    mcpBundles,
-    mcpConfigs: expandBundles(mcpBundles, config.claude.mcpBundles),
+    agent: stepOverride?.agent ?? profileContext?.defaultAgent,
+    skillNames: uniqueStrings([
+      ...(profileContext?.defaultSkills ?? []),
+      ...(stepOverride?.skills ?? []),
+    ]),
+    mcpConfigs: uniqueStrings([
+      ...(profileContext?.defaultMcpConfigs ?? []),
+      ...(stepOverride?.mcpConfigs ?? []),
+    ]),
   };
 }
 
@@ -66,11 +56,21 @@ export function joinPromptSections(sections: Array<string | undefined>): string 
   return normalized.join("\n\n");
 }
 
+export function findSkillFilePath(projectRoot: string, skillName: string): string | null {
+  const preferred = join(projectRoot, ".codex", "skills", skillName, "SKILL.md");
+  if (existsSync(preferred)) return preferred;
+
+  const legacy = join(projectRoot, ".claude", "skills", skillName, "SKILL.md");
+  if (existsSync(legacy)) return legacy;
+
+  return null;
+}
+
 function loadSkillPrompt(projectRoot: string, skillNames: string[]): string {
   const sections = skillNames.map((skillName) => {
-    const skillPath = join(projectRoot, ".claude", "skills", skillName, "SKILL.md");
-    if (!existsSync(skillPath)) {
-      throw new GuardError(`Claude skill not found: .claude/skills/${skillName}/SKILL.md`);
+    const skillPath = findSkillFilePath(projectRoot, skillName);
+    if (!skillPath) {
+      throw new GuardError(`Harness skill not found: .codex/skills/${skillName}/SKILL.md`);
     }
     const content = readFileSync(skillPath, "utf-8").trim();
     return `## Loaded Skill: ${skillName}\n${content}`;
@@ -81,19 +81,6 @@ function loadSkillPrompt(projectRoot: string, skillNames: string[]): string {
     "Use the following project-local skills as authoritative task guidance for this step.",
     ...sections,
   ].join("\n\n");
-}
-
-function expandBundles(
-  bundleNames: string[],
-  bundleMap: Record<string, string[]>,
-): string[] {
-  const values: string[] = [];
-  for (const bundleName of bundleNames) {
-    const entries = bundleMap[bundleName];
-    if (!entries) continue;
-    values.push(...entries);
-  }
-  return uniqueStrings(values);
 }
 
 function uniqueStrings(values: string[]): string[] {

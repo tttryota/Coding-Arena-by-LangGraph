@@ -8,7 +8,7 @@ import { FLOW_STEP } from "./steps.ts";
 import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT } from "./types.ts";
 import type { ReviewChecklistEntry, ReviewIssue, ReviewResult, ReviewRecord } from "./types.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
-import { applyClaudeStepContext } from "./claude-context.ts";
+import { applyStepContext } from "./step-context.ts";
 
 const MAX_REVIEW_CYCLES = 5;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -1136,7 +1136,7 @@ ${spec.slice(0, 3000)}
   ): Promise<ReviewResult> {
     const runner = this.registry.getRunner(step);
     const response = await runner.run(
-      applyClaudeStepContext(
+      applyStepContext(
         {
           prompt,
           allowedTools: options?.allowedTools ?? ["Read"],
@@ -1144,7 +1144,6 @@ ${spec.slice(0, 3000)}
           appendSystemPrompt: options?.appendSystemPrompt,
           outputSchema: options?.outputSchema,
         },
-        this.registry.getConfig(),
         this.profile,
         step,
         this.projectRoot,
@@ -1167,7 +1166,7 @@ ${spec.slice(0, 3000)}
   ): Promise<string> {
     const runner = this.registry.getRunner(step);
     const response = await runner.run(
-      applyClaudeStepContext(
+      applyStepContext(
         {
           prompt,
           allowedTools: options?.allowedTools,
@@ -1176,7 +1175,6 @@ ${spec.slice(0, 3000)}
           timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
           outputSchema: options?.outputSchema,
         },
-        this.registry.getConfig(),
         this.profile,
         step,
         this.projectRoot,

@@ -2,7 +2,7 @@ import type { Runner, RunnerRequest, RunnerResponse } from "./runner.ts";
 import { prepareRequest } from "./runner.ts";
 import type { FlowStep, FlowMode } from "./steps.ts";
 import { LIGHT_SKIP_STEPS } from "./steps.ts";
-import type { HarnessConfig } from "./config.ts";
+import type { HarnessConfig, ResolvedProfileConfig } from "./config.ts";
 import { createClaudeRunner } from "./claude-runner.ts";
 import { createCodexRunner } from "./codex-runner.ts";
 import { createGenericRunner } from "./generic-runner.ts";
@@ -24,7 +24,9 @@ export type RunnerRegistry = {
 export function createRunnerRegistry(
   config: HarnessConfig,
   projectRoot: string,
+  profile: ResolvedProfileConfig,
   overrides?: Partial<Record<FlowStep, string>>,
+  flowMode?: FlowMode,
 ): RunnerRegistry {
   const runners = new Map<string, Runner>();
 
@@ -55,8 +57,9 @@ export function createRunnerRegistry(
   }
 
   const stepMapping: Record<string, string> = {
-    ...config.steps, ...overrides,
+    ...profile.steps, ...overrides,
   } as Record<string, string>;
+  const effectiveFlowMode = flowMode ?? profile.flow;
 
   function wrapRunner(runner: Runner, step?: FlowStep): Runner {
     return {
@@ -116,12 +119,12 @@ export function createRunnerRegistry(
       return resolveRunner(name);
     },
     isStepSkipped(step: FlowStep): boolean {
-      return config.flow === "light" && LIGHT_SKIP_STEPS.has(step);
+      return effectiveFlowMode === "light" && LIGHT_SKIP_STEPS.has(step);
     },
     getFallbackRunner(): Runner {
-      return resolveRunner(config.fallbackRunner);
+      return resolveRunner(profile.fallbackRunner);
     },
-    getFlowMode: () => config.flow,
+    getFlowMode: () => effectiveFlowMode,
     getStepMapping: () => ({ ...stepMapping }),
     getConfig: () => config,
   };

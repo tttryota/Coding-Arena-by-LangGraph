@@ -15,7 +15,7 @@ import { loadTemplate, renderTemplate } from "./templates.ts";
 import { runTool } from "./launcher.ts";
 import type { LauncherOptions } from "./launcher.ts";
 import { parsePlan } from "./plan-parser.ts";
-import { applyClaudeStepContext, joinPromptSections } from "./claude-context.ts";
+import { applyStepContext, joinPromptSections } from "./step-context.ts";
 
 const MAX_GREEN_RETRIES = 3;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -338,7 +338,7 @@ export class ImplFlow {
         mswInstructions: this.buildMswInstructions(plan, "test"),
       });
       const testGenResult = await runner.run(
-        applyClaudeStepContext(
+        applyStepContext(
           {
             prompt: testGenPrompt,
             allowedTools: testTools,
@@ -347,7 +347,6 @@ export class ImplFlow {
             timeoutMs: DEFAULT_TIMEOUT_MS,
             outputSchema: TEST_GENERATION_OUTPUT_SCHEMA,
           },
-          config,
           this.profile,
           FLOW_STEP.TEST_GENERATE,
           root,
@@ -446,7 +445,7 @@ export class ImplFlow {
 
       const implRunner = this.registry.getRunner(FLOW_STEP.IMPL_GENERATE);
       const implResult = await implRunner.run(
-        applyClaudeStepContext(
+        applyStepContext(
           {
             prompt: implPrompt,
             allowedTools: scopeTools,
@@ -456,7 +455,6 @@ export class ImplFlow {
             timeoutMs: DEFAULT_TIMEOUT_MS,
             outputSchema: IMPL_GENERATION_OUTPUT_SCHEMA,
           },
-          config,
           this.profile,
           FLOW_STEP.IMPL_GENERATE,
           root,
@@ -559,7 +557,7 @@ export class ImplFlow {
             .join("\n");
           const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
           await runner.run(
-            applyClaudeStepContext(
+            applyStepContext(
               {
                 prompt: `以下のリンター違反を修正してください。自動修正できなかった違反です。
 
@@ -572,7 +570,6 @@ ${issueList}
                 allowedTools: options.scopeTools,
                 cwd: options.root,
               },
-              this.registry.getConfig(),
               this.profile,
               FLOW_STEP.LINT_FIX,
               this.boundary.getProjectRoot(),

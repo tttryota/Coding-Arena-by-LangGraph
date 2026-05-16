@@ -6,7 +6,7 @@ import type { RunnerRegistry } from "./runner-registry.ts";
 import type { ResolvedProfileConfig } from "./config.ts";
 import { FLOW_STEP } from "./steps.ts";
 import { GuardError } from "./types.ts";
-import { applyClaudeStepContext, joinPromptSections } from "./claude-context.ts";
+import { applyStepContext, joinPromptSections } from "./step-context.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -91,8 +91,8 @@ export class DesignFlow {
     const claudeMd = this.readClaudeMd();
 
     const runner = this.registry.getRunner(FLOW_STEP.SPEC_GENERATE);
-    await runner.run(
-      applyClaudeStepContext(
+      await runner.run(
+      applyStepContext(
         {
           prompt: `以下の要件から機能仕様書を作成してください。
 
@@ -118,7 +118,6 @@ ${template}
           cwd: root,
           timeoutMs: DEFAULT_TIMEOUT_MS,
         },
-        this.registry.getConfig(),
         this.profile,
         FLOW_STEP.SPEC_GENERATE,
         root,
@@ -138,7 +137,7 @@ ${template}
 
     const runner = this.registry.getRunner(FLOW_STEP.TEST_CASE_GENERATE);
     await runner.run(
-      applyClaudeStepContext(
+      applyStepContext(
         {
           prompt: `以下の仕様書からテストケースを導出してください。
 
@@ -165,7 +164,6 @@ ${template}
           cwd: root,
           timeoutMs: DEFAULT_TIMEOUT_MS,
         },
-        this.registry.getConfig(),
         this.profile,
         FLOW_STEP.TEST_CASE_GENERATE,
         root,

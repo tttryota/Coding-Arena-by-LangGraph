@@ -13,7 +13,7 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提条件:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの多くのステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
+- `claude` CLI が PATH に存在（external review などで使う場合）
 - プロジェクトに応じた lint/test ツール（Python: ruff + mypy + pytest、TypeScript: eslint + tsc + vitest）
 
 この repo ではローカル wrapper `./harness` から起動する。npm パッケージとして導入した場合は `tdd-harness` が同じ CLI を提供する。
@@ -32,28 +32,74 @@ tdd-harness init
 ```yaml
 profiles:
   backend:
+    flow: full
+    fallbackRunner: codex
+    steps:
+      test_generate: codex
+      test_self_quality: codex
+      test_external_review: claude
+      impl_generate: codex
+      impl_self_criteria: codex
+      impl_self_quality: codex
+      impl_external_review: claude
+      lint_fix: codex
+      apply_fixes: codex
+      judgment_summary: codex
+      judge_minor: codex
+      spec_generate: codex
+      test_case_generate: codex
+      component_generate: codex
+      component_self_review: codex
+      page_generate: codex
+      page_review_design: codex
+      page_review_behavior: codex
+      page_review_code: codex
+      page_browser_verify: codex
     lint: [ruff, mypy]
     test: pytest
     toolRoot: backend
     criteriaPreset: backend
-    claude:
+    context:
       defaultAgent: harness-backend-general
-      defaultSkillBundles: [backend-core]
+      defaultSkills: [harness-backend-core]
       stepOverrides:
         impl_generate:
           agent: harness-backend-impl
-          skillBundles: [backend-impl, backend-failure-modes]
+          skills: [harness-backend-impl, harness-backend-failure-modes]
         impl_self_criteria:
           agent: harness-backend-reviewer
-          skillBundles: [backend-review-criteria]
+          skills: [harness-backend-review-criteria]
         impl_self_quality:
           agent: harness-backend-reviewer
-          skillBundles: [backend-review-quality]
+          skills: [harness-backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
       scopePattern: "backend/{{category}}/*"
   frontend:
+    flow: full
+    fallbackRunner: codex
+    steps:
+      test_generate: codex
+      test_self_quality: codex
+      test_external_review: claude
+      impl_generate: codex
+      impl_self_criteria: codex
+      impl_self_quality: codex
+      impl_external_review: claude
+      lint_fix: codex
+      apply_fixes: codex
+      judgment_summary: codex
+      judge_minor: codex
+      spec_generate: codex
+      test_case_generate: codex
+      component_generate: codex
+      component_self_review: codex
+      page_generate: codex
+      page_review_design: codex
+      page_review_behavior: codex
+      page_review_code: codex
+      page_browser_verify: codex
     lint: [eslint, tsc]
     test: vitest
     toolRoot: frontend
@@ -68,7 +114,7 @@ profiles:
       smokeCommand: ["pnpm", "storybook", "test", "--stories-json", "{{storyFile}}"]
 ```
 
-### ランナー・ステップ割り当て
+### ランナー
 
 ```yaml
 runners:
@@ -85,33 +131,11 @@ runners:
     command: gh
     args: ["copilot"]
     promptFlag: "--prompt"
-
-claude:
-  skillBundles:
-    backend-core: [harness-backend-core]
-    backend-impl: [harness-backend-impl]
-    backend-review-criteria: [harness-backend-review-criteria]
-    backend-review-quality: [harness-backend-review-quality]
-    backend-failure-modes: [harness-backend-failure-modes]
-
-flow: full          # full | light
-fallbackRunner: claude
-
-steps:
-  test_generate: claude
-  test_self_quality: claude
-  test_external_review: codex
-  impl_generate: claude
-  impl_self_criteria: claude
-  impl_self_quality: copilot     # ステップごとに差し替え可能
-  impl_external_review: claude-opus-review
-  lint_fix: claude
-  apply_fixes: claude
-  judgment_summary: claude
-  judge_minor: claude
 ```
 
-`profile` は lint / test / sourceLayout を選ぶための設定で、LLM サービスの切り替えには使わない。どのサービスを reviewer に使うかは `runners` と `steps` で決める。
+`profile` は lint / test / sourceLayout だけでなく `flow` / `fallbackRunner` / `steps` / `context` まで含む実行単位です。runner の切り替えは `profiles.<name>.steps` で行います。
+
+project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込み、存在しない場合のみ `.claude/skills/<name>/SKILL.md` を後方互換で参照します。
 
 `.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
 

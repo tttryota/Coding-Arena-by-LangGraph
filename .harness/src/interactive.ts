@@ -1,16 +1,15 @@
 import { createInterface } from "node:readline/promises";
-import type { HarnessConfig } from "./config.ts";
 import type { FlowMode, FlowStep } from "./steps.ts";
 import { LIGHT_SKIP_STEPS } from "./steps.ts";
 
 export async function interactiveRunnerAssignment(
-  config: HarnessConfig,
+  runnerNames: string[],
+  stepMapping: Record<FlowStep, string>,
   flowMode: FlowMode,
 ): Promise<Partial<Record<FlowStep, string>> | null> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const runnerNames = Object.keys(config.runners);
 
-  const steps = Object.entries(config.steps)
+  const steps = Object.entries(stepMapping)
     .filter(([step]) => !(flowMode === "light" && LIGHT_SKIP_STEPS.has(step as FlowStep)))
     .map(([step, runner], i) => ({ index: i + 1, step: step as FlowStep, runner: runner as string }));
 

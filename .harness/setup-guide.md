@@ -10,7 +10,7 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの多くのステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
+- `claude` CLI が PATH に存在（external review などで使う場合）
 - プロジェクトに応じた lint/test ツール
 
 この repo では `./harness` から起動する。npm パッケージ版では `tdd-harness` を使う。
@@ -24,23 +24,46 @@ pnpm add @tsuryoryo/tdd-harness
 ```yaml
 profiles:
   backend:
+    flow: full
+    fallbackRunner: codex
+    steps:
+      test_generate: codex
+      test_self_quality: codex
+      test_external_review: claude
+      impl_generate: codex
+      impl_self_criteria: codex
+      impl_self_quality: codex
+      impl_external_review: claude
+      lint_fix: codex
+      apply_fixes: codex
+      judgment_summary: codex
+      judge_minor: codex
+      spec_generate: codex
+      test_case_generate: codex
+      component_generate: codex
+      component_self_review: codex
+      page_generate: codex
+      page_review_design: codex
+      page_review_behavior: codex
+      page_review_code: codex
+      page_browser_verify: codex
     lint: [ruff, mypy]
     test: pytest
     toolRoot: backend
     criteriaPreset: backend
-    claude:
+    context:
       defaultAgent: harness-backend-general
-      defaultSkillBundles: [backend-core]
+      defaultSkills: [harness-backend-core]
       stepOverrides:
         impl_generate:
           agent: harness-backend-impl
-          skillBundles: [backend-impl, backend-failure-modes]
+          skills: [harness-backend-impl, harness-backend-failure-modes]
         impl_self_criteria:
           agent: harness-backend-reviewer
-          skillBundles: [backend-review-criteria]
+          skills: [harness-backend-review-criteria]
         impl_self_quality:
           agent: harness-backend-reviewer
-          skillBundles: [backend-review-quality]
+          skills: [harness-backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
@@ -52,6 +75,29 @@ profiles:
 ```yaml
 profiles:
   app:
+    flow: full
+    fallbackRunner: codex
+    steps:
+      test_generate: codex
+      test_self_quality: codex
+      test_external_review: claude
+      impl_generate: codex
+      impl_self_criteria: codex
+      impl_self_quality: codex
+      impl_external_review: claude
+      lint_fix: codex
+      apply_fixes: codex
+      judgment_summary: codex
+      judge_minor: codex
+      spec_generate: codex
+      test_case_generate: codex
+      component_generate: codex
+      component_self_review: codex
+      page_generate: codex
+      page_review_design: codex
+      page_review_behavior: codex
+      page_review_code: codex
+      page_browser_verify: codex
     lint: [eslint, tsc]
     test: vitest
     toolRoot: .
@@ -67,6 +113,29 @@ profiles:
 ```yaml
 profiles:
   backend:
+    flow: full
+    fallbackRunner: codex
+    steps:
+      test_generate: codex
+      test_self_quality: codex
+      test_external_review: claude
+      impl_generate: codex
+      impl_self_criteria: codex
+      impl_self_quality: codex
+      impl_external_review: claude
+      lint_fix: codex
+      apply_fixes: codex
+      judgment_summary: codex
+      judge_minor: codex
+      spec_generate: codex
+      test_case_generate: codex
+      component_generate: codex
+      component_self_review: codex
+      page_generate: codex
+      page_review_design: codex
+      page_review_behavior: codex
+      page_review_code: codex
+      page_browser_verify: codex
     lint: [ruff, mypy]
     test: pytest
     toolRoot: backend
@@ -75,6 +144,29 @@ profiles:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
   frontend:
+    flow: full
+    fallbackRunner: codex
+    steps:
+      test_generate: codex
+      test_self_quality: codex
+      test_external_review: claude
+      impl_generate: codex
+      impl_self_criteria: codex
+      impl_self_quality: codex
+      impl_external_review: claude
+      lint_fix: codex
+      apply_fixes: codex
+      judgment_summary: codex
+      judge_minor: codex
+      spec_generate: codex
+      test_case_generate: codex
+      component_generate: codex
+      component_self_review: codex
+      page_generate: codex
+      page_review_design: codex
+      page_review_behavior: codex
+      page_review_code: codex
+      page_browser_verify: codex
     lint: [eslint, tsc]
     test: vitest
     toolRoot: frontend
@@ -93,19 +185,11 @@ runners:
   codex:
     type: codex
     sandbox: read-only
-
-claude:
-  skillBundles:
-    backend-core: [harness-backend-core]
-    backend-impl: [harness-backend-impl]
-    backend-review-criteria: [harness-backend-review-criteria]
-    backend-review-quality: [harness-backend-review-quality]
-    backend-failure-modes: [harness-backend-failure-modes]
 ```
 
 `profiles` は必須。未定義の場合はエラーになる。`tdd-harness init` でこのガイドを表示できる。
 
-`profile` は lint / test / sourceLayout を選ぶためのもので、LLM サービス選択には使わない。reviewer を切り替える場合は `runners` と `steps` を使う。
+`profile` は実行単位です。lint / test / sourceLayout に加え、`flow` / `fallbackRunner` / `steps` / `context` も profile 内に置きます。
 
 ## 利用可能なツール
 

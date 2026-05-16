@@ -49,14 +49,13 @@ async function main(): Promise<void> {
       const flowFlagIndex = args.indexOf("--flow");
       const flowFlag = flowFlagIndex !== -1 ? args[flowFlagIndex + 1] as FlowMode | undefined : undefined;
 
-      if (flowFlag) config.flow = flowFlag;
-
       // 1. plan を先に読む（Boundary 不要）
       const plan = parsePlan(projectRoot, planPath);
 
       // 2. profile 解決
       const profileName = plan.profile ?? inferProfile(config);
       const profile = resolveProfile(config, profileName);
+      const effectiveFlow = flowFlag ?? profile.flow;
 
       // 3. adapter 解決
       const lintAdapters = profile.lint.map(resolveLintAdapter);
@@ -70,10 +69,10 @@ async function main(): Promise<void> {
 
       let overrides: Partial<Record<FlowStep, string>> | null = null;
       if (!noInteractive && !resume && process.stdin.isTTY) {
-        overrides = await interactiveRunnerAssignment(config, config.flow);
+        overrides = await interactiveRunnerAssignment(Object.keys(config.runners), profile.steps, effectiveFlow);
       }
 
-      const registry = createRunnerRegistry(config, projectRoot, overrides ?? undefined);
+      const registry = createRunnerRegistry(config, projectRoot, profile, overrides ?? undefined, effectiveFlow);
 
       // 5. ImplFlow 実行
       const implFlow = new ImplFlow(boundary, registry, profile, testAdapter, lintAdapters);
@@ -90,11 +89,10 @@ async function main(): Promise<void> {
       const flowFlagIndex = args.indexOf("--flow");
       const flowFlag = flowFlagIndex !== -1 ? args[flowFlagIndex + 1] as FlowMode | undefined : undefined;
 
-      if (flowFlag) config.flow = flowFlag;
-
       const plan = parsePlan(projectRoot, planPath);
       const profileName = plan.profile ?? inferProfile(config);
       const profile = resolveProfile(config, profileName);
+      const effectiveFlow = flowFlag ?? profile.flow;
       const lintAdapters = profile.lint.map(resolveLintAdapter);
       const testAdapter = resolveTestAdapter(profile.test);
       const allAdapters: BaseAdapter[] = [...lintAdapters, testAdapter];
@@ -104,10 +102,10 @@ async function main(): Promise<void> {
 
       let overrides: Partial<Record<FlowStep, string>> | null = null;
       if (!noInteractive && process.stdin.isTTY) {
-        overrides = await interactiveRunnerAssignment(config, config.flow);
+        overrides = await interactiveRunnerAssignment(Object.keys(config.runners), profile.steps, effectiveFlow);
       }
 
-      const registry = createRunnerRegistry(config, projectRoot, overrides ?? undefined);
+      const registry = createRunnerRegistry(config, projectRoot, profile, overrides ?? undefined, effectiveFlow);
       const pageFlow = new PageFlow(boundary, registry, profile, testAdapter, lintAdapters);
       await pageFlow.run(planPath, { plan });
       break;
@@ -122,11 +120,10 @@ async function main(): Promise<void> {
       const flowFlagIndex = args.indexOf("--flow");
       const flowFlag = flowFlagIndex !== -1 ? args[flowFlagIndex + 1] as FlowMode | undefined : undefined;
 
-      if (flowFlag) config.flow = flowFlag;
-
       const plan = parsePlan(projectRoot, planPath);
       const profileName = plan.profile ?? inferProfile(config);
       const profile = resolveProfile(config, profileName);
+      const effectiveFlow = flowFlag ?? profile.flow;
       const lintAdapters = profile.lint.map(resolveLintAdapter);
       const testAdapter = resolveTestAdapter(profile.test);
       const allAdapters: BaseAdapter[] = [...lintAdapters, testAdapter];
@@ -136,10 +133,10 @@ async function main(): Promise<void> {
 
       let overrides: Partial<Record<FlowStep, string>> | null = null;
       if (!noInteractive && process.stdin.isTTY) {
-        overrides = await interactiveRunnerAssignment(config, config.flow);
+        overrides = await interactiveRunnerAssignment(Object.keys(config.runners), profile.steps, effectiveFlow);
       }
 
-      const registry = createRunnerRegistry(config, projectRoot, overrides ?? undefined);
+      const registry = createRunnerRegistry(config, projectRoot, profile, overrides ?? undefined, effectiveFlow);
       const componentFlow = new ComponentFlow(boundary, registry, profile, testAdapter, lintAdapters);
       await componentFlow.run(planPath, { plan });
       break;
@@ -154,13 +151,12 @@ async function main(): Promise<void> {
       const profileFlagIndex = args.indexOf("--profile");
       const profileName = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
       const boundary = new Boundary(projectRoot);
-      const registry = createRunnerRegistry(config, projectRoot);
       const logger = new HarnessLogger(`design_${featureName}`, { baseDir: join(projectRoot, DEFAULT_LOG_BASE_DIR) });
-      const profile = profileName
-        ? resolveProfile(config, profileName)
-        : Object.keys(config.profiles).length === 1
-          ? resolveProfile(config, inferProfile(config))
-          : undefined;
+      const profile = resolveProfile(
+        config,
+        profileName ?? inferProfile(config),
+      );
+      const registry = createRunnerRegistry(config, projectRoot, profile);
       const designFlow = new DesignFlow(boundary, registry, profile);
       await designFlow.run(featureName, requirements, logger);
       break;

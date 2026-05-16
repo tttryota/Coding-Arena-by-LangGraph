@@ -3,10 +3,8 @@ import { join, relative, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { HarnessError, GuardError } from "./types.ts";
 import { LINT_REGISTRY, TEST_REGISTRY } from "./tool-adapter.ts";
-import { FLOW_STEP } from "./steps.ts";
+import { FLOW_MODE, FLOW_STEP } from "./steps.ts";
 import type { FlowMode, FlowStep } from "./steps.ts";
-
-// === Runner 型（変更なし） ===
 
 export type RunnerConfig =
   | { type: "claude"; timeoutMs?: number; model?: string }
@@ -28,8 +26,6 @@ export type RunnerConfig =
       timeoutMs?: number;
     };
 
-// === SourceLayout ===
-
 export type UserSourceLayoutConfig = {
   sourceDir?: string;
   testDir?: string;
@@ -42,17 +38,17 @@ export type UserStorybookConfig = {
   smokeCommand?: string[];
 };
 
-export type UserClaudeStepOverrideConfig = {
+export type UserStepContextOverrideConfig = {
   agent?: string;
-  skillBundles?: string[];
-  mcpBundles?: string[];
+  skills?: string[];
+  mcpConfigs?: string[];
 };
 
-export type UserProfileClaudeConfig = {
+export type UserProfileContextConfig = {
   defaultAgent?: string;
-  defaultSkillBundles?: string[];
-  defaultMcpBundles?: string[];
-  stepOverrides?: Partial<Record<FlowStep, UserClaudeStepOverrideConfig>>;
+  defaultSkills?: string[];
+  defaultMcpConfigs?: string[];
+  stepOverrides?: Partial<Record<FlowStep, UserStepContextOverrideConfig>>;
 };
 
 export type SourceLayoutConfig = {
@@ -62,32 +58,28 @@ export type SourceLayoutConfig = {
   additionalAllowedPrefixes: string[];
 };
 
-export type ClaudeStepOverrideConfig = {
+export type StorybookConfig = {
+  renderCommand: string[];
+  smokeCommand: string[];
+};
+
+export type StepContextOverrideConfig = {
   agent?: string;
-  skillBundles: string[];
-  mcpBundles: string[];
+  skills: string[];
+  mcpConfigs: string[];
 };
 
-export type ProfileClaudeConfig = {
+export type ProfileContextConfig = {
   defaultAgent?: string;
-  defaultSkillBundles: string[];
-  defaultMcpBundles: string[];
-  stepOverrides: Partial<Record<FlowStep, ClaudeStepOverrideConfig>>;
+  defaultSkills: string[];
+  defaultMcpConfigs: string[];
+  stepOverrides: Partial<Record<FlowStep, StepContextOverrideConfig>>;
 };
-
-export type UserClaudeConfig = {
-  skillBundles?: Record<string, string[]>;
-  mcpBundles?: Record<string, string[]>;
-};
-
-export type ResolvedClaudeConfig = {
-  skillBundles: Record<string, string[]>;
-  mcpBundles: Record<string, string[]>;
-};
-
-// === Profile ===
 
 export type UserProfileConfig = {
+  flow: FlowMode;
+  steps: Record<FlowStep, string>;
+  fallbackRunner: string;
   lint?: string[];
   test?: string;
   sourceLayout?: UserSourceLayoutConfig;
@@ -96,15 +88,13 @@ export type UserProfileConfig = {
   toolRoot?: string;
   reviewCriteria?: string[];
   criteriaPreset?: "backend" | "frontend";
-  claude?: UserProfileClaudeConfig;
-};
-
-export type StorybookConfig = {
-  renderCommand: string[];
-  smokeCommand: string[];
+  context?: UserProfileContextConfig;
 };
 
 export type ResolvedProfileConfig = {
+  flow: FlowMode;
+  steps: Record<FlowStep, string>;
+  fallbackRunner: string;
   lint: string[];
   test: string;
   sourceLayout: SourceLayoutConfig;
@@ -113,35 +103,22 @@ export type ResolvedProfileConfig = {
   toolRoot: string;
   reviewCriteria: string[];
   criteriaPreset: "backend" | "frontend" | undefined;
-  claude?: ProfileClaudeConfig;
+  context?: ProfileContextConfig;
 };
-
-// === Config ===
 
 export type HarnessUserConfig = {
   profiles?: Record<string, UserProfileConfig>;
   runners?: Record<string, RunnerConfig>;
-  flow?: FlowMode;
-  steps?: Partial<Record<FlowStep, string>>;
-  fallbackRunner?: string;
   templates?: Record<string, string | null>;
-  claude?: UserClaudeConfig;
 };
 
 export type ResolvedConfig = {
   profiles: Record<string, ResolvedProfileConfig>;
   runners: Record<string, RunnerConfig>;
-  flow: FlowMode;
-  steps: Partial<Record<FlowStep, string>>;
-  fallbackRunner: string;
   templates: Record<string, string | null>;
-  claude: ResolvedClaudeConfig;
 };
 
-// 旧 HarnessConfig との互換エイリアス（既存 import を壊さないため）
 export type HarnessConfig = ResolvedConfig;
-
-// === 定数 ===
 
 const PREFERRED_CONFIG_PATH = ".harness/harness.yml";
 const LEGACY_CONFIG_PATH = ".harness.yml";
@@ -151,31 +128,7 @@ const CONFIG_FILENAMES = [
   LEGACY_CONFIG_PATH,
   ".harness.yaml",
 ];
-
-const DEFAULT_STEPS: Partial<Record<FlowStep, string>> = {
-  test_generate: "claude",
-  test_self_quality: "claude",
-  test_external_review: "claude",
-  impl_generate: "claude",
-  impl_self_criteria: "claude",
-  impl_self_quality: "claude",
-  impl_external_review: "claude",
-  lint_fix: "claude",
-  apply_fixes: "claude",
-  judgment_summary: "claude",
-  judge_minor: "claude",
-  spec_generate: "claude",
-  test_case_generate: "claude",
-  component_generate: "claude",
-  component_self_review: "claude",
-  page_generate: "claude",
-  page_review_design: "claude",
-  page_review_behavior: "claude",
-  page_review_code: "claude",
-  page_browser_verify: "claude",
-};
-
-// === loadConfig ===
+const ALL_FLOW_STEPS = Object.values(FLOW_STEP);
 
 export function loadConfig(projectRoot: string): ResolvedConfig {
   let userConfig: HarnessUserConfig = {};
@@ -193,54 +146,24 @@ export function loadConfig(projectRoot: string): ResolvedConfig {
     }
   }
 
-  // 型ガード: トップレベルフィールドの簡易検証
   validateUserConfigShape(userConfig);
-
-  // profiles がない場合は Python デフォルトに移行
   const migrated = requireProfiles(userConfig);
-
-  const runners = migrated.runners ?? { claude: { type: "claude" } };
-  const runnerNames = Object.keys(runners);
-  const defaultRunner = migrated.fallbackRunner ?? runnerNames[0] ?? "claude";
-
-  // ユーザー指定の steps に未知 runner があればエラー（typo 検出）
-  if (migrated.steps) {
-    for (const [step, runner] of Object.entries(migrated.steps)) {
-      if (runner && !runners[runner]) {
-        throw new GuardError(
-          `steps.${step} に指定された runner "${runner}" が runners に存在しません。利用可能: ${runnerNames.join(", ")}`,
-        );
-      }
-    }
-  }
-
-  // デフォルト steps: runners に "claude" があれば claude、なければ先頭 runner
-  const stepDefault = runners["claude"] ? "claude" : runnerNames[0] ?? "claude";
-  const defaultSteps: Partial<Record<FlowStep, string>> = {};
-  for (const [key, val] of Object.entries(DEFAULT_STEPS)) {
-    // デフォルト runner が利用不可なら stepDefault に差し替え
-    defaultSteps[key as FlowStep] = val && runners[val] ? val : stepDefault;
-  }
-  const mergedSteps = { ...defaultSteps, ...migrated.steps };
-
   const resolved: ResolvedConfig = {
     profiles: resolveProfiles(migrated.profiles ?? {}, projectRoot),
-    runners,
-    flow: migrated.flow ?? "full",
-    steps: mergedSteps,
-    fallbackRunner: defaultRunner,
+    runners: migrated.runners ?? { claude: { type: "claude" } },
     templates: migrated.templates ?? {},
-    claude: resolveClaudeConfig(migrated.claude),
   };
 
   validateConfig(resolved);
   return resolved;
 }
 
-// === 入力スキーマ検証 ===
-
 function validateUserConfigShape(config: HarnessUserConfig): void {
-  // profiles の各 profile.lint が配列であること
+  rejectLegacyTopLevelField(config, "flow", "profiles.<name>.flow");
+  rejectLegacyTopLevelField(config, "steps", "profiles.<name>.steps");
+  rejectLegacyTopLevelField(config, "fallbackRunner", "profiles.<name>.fallbackRunner");
+  rejectLegacyTopLevelField(config, "claude", "profiles.<name>.context");
+
   if (config.profiles) {
     if (typeof config.profiles !== "object" || Array.isArray(config.profiles)) {
       throw new GuardError("profiles はオブジェクト形式で指定してください。");
@@ -249,6 +172,22 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
       if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
         throw new GuardError(`profile "${name}" はオブジェクト形式で指定してください（配列不可）。`);
       }
+
+      rejectLegacyProfileField(profile, name, "claude", "context");
+
+      if (profile.flow === undefined) {
+        throw new GuardError(`profile "${name}".flow は必須です。full または light を指定してください。`);
+      }
+      if (profile.flow !== FLOW_MODE.FULL && profile.flow !== FLOW_MODE.LIGHT) {
+        throw new GuardError(
+          `profile "${name}".flow は "full" または "light" で指定してください。受け取った値: "${profile.flow}"`,
+        );
+      }
+      if (profile.fallbackRunner === undefined || typeof profile.fallbackRunner !== "string" || profile.fallbackRunner.length === 0) {
+        throw new GuardError(`profile "${name}".fallbackRunner は空でない文字列で指定してください。`);
+      }
+      validateStepRunnerMapShape(profile.steps, `profile "${name}".steps`);
+
       if (profile.lint !== undefined && !Array.isArray(profile.lint)) {
         throw new GuardError(
           `profile "${name}".lint は配列で指定してください。例: lint: [ruff, mypy]`,
@@ -323,48 +262,25 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
       if (profile.toolRoot !== undefined && typeof profile.toolRoot !== "string") {
         throw new GuardError(`profile "${name}".toolRoot は文字列である必要があります。`);
       }
-      if (profile.claude !== undefined) {
-        validateProfileClaudeConfig(profile.claude, `profile "${name}".claude`);
+      if (profile.context !== undefined) {
+        validateProfileContextConfig(profile.context, `profile "${name}".context`);
       }
     }
   }
 
-  // fallbackRunner / templates / steps の型検証
-  if (config.fallbackRunner !== undefined && typeof config.fallbackRunner !== "string") {
-    throw new GuardError("fallbackRunner は文字列で指定してください。");
-  }
   if (config.templates !== undefined) {
     if (typeof config.templates !== "object" || Array.isArray(config.templates)) {
       throw new GuardError("templates はオブジェクト形式で指定してください。");
     }
   }
-  if (config.claude !== undefined) {
-    validateBundleRecord(config.claude.skillBundles, "claude.skillBundles");
-    validateBundleRecord(config.claude.mcpBundles, "claude.mcpBundles");
-  }
-  if (config.steps !== undefined) {
-    if (typeof config.steps !== "object" || Array.isArray(config.steps)) {
-      throw new GuardError("steps はオブジェクト形式で指定してください。");
-    }
-  }
 
-  // flow の enum 検証
-  if (config.flow !== undefined && config.flow !== "full" && config.flow !== "light") {
-    throw new GuardError(
-      `flow は "full" または "light" で指定してください。受け取った値: "${config.flow}"`,
-    );
-  }
-
-  // runners の shape 検証
   if (config.runners !== undefined) {
     if (typeof config.runners !== "object" || Array.isArray(config.runners)) {
       throw new GuardError("runners はオブジェクト形式で指定してください。");
     }
     for (const [name, runner] of Object.entries(config.runners)) {
       if (!runner || typeof runner !== "object" || !("type" in runner)) {
-        throw new GuardError(
-          `runner "${name}" には type フィールドが必要です。`,
-        );
+        throw new GuardError(`runner "${name}" には type フィールドが必要です。`);
       }
       const r = runner as Record<string, unknown>;
       const validTypes = ["claude", "codex", "generic"];
@@ -457,7 +373,97 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
   }
 }
 
-// === profiles 検証 ===
+function rejectLegacyTopLevelField(
+  config: HarnessUserConfig,
+  field: string,
+  replacement: string,
+): void {
+  if (field in config) {
+    throw new GuardError(`${field} はトップレベルでは使えません。${replacement} に移動してください。`);
+  }
+}
+
+function rejectLegacyProfileField(
+  profile: UserProfileConfig,
+  profileName: string,
+  field: string,
+  replacement: string,
+): void {
+  if (field in profile) {
+    throw new GuardError(`profile "${profileName}".${field} は廃止されました。profile "${profileName}".${replacement} を使ってください。`);
+  }
+}
+
+function validateStepRunnerMapShape(
+  value: unknown,
+  field: string,
+): void {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new GuardError(`${field} はオブジェクト形式で指定してください。`);
+  }
+
+  const entries = value as Record<string, unknown>;
+  const validStepKeys = new Set(ALL_FLOW_STEPS);
+
+  for (const [step, runner] of Object.entries(entries)) {
+    if (!validStepKeys.has(step as FlowStep)) {
+      throw new GuardError(
+        `${field} に未知の step "${step}" が指定されています。利用可能: ${ALL_FLOW_STEPS.join(", ")}`,
+      );
+    }
+    if (typeof runner !== "string" || runner.length === 0) {
+      throw new GuardError(`${field}.${step} は空でない文字列で指定してください。`);
+    }
+  }
+
+  const missingSteps = ALL_FLOW_STEPS.filter((step) => !(step in entries));
+  if (missingSteps.length > 0) {
+    throw new GuardError(`${field} に不足している step があります: ${missingSteps.join(", ")}`);
+  }
+}
+
+function validateProfileContextConfig(
+  value: UserProfileContextConfig,
+  field: string,
+): void {
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new GuardError(`${field} はオブジェクト形式で指定してください。`);
+  }
+  if (value.defaultAgent !== undefined && typeof value.defaultAgent !== "string") {
+    throw new GuardError(`${field}.defaultAgent は文字列で指定してください。`);
+  }
+  if (value.defaultSkills !== undefined) {
+    validateStringArrayField(value.defaultSkills, `${field}.defaultSkills`);
+  }
+  if (value.defaultMcpConfigs !== undefined) {
+    validateStringArrayField(value.defaultMcpConfigs, `${field}.defaultMcpConfigs`);
+  }
+  if (value.stepOverrides === undefined) return;
+  if (typeof value.stepOverrides !== "object" || Array.isArray(value.stepOverrides)) {
+    throw new GuardError(`${field}.stepOverrides はオブジェクト形式で指定してください。`);
+  }
+
+  const validStepKeys = new Set(ALL_FLOW_STEPS);
+  for (const [step, override] of Object.entries(value.stepOverrides)) {
+    if (!validStepKeys.has(step as FlowStep)) {
+      throw new GuardError(
+        `${field}.stepOverrides に未知の step "${step}" が指定されています。利用可能: ${ALL_FLOW_STEPS.join(", ")}`,
+      );
+    }
+    if (!override || typeof override !== "object" || Array.isArray(override)) {
+      throw new GuardError(`${field}.stepOverrides.${step} はオブジェクト形式で指定してください。`);
+    }
+    if (override.agent !== undefined && typeof override.agent !== "string") {
+      throw new GuardError(`${field}.stepOverrides.${step}.agent は文字列で指定してください。`);
+    }
+    if (override.skills !== undefined) {
+      validateStringArrayField(override.skills, `${field}.stepOverrides.${step}.skills`);
+    }
+    if (override.mcpConfigs !== undefined) {
+      validateStringArrayField(override.mcpConfigs, `${field}.stepOverrides.${step}.mcpConfigs`);
+    }
+  }
+}
 
 function requireProfiles(config: HarnessUserConfig): HarnessUserConfig {
   if (config.profiles && Object.keys(config.profiles).length > 0) {
@@ -467,8 +473,6 @@ function requireProfiles(config: HarnessUserConfig): HarnessUserConfig {
     `profiles が定義されていません。${configLocationMessage()} に profiles を追加してください。\n\`tdd-harness init\` でセットアップガイドを表示できます。`,
   );
 }
-
-// === Profile 解決 ===
 
 function resolveProfiles(
   profiles: Record<string, UserProfileConfig>,
@@ -485,7 +489,6 @@ function resolveOneProfile(
   user: UserProfileConfig,
   projectRoot: string,
 ): ResolvedProfileConfig {
-  // 明示指定されたツール名を先に検証
   if (user.lint !== undefined) {
     for (const t of user.lint) {
       if (!LINT_REGISTRY[t]) {
@@ -501,7 +504,6 @@ function resolveOneProfile(
     );
   }
 
-  // デフォルト適用
   const hasExplicitLint = user.lint !== undefined;
   const hasExplicitTest = user.test !== undefined;
 
@@ -535,6 +537,7 @@ function resolveOneProfile(
       );
     }
   }
+
   const rawToolRoot = user.toolRoot ?? ".";
   const toolRoot = resolve(projectRoot, rawToolRoot);
   const exec = normalizeExec(user.exec);
@@ -545,7 +548,6 @@ function resolveOneProfile(
         smokeCommand: [...(user.storybook.smokeCommand ?? [])],
       }
     : undefined;
-
   const userLayout = user.sourceLayout;
   const sourceLayout: SourceLayoutConfig = {
     sourceDir: userLayout?.sourceDir ?? "backend/{{category}}",
@@ -558,6 +560,9 @@ function resolveOneProfile(
   };
 
   return {
+    flow: user.flow,
+    steps: cloneStepMap(user.steps),
+    fallbackRunner: user.fallbackRunner,
     lint,
     test,
     sourceLayout,
@@ -566,11 +571,15 @@ function resolveOneProfile(
     toolRoot,
     reviewCriteria,
     criteriaPreset: user.criteriaPreset,
-    claude: resolveProfileClaudeConfig(user.claude),
+    context: resolveProfileContextConfig(user.context),
   };
 }
 
-// === exec 正規化 ===
+function cloneStepMap(steps: Record<FlowStep, string>): Record<FlowStep, string> {
+  return Object.fromEntries(
+    ALL_FLOW_STEPS.map((step) => [step, steps[step]]),
+  ) as Record<FlowStep, string>;
+}
 
 function normalizeExec(raw: unknown): string[] {
   if (raw === undefined || raw === null) return [];
@@ -606,10 +615,7 @@ function validateExecElement(elem: string): void {
       `exec の要素に前後の空白を含む文字列は指定できません: "${elem}"`,
     );
   }
-  // 内部空白は許可（execFile は引数を個別に渡すため安全。Windows の "Program Files" 等に対応）
 }
-
-// === Validation ===
 
 function validateConfig(config: ResolvedConfig): void {
   const profileNames = Object.keys(config.profiles);
@@ -619,48 +625,25 @@ function validateConfig(config: ResolvedConfig): void {
     );
   }
 
-  for (const [name, profile] of Object.entries(config.profiles)) {
-    validateProfile(name, profile, config.claude);
-  }
-
-  // runners
   const runnerNames = Object.keys(config.runners);
   if (runnerNames.length === 0) {
     throw new GuardError("runners が定義されていません。");
   }
-  if (!config.runners[config.fallbackRunner]) {
-    throw new GuardError(
-      `fallbackRunner "${config.fallbackRunner}" が runners に存在しません。利用可能: ${runnerNames.join(", ")}`,
-    );
-  }
-  const validStepKeys = new Set(Object.values(FLOW_STEP));
-  for (const [step, runner] of Object.entries(config.steps)) {
-    if (!validStepKeys.has(step as FlowStep)) {
-      throw new GuardError(
-        `steps に未知のキー "${step}" が指定されています。利用可能: ${[...validStepKeys].join(", ")}`,
-      );
-    }
-    if (runner && !config.runners[runner]) {
-      throw new GuardError(
-        `steps.${step} に指定された runner "${runner}" が runners に存在しません。利用可能: ${runnerNames.join(", ")}`,
-      );
-    }
+
+  for (const [name, profile] of Object.entries(config.profiles)) {
+    validateProfile(name, profile, runnerNames);
   }
 }
 
 function validateProfile(
   name: string,
   profile: ResolvedProfileConfig,
-  rootClaudeConfig: ResolvedClaudeConfig,
+  runnerNames: string[],
 ): void {
-  // lint 非空
   if (profile.lint.length === 0) {
-    throw new GuardError(
-      `profile "${name}": lint ツールが指定されていません。`,
-    );
+    throw new GuardError(`profile "${name}": lint ツールが指定されていません。`);
   }
 
-  // lint ツール存在確認
   for (const tool of profile.lint) {
     if (!LINT_REGISTRY[tool]) {
       throw new GuardError(
@@ -669,24 +652,19 @@ function validateProfile(
     }
   }
 
-  // mixed runtime 禁止
-  const runtimes = new Set(
-    profile.lint.map((t) => LINT_REGISTRY[t].runtime),
-  );
+  const runtimes = new Set(profile.lint.map((t) => LINT_REGISTRY[t].runtime));
   if (runtimes.size > 1) {
     throw new GuardError(
       `profile "${name}": 異なる runtime の lint ツールを混在させることはできません（検出: ${[...runtimes].join(", ")}）。profile を分けてください。`,
     );
   }
 
-  // test ツール存在確認
   if (!TEST_REGISTRY[profile.test]) {
     throw new GuardError(
       `profile "${name}": 未知のテストランナー "${profile.test}"。利用可能: ${Object.keys(TEST_REGISTRY).join(", ")}`,
     );
   }
 
-  // test runtime と lint runtime の一致
   const lintRuntime = [...runtimes][0];
   const testRuntime = TEST_REGISTRY[profile.test].runtime;
   if (lintRuntime && testRuntime !== lintRuntime) {
@@ -695,7 +673,6 @@ function validateProfile(
     );
   }
 
-  // sourceLayout validation
   validatePathTemplate(
     `profile "${name}".sourceLayout.sourceDir`,
     profile.sourceLayout.sourceDir,
@@ -718,8 +695,20 @@ function validateProfile(
     validateResolvedStringArray(profile.storybook.renderCommand, `profile "${name}".storybook.renderCommand`);
     validateResolvedStringArray(profile.storybook.smokeCommand, `profile "${name}".storybook.smokeCommand`);
   }
-  if (profile.claude) {
-    validateResolvedProfileClaudeConfig(name, profile.claude, rootClaudeConfig);
+
+  if (!runnerNames.includes(profile.fallbackRunner)) {
+    throw new GuardError(
+      `profile "${name}".fallbackRunner "${profile.fallbackRunner}" が runners に存在しません。利用可能: ${runnerNames.join(", ")}`,
+    );
+  }
+
+  for (const step of ALL_FLOW_STEPS) {
+    const runner = profile.steps[step];
+    if (!runnerNames.includes(runner)) {
+      throw new GuardError(
+        `profile "${name}".steps.${step} に指定された runner "${runner}" が runners に存在しません。利用可能: ${runnerNames.join(", ")}`,
+      );
+    }
   }
 }
 
@@ -734,143 +723,26 @@ function validateStringArrayField(value: unknown, field: string): void {
   }
 }
 
-function validateBundleRecord(
-  value: Record<string, string[]> | undefined,
-  field: string,
-): void {
-  if (value === undefined) return;
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new GuardError(`${field} はオブジェクト形式で指定してください。`);
-  }
-  for (const [name, entries] of Object.entries(value)) {
-    validateStringArrayField(entries, `${field}.${name}`);
-  }
-}
-
-function validateProfileClaudeConfig(
-  value: UserProfileClaudeConfig,
-  field: string,
-): void {
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new GuardError(`${field} はオブジェクト形式で指定してください。`);
-  }
-  if (value.defaultAgent !== undefined && typeof value.defaultAgent !== "string") {
-    throw new GuardError(`${field}.defaultAgent は文字列で指定してください。`);
-  }
-  if (value.defaultSkillBundles !== undefined) {
-    validateStringArrayField(value.defaultSkillBundles, `${field}.defaultSkillBundles`);
-  }
-  if (value.defaultMcpBundles !== undefined) {
-    validateStringArrayField(value.defaultMcpBundles, `${field}.defaultMcpBundles`);
-  }
-  if (value.stepOverrides === undefined) return;
-  if (typeof value.stepOverrides !== "object" || Array.isArray(value.stepOverrides)) {
-    throw new GuardError(`${field}.stepOverrides はオブジェクト形式で指定してください。`);
-  }
-
-  const validStepKeys = new Set(Object.values(FLOW_STEP));
-  for (const [step, override] of Object.entries(value.stepOverrides)) {
-    if (!validStepKeys.has(step as FlowStep)) {
-      throw new GuardError(
-        `${field}.stepOverrides に未知の step "${step}" が指定されています。利用可能: ${[...validStepKeys].join(", ")}`,
-      );
-    }
-    if (!override || typeof override !== "object" || Array.isArray(override)) {
-      throw new GuardError(`${field}.stepOverrides.${step} はオブジェクト形式で指定してください。`);
-    }
-    if (override.agent !== undefined && typeof override.agent !== "string") {
-      throw new GuardError(`${field}.stepOverrides.${step}.agent は文字列で指定してください。`);
-    }
-    if (override.skillBundles !== undefined) {
-      validateStringArrayField(override.skillBundles, `${field}.stepOverrides.${step}.skillBundles`);
-    }
-    if (override.mcpBundles !== undefined) {
-      validateStringArrayField(override.mcpBundles, `${field}.stepOverrides.${step}.mcpBundles`);
-    }
-  }
-}
-
-function resolveClaudeConfig(user: UserClaudeConfig | undefined): ResolvedClaudeConfig {
-  return {
-    skillBundles: cloneBundleRecord(user?.skillBundles),
-    mcpBundles: cloneBundleRecord(user?.mcpBundles),
-  };
-}
-
-function cloneBundleRecord(
-  bundles: Record<string, string[]> | undefined,
-): Record<string, string[]> {
-  if (!bundles) return {};
-  return Object.fromEntries(
-    Object.entries(bundles).map(([name, entries]) => [name, [...entries]]),
-  );
-}
-
-function resolveProfileClaudeConfig(
-  user: UserProfileClaudeConfig | undefined,
-): ProfileClaudeConfig | undefined {
+function resolveProfileContextConfig(
+  user: UserProfileContextConfig | undefined,
+): ProfileContextConfig | undefined {
   if (!user) return undefined;
 
-  const stepOverrides: Partial<Record<FlowStep, ClaudeStepOverrideConfig>> = {};
+  const stepOverrides: Partial<Record<FlowStep, StepContextOverrideConfig>> = {};
   for (const [step, override] of Object.entries(user.stepOverrides ?? {})) {
     stepOverrides[step as FlowStep] = {
       agent: override?.agent,
-      skillBundles: [...(override?.skillBundles ?? [])],
-      mcpBundles: [...(override?.mcpBundles ?? [])],
+      skills: [...(override?.skills ?? [])],
+      mcpConfigs: [...(override?.mcpConfigs ?? [])],
     };
   }
 
   return {
     defaultAgent: user.defaultAgent,
-    defaultSkillBundles: [...(user.defaultSkillBundles ?? [])],
-    defaultMcpBundles: [...(user.defaultMcpBundles ?? [])],
+    defaultSkills: [...(user.defaultSkills ?? [])],
+    defaultMcpConfigs: [...(user.defaultMcpConfigs ?? [])],
     stepOverrides,
   };
-}
-
-function validateResolvedProfileClaudeConfig(
-  profileName: string,
-  claude: ProfileClaudeConfig,
-  rootClaudeConfig: ResolvedClaudeConfig,
-): void {
-  validateBundleRefs(
-    claude.defaultSkillBundles,
-    rootClaudeConfig.skillBundles,
-    `profile "${profileName}".claude.defaultSkillBundles`,
-  );
-  validateBundleRefs(
-    claude.defaultMcpBundles,
-    rootClaudeConfig.mcpBundles,
-    `profile "${profileName}".claude.defaultMcpBundles`,
-  );
-
-  for (const [step, override] of Object.entries(claude.stepOverrides)) {
-    if (!override) continue;
-    validateBundleRefs(
-      override.skillBundles,
-      rootClaudeConfig.skillBundles,
-      `profile "${profileName}".claude.stepOverrides.${step}.skillBundles`,
-    );
-    validateBundleRefs(
-      override.mcpBundles,
-      rootClaudeConfig.mcpBundles,
-      `profile "${profileName}".claude.stepOverrides.${step}.mcpBundles`,
-    );
-  }
-}
-
-function validateBundleRefs(
-  bundleNames: string[],
-  availableBundles: Record<string, string[]>,
-  field: string,
-): void {
-  for (const bundleName of bundleNames) {
-    if (!availableBundles[bundleName]) {
-      throw new GuardError(
-        `${field} に未知の bundle "${bundleName}" が指定されています。利用可能: ${Object.keys(availableBundles).join(", ") || "なし"}`,
-      );
-    }
-  }
 }
 
 function validateResolvedStringArray(value: string[], field: string): void {
@@ -893,7 +765,6 @@ function validatePathTemplate(field: string, value: string): void {
       `${field}: ".." を含むパスは指定できません: "${value}"`,
     );
   }
-  // 許可プレースホルダ以外の {{ }} を拒否
   const withoutPlaceholders = value
     .replaceAll("{{category}}", "")
     .replaceAll("{{name}}", "");
@@ -902,7 +773,6 @@ function validatePathTemplate(field: string, value: string): void {
       `${field}: 未知のプレースホルダが含まれています: "${value}"。許可: {{category}}, {{name}}`,
     );
   }
-  // CLI メタ文字禁止（* も禁止。scopePattern は別 validator）
   if (/[,)()*?\\]/.test(withoutPlaceholders)) {
     throw new GuardError(
       `${field}: 特殊文字（, ) ( * ? \\）は許可されていません: "${value}"`,
@@ -911,18 +781,14 @@ function validatePathTemplate(field: string, value: string): void {
 }
 
 function validateScopePattern(field: string, value: string): void {
-  // 末尾の /* または /** を除去してから validatePathTemplate
   const trimmed = value.replace(/\/\*{1,2}$/, "");
   validatePathTemplate(field, trimmed);
-  // 末尾は /* か /** でなければならない
   if (!value.endsWith("/*") && !value.endsWith("/**")) {
     throw new GuardError(
       `${field}: scopePattern の末尾は "/*" または "/**" である必要があります: "${value}"`,
     );
   }
 }
-
-// === Profile 解決ユーティリティ ===
 
 export function inferProfile(config: ResolvedConfig): string {
   const names = Object.keys(config.profiles);

@@ -2,9 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRunnerRegistry } from "./runner-registry.ts";
 import { FLOW_STEP } from "./steps.ts";
-import type { HarnessConfig } from "./config.ts";
+import type { HarnessConfig, ResolvedProfileConfig } from "./config.ts";
 
 test("runner registry preserves review API on wrapped runners", () => {
+  const steps = Object.fromEntries(
+    Object.values(FLOW_STEP).map((step) => [step, "codexReviewer"]),
+  ) as Record<(typeof FLOW_STEP)[keyof typeof FLOW_STEP], string>;
   const config: HarnessConfig = {
     runners: {
       codexReviewer: {
@@ -12,22 +15,28 @@ test("runner registry preserves review API on wrapped runners", () => {
         sandbox: "read-only",
       },
     },
-    fallbackRunner: "codexReviewer",
-    steps: {
-      ...Object.fromEntries(
-        Object.values(FLOW_STEP).map((step) => [step, "codexReviewer"]),
-      ),
-    } as HarnessConfig["steps"],
-    flow: "full",
     templates: {},
     profiles: {},
-    claude: {
-      skillBundles: {},
-      mcpBundles: {},
+  };
+  const profile: ResolvedProfileConfig = {
+    flow: "full",
+    steps,
+    fallbackRunner: "codexReviewer",
+    lint: ["ruff", "mypy"],
+    test: "pytest",
+    sourceLayout: {
+      sourceDir: "backend/{{category}}",
+      testDir: "backend/{{category}}/tests",
+      scopePattern: "backend/{{category}}/*",
+      additionalAllowedPrefixes: ["docs/reviews/"],
     },
+    exec: [],
+    toolRoot: "/tmp/project",
+    reviewCriteria: [],
+    criteriaPreset: "backend",
   };
 
-  const registry = createRunnerRegistry(config, "/tmp/project");
+  const registry = createRunnerRegistry(config, "/tmp/project", profile);
   const runner = registry.getRunner(FLOW_STEP.IMPL_EXTERNAL_REVIEW);
 
   assert.equal(typeof runner.review, "function");

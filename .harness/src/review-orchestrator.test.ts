@@ -35,10 +35,6 @@ test("ReviewOrchestrator uses runner.run for external implementation review", as
     },
     getConfig() {
       return {
-        claude: {
-          skillBundles: {},
-          mcpBundles: {},
-        },
         templates: {},
       };
     },
@@ -83,10 +79,6 @@ test("ReviewOrchestrator skips external test review when skipExternalReview is s
     },
     getConfig() {
       return {
-        claude: {
-          skillBundles: {},
-          mcpBundles: {},
-        },
         templates: {},
       };
     },

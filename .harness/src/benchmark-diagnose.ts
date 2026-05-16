@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { loadConfig, resolveProfile } from "./config.ts";
-import { resolveClaudeStepContext } from "./claude-context.ts";
+import { findSkillFilePath, resolveStepContext } from "./step-context.ts";
 import { loadTemplate } from "./templates.ts";
 import { summarizeRunnerUsageFromLog } from "./logger.ts";
 import { GuardError } from "./types.ts";
@@ -440,9 +440,10 @@ function computePromptBaggageSizes(
     const result: Partial<Record<string, { staticPromptChars: number; templateChars: number; skillPromptChars: number }>> = {};
     for (const step of SUMMARY_STEP_ORDER) {
       const flowStep = step as FlowStep;
-      const context = resolveClaudeStepContext(config, profile, flowStep, projectRoot);
+      const context = resolveStepContext(profile, flowStep);
       const skillPromptChars = context.skillNames
-        .map((skillName) => join(projectRoot, ".claude", "skills", skillName, "SKILL.md"))
+        .map((skillName) => findSkillFilePath(projectRoot, skillName))
+        .filter((filePath): filePath is string => typeof filePath === "string")
         .filter((filePath) => existsSync(filePath))
         .reduce((sum, filePath) => sum + readFileSync(filePath, "utf-8").length, 0);
       const templateChars = uniqueStrings(TEMPLATE_MAP[flowStep] ?? [])

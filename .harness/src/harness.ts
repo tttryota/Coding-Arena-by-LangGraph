@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { HarnessLogger } from "./logger.ts";
+import { HarnessLogger, DEFAULT_LOG_BASE_DIR } from "./logger.ts";
 import { HarnessError } from "./types.ts";
 import { Boundary } from "./boundary.ts";
 import { DesignFlow } from "./design-flow.ts";
@@ -155,7 +155,7 @@ async function main(): Promise<void> {
       const profileName = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
       const boundary = new Boundary(projectRoot);
       const registry = createRunnerRegistry(config, projectRoot);
-      const logger = new HarnessLogger(`design_${featureName}`, { baseDir: join(projectRoot, "logs") });
+      const logger = new HarnessLogger(`design_${featureName}`, { baseDir: join(projectRoot, DEFAULT_LOG_BASE_DIR) });
       const profile = profileName
         ? resolveProfile(config, profileName)
         : Object.keys(config.profiles).length === 1

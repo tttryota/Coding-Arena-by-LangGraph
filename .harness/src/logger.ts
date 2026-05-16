@@ -3,6 +3,8 @@ import { join } from "node:path";
 import type { CommandResult, CheckpointData } from "./types.ts";
 import { EVENT } from "./types.ts";
 
+export const DEFAULT_LOG_BASE_DIR = ".harness/logs";
+
 type LoggerOptions = {
   baseDir?: string;
   redactOutput?: boolean;
@@ -58,7 +60,7 @@ export class HarnessLogger {
   private redactOutput: boolean;
 
   constructor(taskName: string, options?: LoggerOptions) {
-    this.baseDir = options?.baseDir ?? "logs";
+    this.baseDir = options?.baseDir ?? DEFAULT_LOG_BASE_DIR;
     this.redactOutput = options?.redactOutput ?? true;
 
     // パストラバーサル防止: taskName から危険な文字を除去

@@ -4,7 +4,7 @@ import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import { stringify as stringifyYaml } from "yaml";
-import { HarnessLogger } from "./logger.ts";
+import { HarnessLogger, DEFAULT_LOG_BASE_DIR } from "./logger.ts";
 import { LintGuard } from "./lint-guard.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { Boundary } from "./boundary.ts";
@@ -55,7 +55,7 @@ export class ComponentFlow {
     this.validateComponentPlan(plan);
 
     const root = this.boundary.getProjectRoot();
-    const logger = new HarnessLogger(`component_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, "logs") });
+    const logger = new HarnessLogger(`component_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, DEFAULT_LOG_BASE_DIR) });
     const lintGuard = new LintGuard(logger, this.lintAdapters, {
       toolRoot: this.profile.toolRoot,
       execOverride: this.profile.exec,

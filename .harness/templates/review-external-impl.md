@@ -7,6 +7,12 @@
 ## 仕様書
 {{spec}}
 
+## 根拠の制約
+- 現在の対象コードと現在の仕様書だけを根拠に判断する
+- `.harness/logs/` 配下、および repo 直下 `logs/` 配下の review / usage / transcript / checkpoint を根拠にしない
+- `.harness/` 配下の現在タスクと無関係な補助ファイルを根拠にしない
+- 過去 run の review / usage / transcript を根拠にしない
+
 ## 観点
 - 仕様書の受け入れ基準を全て満たしているか
 - 仕様書の境界条件の定義と実装が一致しているか

@@ -17,6 +17,12 @@
 - 仕様書: {{specPath}}
 - テストケース文書: {{testCasesPath}}
 
+## 根拠の制約
+- 現在の変更 diff、現在の対象コード、現在の仕様書、現在のテストケース文書だけを根拠に判断する
+- `.harness/logs/` 配下、および repo 直下 `logs/` 配下の review / usage / transcript / checkpoint を根拠にしない
+- `.harness/` 配下の現在タスクと無関係な補助ファイルを根拠にしない
+- 過去 run の review / usage / transcript を根拠にしない
+
 ## レビュー観点
 - テスト入力データが仕様の条件を正しく表しているか
 - 期待値が仕様と一致しているか

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { resolve, join, basename } from "node:path";
-import { HarnessLogger, redact } from "./logger.ts";
+import { HarnessLogger, DEFAULT_LOG_BASE_DIR, redact } from "./logger.ts";
 import { LintGuard } from "./lint-guard.ts";
 import { DriftGuard } from "./drift-guard.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
@@ -269,7 +269,7 @@ export class ImplFlow {
   async run(planPath: string, options?: { resume?: boolean; plan?: import("./types.ts").TaskPlan }): Promise<void> {
     const plan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
     const root = this.boundary.getProjectRoot();
-    const logger = new HarnessLogger(`impl_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, "logs"), resume: options?.resume });
+    const logger = new HarnessLogger(`impl_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, DEFAULT_LOG_BASE_DIR), resume: options?.resume });
     const lintGuard = new LintGuard(logger, this.lintAdapters, {
       toolRoot: this.profile.toolRoot,
       execOverride: this.profile.exec,

@@ -323,7 +323,7 @@ impl フロー完了時に `docs/reviews/{date}_{scope}.md` を自動生成。
 
 ## ログ
 
-`logs/{timestamp}_{task_name}/` に出力:
+`.harness/logs/{timestamp}_{task_name}/` に出力:
 
 - `harness.jsonl` — イベントログ
 - `claude-code.log` — Claude CLI の入出力

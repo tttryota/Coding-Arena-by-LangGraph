@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { stringify as stringifyYaml } from "yaml";
-import { HarnessLogger } from "./logger.ts";
+import { HarnessLogger, DEFAULT_LOG_BASE_DIR } from "./logger.ts";
 import { LintGuard } from "./lint-guard.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
 import type { Boundary } from "./boundary.ts";
@@ -46,7 +46,7 @@ export class PageFlow {
     this.validatePagePlan(plan);
 
     const root = this.boundary.getProjectRoot();
-    const logger = new HarnessLogger(`page_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, "logs") });
+    const logger = new HarnessLogger(`page_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, DEFAULT_LOG_BASE_DIR) });
     const lintGuard = new LintGuard(logger, this.lintAdapters, {
       toolRoot: this.profile.toolRoot,
       execOverride: this.profile.exec,

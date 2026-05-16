@@ -18,6 +18,12 @@
 ## 設計判断
 {{designDecisions}}
 
+## 根拠の制約
+- 現在の target、現在の仕様書、現在の component 定義書、現在の Figma Slice、現在の Dependencies だけを根拠に判断する
+- `.harness/logs/` 配下、および repo 直下 `logs/` 配下の review / usage / transcript / checkpoint を根拠にしない
+- `.harness/` 配下の現在タスクと無関係な補助ファイルを根拠にしない
+- 過去 run の review / usage / transcript を根拠にしない
+
 ## 実装要件
 - target に対応する component 本体と Story を同時に作成/更新する
 - component の責務はプレゼンテーション責務のみに限定する

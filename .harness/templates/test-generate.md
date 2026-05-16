@@ -6,6 +6,12 @@
 ## 仕様書
 {{spec}}
 
+## 根拠の制約
+- 現在の対象コード、現在の仕様書、現在のテストケース文書だけを根拠に判断する
+- `.harness/logs/` 配下、および repo 直下 `logs/` 配下の review / usage / transcript / checkpoint を根拠にしない
+- `.harness/` 配下の現在タスクと無関係な補助ファイルを根拠にしない
+- 過去 run の review / usage / transcript を根拠にしない
+
 ## テスト配置先
 - テストは必ず `{{testPath}}` 配下に配置する
 - `{{testPath}}` の外にテストファイルを新規作成・移動しない

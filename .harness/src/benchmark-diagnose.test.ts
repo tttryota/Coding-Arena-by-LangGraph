@@ -1,13 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderBenchmarkDiagnose } from "./benchmark-diagnose.ts";
+import { DEFAULT_LOG_BASE_DIR } from "./logger.ts";
 
 test("renderBenchmarkDiagnose summarizes a single log with optimization opportunities", () => {
   const workspace = mkdtempSync(join(tmpdir(), "benchmark-diagnose-"));
-  const logDir = join(workspace, "logs", "case");
+  const logDir = join(workspace, DEFAULT_LOG_BASE_DIR, "case");
   mkdirSync(logDir, { recursive: true });
 
   writeFileSync(join(logDir, "harness.jsonl"), [
@@ -78,8 +79,8 @@ test("renderBenchmarkDiagnose summarizes a single log with optimization opportun
 
 test("renderBenchmarkDiagnose compares two logs", () => {
   const workspace = mkdtempSync(join(tmpdir(), "benchmark-diagnose-diff-"));
-  const beforeDir = join(workspace, "logs", "before");
-  const afterDir = join(workspace, "logs", "after");
+  const beforeDir = join(workspace, DEFAULT_LOG_BASE_DIR, "before");
+  const afterDir = join(workspace, DEFAULT_LOG_BASE_DIR, "after");
   mkdirSync(beforeDir, { recursive: true });
   mkdirSync(afterDir, { recursive: true });
 
@@ -126,7 +127,10 @@ test("renderBenchmarkDiagnose compares two logs", () => {
 
 test("renderBenchmarkDiagnose flags real benchmark hotspots from the latest completed log", () => {
   const projectRoot = new URL("../..", import.meta.url).pathname;
-  const logDir = join(projectRoot, "logs", "2026-05-16T00-16-00_impl_benchmark_markdown-toc");
+  const logDir = findLatestBenchmarkLogDir(projectRoot);
+  if (!logDir) {
+    return;
+  }
 
   const report = renderBenchmarkDiagnose([logDir], projectRoot);
 
@@ -135,3 +139,20 @@ test("renderBenchmarkDiagnose flags real benchmark hotspots from the latest comp
   assert.match(report, /apply_fixes/);
   assert.match(report, /Optimization Opportunities/);
 });
+
+function findLatestBenchmarkLogDir(projectRoot: string): string | null {
+  const baseDir = join(projectRoot, DEFAULT_LOG_BASE_DIR);
+  if (!existsSync(baseDir)) return null;
+  const candidates = readdirSync(baseDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.endsWith("_impl_benchmark_markdown-toc"))
+    .map((entry) => join(baseDir, entry.name))
+    .filter((candidate) => hasRunnerUsage(candidate))
+    .sort();
+  return candidates.at(-1) ?? null;
+}
+
+function hasRunnerUsage(logDir: string): boolean {
+  const harnessPath = join(logDir, "harness.jsonl");
+  if (!existsSync(harnessPath)) return false;
+  return readFileSync(harnessPath, "utf-8").includes("\"event\":\"runner_usage\"");
+}

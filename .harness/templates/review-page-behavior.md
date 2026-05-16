@@ -10,6 +10,12 @@
 ## Browser Scenarios
 {{browserScenarios}}
 
+## 根拠の制約
+- 現在の対象コード、現在の仕様書、現在の Browser Scenarios だけを根拠に判断する
+- `.harness/logs/` 配下、および repo 直下 `logs/` 配下の review / usage / transcript / checkpoint を根拠にしない
+- `.harness/` 配下の現在タスクと無関係な補助ファイルを根拠にしない
+- 過去 run の review / usage / transcript を根拠にしない
+
 ## 観点
 - 仕様書の UX 要件と状態遷移が一致しているか
 - ローディング、空データ、エラー状態の扱いが仕様と矛盾していないか

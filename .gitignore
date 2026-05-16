@@ -25,6 +25,8 @@ Thumbs.db
 # Logs
 logs/*
 !logs/README.md
+.harness/logs/*
+!.harness/logs/README.md
 
 # ChromaDB
 chroma_data/

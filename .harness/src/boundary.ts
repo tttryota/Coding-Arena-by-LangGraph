@@ -201,6 +201,48 @@ export class Boundary {
     return this.findFilesInDirs([join(this.projectRoot, testDir)]);
   }
 
+  async findMisplacedTestFiles(scope: string): Promise<string[]> {
+    const sourceDir = this.resolvePattern(this.sourceLayout.sourceDir, scope);
+    const testDir = this.resolvePattern(this.sourceLayout.testDir, scope);
+    const sourceRoot = join(this.projectRoot, sourceDir);
+    const expectedTestRoot = join(this.projectRoot, testDir);
+    if (!existsSync(sourceRoot)) return [];
+
+    const nameArgs: string[] = [];
+    for (const pattern of this.testLikeNamePatterns()) {
+      if (nameArgs.length > 0) nameArgs.push("-o");
+      nameArgs.push("-name", pattern);
+    }
+    if (nameArgs.length === 0) return [];
+
+    const excludeArgs: string[] = [];
+    for (const excludeDir of this.excludeDirs) {
+      excludeArgs.push("-not", "-path", `*/${excludeDir}/*`);
+    }
+
+    try {
+      const { stdout } = await execFileAsync(
+        "find",
+        [sourceRoot, "-type", "f", "(", ...nameArgs, ")", ...excludeArgs],
+        { timeout: LOCAL_CMD_TIMEOUT_MS },
+      );
+      const expectedPrefix = expectedTestRoot.endsWith("/") ? expectedTestRoot : `${expectedTestRoot}/`;
+      return stdout
+        .split("\n")
+        .filter(Boolean)
+        .filter((file) => this.isFileWithinProject(file))
+        .filter((file) => file !== expectedTestRoot && !file.startsWith(expectedPrefix));
+    } catch (error: unknown) {
+      const execError = error as { code?: string; stderr?: string };
+      if (execError.code === "ENOENT") {
+        throw new GuardError("find コマンドが見つかりません。");
+      }
+      throw new GuardError(
+        `${sourceRoot} のテスト候補探索に失敗しました。権限やディレクトリ構造を確認してください。\n${execError.stderr ?? ""}`,
+      );
+    }
+  }
+
   private async findFilesInDirs(dirs: string[]): Promise<string[]> {
     const files: string[] = [];
     // find の -name 条件を拡張子から動的構築
@@ -248,6 +290,17 @@ export class Boundary {
       }
     }
     return files;
+  }
+
+  private testLikeNamePatterns(): string[] {
+    const patterns = new Set<string>();
+    for (const ext of this.fileExtensions) {
+      patterns.add(`test_*.${ext}`);
+      patterns.add(`*_test.${ext}`);
+      patterns.add(`*.test.${ext}`);
+      patterns.add(`*.spec.${ext}`);
+    }
+    return [...patterns];
   }
 
   testPathForScope(scope: string): string {

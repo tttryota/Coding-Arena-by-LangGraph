@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
+import { resolve, join, basename } from "node:path";
 import { HarnessLogger, redact } from "./logger.ts";
 import { LintGuard } from "./lint-guard.ts";
 import { DriftGuard } from "./drift-guard.ts";
@@ -313,8 +313,9 @@ export class ImplFlow {
     const LINES_PER_TEST_CASE = 30;
     const expectedLines = plan.targetTestCases.length * LINES_PER_TEST_CASE;
     driftGuard.startTask(plan.scope, expectedLines);
-    const scopeTools = this.boundary.scopeAllowedTools(plan.scope);
     const testPath = this.boundary.testPathForScope(plan.scope);
+    const scopeTools = this.boundary.scopeAllowedTools(plan.scope);
+    const testTools = this.boundary.testAllowedTools(plan.scope);
 
     const spec = readFileSync(resolve(root, plan.specPath), "utf-8");
     const criteriaPaths = this.resolveCriteriaPaths();
@@ -333,13 +334,14 @@ export class ImplFlow {
         testCases: plan.targetTestCases.join("\n"),
         spec,
         frameworkName: this.testAdapter.frameworkName,
+        testPath,
         mswInstructions: this.buildMswInstructions(plan, "test"),
       });
       const testGenResult = await runner.run(
         applyClaudeStepContext(
           {
             prompt: testGenPrompt,
-            allowedTools: scopeTools,
+            allowedTools: testTools,
             appendSystemPrompt: generationSystemPrompt,
             cwd: root,
             timeoutMs: DEFAULT_TIMEOUT_MS,
@@ -355,6 +357,8 @@ export class ImplFlow {
       const parsedTestGenerationResult = parseTestGenerationResult(testGenResult.text);
       sessionId = testGenResult.sessionId ?? "";
       testGenerationDecision = parsedTestGenerationResult.decision;
+
+      await this.reconcileGeneratedTestsPlacement(plan.scope, testPath, testGenerationDecision);
 
       if (testGenerationDecision === "updated") {
         await this.boundary.stageFiles(plan.scope);
@@ -611,6 +615,42 @@ ${issueList}
       skipExternalReview: options?.skipExternalReview,
       testCasesPath: resolve(this.boundary.getProjectRoot(), plan.testCasesPath),
     });
+  }
+
+  private async reconcileGeneratedTestsPlacement(
+    scope: string,
+    testPath: string,
+    decision: "noop" | "updated",
+  ): Promise<void> {
+    let expectedTests = await this.boundary.findTestFiles(scope);
+    const misplacedTests = await this.boundary.findMisplacedTestFiles(scope);
+
+    if (decision === "updated" && misplacedTests.length > 0) {
+      const absTestDir = resolve(this.boundary.getProjectRoot(), testPath);
+      mkdirSync(absTestDir, { recursive: true });
+
+      for (const misplaced of misplacedTests) {
+        const destination = join(absTestDir, basename(misplaced));
+        if (misplaced === destination) continue;
+        if (existsSync(destination)) {
+          throw new GuardError(
+            `期待ディレクトリへのテスト移動先が既に存在します: ${destination}`,
+          );
+        }
+        renameSync(misplaced, destination);
+      }
+
+      expectedTests = await this.boundary.findTestFiles(scope);
+    }
+
+    if (expectedTests.length === 0) {
+      const misplacedNote = misplacedTests.length > 0
+        ? `\n期待外の場所に生成されたテスト候補:\n${misplacedTests.join("\n")}`
+        : "";
+      throw new GuardError(
+        `生成されたテストが期待ディレクトリに存在しません。期待パス: ${testPath}${misplacedNote}`,
+      );
+    }
   }
 
   private async runImplReview(

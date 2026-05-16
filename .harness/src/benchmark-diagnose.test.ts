@@ -146,13 +146,14 @@ function findLatestBenchmarkLogDir(projectRoot: string): string | null {
   const candidates = readdirSync(baseDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name.endsWith("_impl_benchmark_markdown-toc"))
     .map((entry) => join(baseDir, entry.name))
-    .filter((candidate) => hasRunnerUsage(candidate))
+    .filter((candidate) => hasCompletedBenchmarkUsage(candidate))
     .sort();
   return candidates.at(-1) ?? null;
 }
 
-function hasRunnerUsage(logDir: string): boolean {
+function hasCompletedBenchmarkUsage(logDir: string): boolean {
   const harnessPath = join(logDir, "harness.jsonl");
   if (!existsSync(harnessPath)) return false;
-  return readFileSync(harnessPath, "utf-8").includes("\"event\":\"runner_usage\"");
+  const text = readFileSync(harnessPath, "utf-8");
+  return text.includes("\"event\":\"runner_usage\"") && text.includes("\"step\":\"impl_self_quality\"");
 }

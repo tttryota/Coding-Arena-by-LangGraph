@@ -262,7 +262,7 @@ export class ReviewOrchestrator {
     // Step 1: テスト品質チェック（テストケース文書との整合性）
     const step1Result = await this.reviewStep(
       () => this.selfReviewTestQuality(
-        params.targetFiles, params.specPath, params.testCasesPath ?? "",
+        params.targetFiles, params.specPath, params.testCasesPath ?? "", params.targetTestCases ?? [],
       ),
       params,
     );
@@ -465,6 +465,7 @@ export class ReviewOrchestrator {
     targetFiles: string[],
     specPath: string,
     testCasesPath: string,
+    targetTestCases: string[],
   ): Promise<ReviewResult> {
     const fileContents = this.readFiles(targetFiles);
     const spec = readFileSync(specPath, "utf-8");
@@ -472,7 +473,13 @@ export class ReviewOrchestrator {
     const config = this.registry.getConfig();
     const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
     const template = loadTemplate("review-test-quality", this.projectRoot, config.templates);
-    const prompt = renderTemplate(template, { fileContents, testCases, spec, responseFormat });
+    const prompt = renderTemplate(template, {
+      fileContents,
+      testCases,
+      targetTestCases: targetTestCases.join("\n"),
+      spec,
+      responseFormat,
+    });
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "test_quality" });
     return this.executeReview(FLOW_STEP.TEST_SELF_QUALITY, prompt, "test_self_quality", {

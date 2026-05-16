@@ -60,11 +60,11 @@ export async function runClaude(
 }
 
 export function extractClaudeText(result: ClaudeResult): string {
-  if (result.result) {
-    return result.result;
-  }
   if (result.structured_output !== undefined) {
     return JSON.stringify(result.structured_output);
+  }
+  if (result.result) {
+    return result.result;
   }
   return "";
 }

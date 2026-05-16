@@ -54,7 +54,7 @@ runners:
     type: claude
   codex:
     type: codex
-    sandbox: read-only
+    sandbox: workspace-write
 
 claude:
   skillBundles:

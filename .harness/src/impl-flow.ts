@@ -22,14 +22,10 @@ const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const TEST_GENERATION_OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["decision", "why", "changed_files", "covered_test_cases", "updated_test_cases", "notes"],
+  required: ["decision", "why", "covered_test_cases", "updated_test_cases", "notes"],
   properties: {
     decision: { enum: ["noop", "updated"] },
     why: {
-      type: "array",
-      items: { type: "string" },
-    },
-    changed_files: {
       type: "array",
       items: { type: "string" },
     },
@@ -51,7 +47,6 @@ const TEST_GENERATION_OUTPUT_SCHEMA = {
 type TestGenerationResult = {
   decision: "noop" | "updated";
   why: string[];
-  changedFiles: string[];
   coveredTestCases: string[];
   updatedTestCases: string[];
   notes: string[];
@@ -85,7 +80,6 @@ export function parseTestGenerationResult(raw: string): TestGenerationResult {
   return {
     decision,
     why: stringArrayField(record.why, "why"),
-    changedFiles: stringArrayField(record.changed_files, "changed_files"),
     coveredTestCases: stringArrayField(record.covered_test_cases, "covered_test_cases"),
     updatedTestCases: stringArrayField(record.updated_test_cases, "updated_test_cases"),
     notes: stringArrayField(record.notes, "notes"),
@@ -543,6 +537,7 @@ ${issueList}
       scopeAllowedTools: this.boundary.testAllowedTools(plan.scope),
       getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
       reviewMode: "test",
+      targetTestCases: plan.targetTestCases,
       skipExternalReview: options?.skipExternalReview,
       testCasesPath: resolve(this.boundary.getProjectRoot(), plan.testCasesPath),
     });

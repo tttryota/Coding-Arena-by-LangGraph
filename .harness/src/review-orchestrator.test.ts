@@ -5,10 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HarnessLogger } from "./logger.ts";
 import { ReviewOrchestrator } from "./review-orchestrator.ts";
-import { RUNNER_CAPABILITY } from "./runner.ts";
 import type { Runner } from "./runner.ts";
 
-test("ReviewOrchestrator prefers runner.review for external review when supported", async () => {
+test("ReviewOrchestrator uses runner.run for external implementation review", async () => {
   const workspace = mkdtempSync(join(tmpdir(), "harness-review-"));
   const targetFile = join(workspace, "target.ts");
   const specFile = join(workspace, "spec.md");
@@ -19,16 +18,14 @@ test("ReviewOrchestrator prefers runner.review for external review when supporte
   let runCalls = 0;
   const runner: Runner = {
     name: "codex",
-    capabilities: new Set([RUNNER_CAPABILITY.REVIEW_API]),
+    capabilities: new Set(),
     async run() {
       runCalls += 1;
-      return { text: "{\"issues\":[{\"file\":\"x\",\"severity\":\"major\",\"description\":\"wrong path\"}]}" };
-    },
-    async review(request) {
-      reviewCalls += 1;
-      assert.equal(request.delivery, "detached");
-      assert.match(request.instructions, /### /);
       return { text: "{\"issues\":[]}" };
+    },
+    async review() {
+      reviewCalls += 1;
+      return { text: "{\"issues\":[{\"file\":\"x\",\"severity\":\"major\",\"description\":\"wrong path\"}]}" };
     },
   };
 
@@ -52,8 +49,8 @@ test("ReviewOrchestrator prefers runner.review for external review when supporte
   const result = await (orchestrator as any).externalImplementationReview([targetFile], specFile);
 
   assert.equal(result.isLgtm, true);
-  assert.equal(reviewCalls, 1);
-  assert.equal(runCalls, 0);
+  assert.equal(reviewCalls, 0);
+  assert.equal(runCalls, 1);
 });
 
 test("ReviewOrchestrator skips external test review when skipExternalReview is set", async () => {
@@ -69,7 +66,7 @@ test("ReviewOrchestrator skips external test review when skipExternalReview is s
   let runCalls = 0;
   const runner: Runner = {
     name: "codex",
-    capabilities: new Set([RUNNER_CAPABILITY.REVIEW_API]),
+    capabilities: new Set(),
     async run() {
       runCalls += 1;
       return { text: "{\"issues\":[]}" };

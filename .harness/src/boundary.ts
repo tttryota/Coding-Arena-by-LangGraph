@@ -419,7 +419,7 @@ export class Boundary {
 
     try {
       const { stdout } = await execFileAsync(
-        "git", ["diff", "--", ...files],
+        "git", ["diff", "HEAD", "--", ...files],
         { cwd: this.projectRoot, maxBuffer: 10 * 1024 * 1024, timeout: LOCAL_CMD_TIMEOUT_MS },
       );
       return stdout;

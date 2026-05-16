@@ -34,7 +34,6 @@
   "why": [
     "対象テストケース X, Y, Z は既存テストで満たされている"
   ],
-  "changed_files": [],
   "covered_test_cases": [
     "テストケース名"
   ],
@@ -46,9 +45,8 @@
 ## 出力ルール
 - `why` は 1-3 件の配列にする
 - `covered_test_cases` には今回の対象テストケース名を列挙する
-- `changed_files` には実際に編集したテストファイルのみを入れる
 - `updated_test_cases` には今回追加・修正したテストケース名のみを入れる
-- `decision = "noop"` の場合、`changed_files` と `updated_test_cases` は空配列にする
+- `decision = "noop"` の場合、`updated_test_cases` は空配列にする
 - 対応表、長文レビュー、表形式の説明は書かない
 
 {{mswInstructions}}

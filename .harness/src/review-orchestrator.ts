@@ -9,7 +9,6 @@ import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT
 import type { ReviewIssue, ReviewResult, ReviewRecord } from "./types.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
 import { applyClaudeStepContext } from "./claude-context.ts";
-import { RUNNER_CAPABILITY } from "./runner.ts";
 
 const MAX_REVIEW_CYCLES = 5;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -56,6 +55,7 @@ type ReviewParams = {
   getFileDiff?: (files: string[]) => Promise<string>;
   designDecisions?: string[];
   reviewMode: "test" | "implementation";
+  targetTestCases?: string[];
   skipExternalReview?: boolean;
   testCasesPath?: string;
 };
@@ -274,7 +274,13 @@ export class ReviewOrchestrator {
     } else {
       try {
         const step2Result = await this.reviewStep(
-          () => this.externalTestReview(params.targetFiles, params.specPath, params.testCasesPath ?? ""),
+          () => this.externalTestReview(
+            params.targetFiles,
+            params.specPath,
+            params.testCasesPath ?? "",
+            params.targetTestCases ?? [],
+            params.getFileDiff,
+          ),
           params,
         );
         results.push(step2Result);
@@ -368,6 +374,12 @@ export class ReviewOrchestrator {
         params.targetFiles,
         params.specPath,
         params.reviewMode === "test" ? params.testCasesPath : undefined,
+        params.reviewMode === "test"
+          ? {
+              targetTestCases: params.targetTestCases,
+              changedHunks: diffBefore,
+            }
+          : undefined,
       );
 
       this.logger.log(EVENT.FALLBACK_REVIEW, {
@@ -510,16 +522,25 @@ export class ReviewOrchestrator {
     targetFiles: string[],
     specPath: string,
     testCasesPath: string,
+    targetTestCases: string[],
+    getFileDiff?: (files: string[]) => Promise<string>,
   ): Promise<ReviewResult> {
-    const fileContents = this.readFiles(targetFiles);
-    const spec = readFileSync(specPath, "utf-8");
-    const testCases = testCasesPath ? readFileSync(testCasesPath, "utf-8") : "";
     const config = this.registry.getConfig();
     const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
-    const template = loadTemplate("review-codex-test", this.projectRoot, config.templates);
-    const prompt = renderTemplate(template, { fileContents, testCases, spec, responseFormat });
+    const template = loadTemplate("review-external-test", this.projectRoot, config.templates);
+    const changedHunks = getFileDiff ? await getFileDiff(targetFiles) : "";
+    const prompt = renderTemplate(template, {
+      targetFiles: targetFiles.join("\n"),
+      changedHunks: changedHunks || "(差分なし)",
+      targetTestCases: targetTestCases.join("\n"),
+      specPath,
+      testCasesPath,
+      responseFormat,
+    });
 
-    return this.executeExternalReview(FLOW_STEP.TEST_EXTERNAL_REVIEW, prompt, "test_external");
+    return this.executeReview(FLOW_STEP.TEST_EXTERNAL_REVIEW, prompt, "test_external", {
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
   }
 
   private async externalImplementationReview(
@@ -530,10 +551,12 @@ export class ReviewOrchestrator {
     const spec = readFileSync(specPath, "utf-8");
     const config = this.registry.getConfig();
     const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
-    const template = loadTemplate("review-codex-impl", this.projectRoot, config.templates);
+    const template = loadTemplate("review-external-impl", this.projectRoot, config.templates);
     const prompt = renderTemplate(template, { fileContents, spec, responseFormat });
 
-    return this.executeExternalReview(FLOW_STEP.IMPL_EXTERNAL_REVIEW, prompt, "impl_external");
+    return this.executeReview(FLOW_STEP.IMPL_EXTERNAL_REVIEW, prompt, "impl_external", {
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
   }
 
   private async pageDesignReview(
@@ -609,18 +632,28 @@ export class ReviewOrchestrator {
     targetFiles: string[],
     specPath: string,
     testCasesPath?: string,
+    options?: {
+      targetTestCases?: string[];
+      changedHunks?: string;
+    },
   ): Promise<[ReviewResult, ReviewResult]> {
-    const fileContents = this.readFiles(targetFiles);
-    const spec = readFileSync(specPath, "utf-8");
     const config = this.registry.getConfig();
     const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
 
     let prompt: string;
     if (testCasesPath) {
-      const testCases = readFileSync(testCasesPath, "utf-8");
-      const template = loadTemplate("review-codex-test", this.projectRoot, config.templates);
-      prompt = renderTemplate(template, { fileContents, testCases, spec, responseFormat });
+      const template = loadTemplate("review-external-test", this.projectRoot, config.templates);
+      prompt = renderTemplate(template, {
+        targetFiles: targetFiles.join("\n"),
+        changedHunks: options?.changedHunks ?? "(差分なし)",
+        targetTestCases: (options?.targetTestCases ?? []).join("\n"),
+        specPath,
+        testCasesPath,
+        responseFormat,
+      });
     } else {
+      const fileContents = this.readFiles(targetFiles);
+      const spec = readFileSync(specPath, "utf-8");
       const template = loadTemplate("review-dual-fallback", this.projectRoot, config.templates);
       prompt = renderTemplate(template, { fileContents, spec, responseFormat });
     }
@@ -1064,34 +1097,6 @@ ${spec.slice(0, 3000)}
       this.logger,
     );
     return this.parseReviewResult(reviewer, response.text);
-  }
-
-  private async executeExternalReview(
-    step: FlowStep,
-    prompt: string,
-    reviewer: string,
-    options?: {
-      timeoutMs?: number;
-    },
-  ): Promise<ReviewResult> {
-    const runner = this.registry.getRunner(step);
-    if (runner.review && runner.capabilities.has(RUNNER_CAPABILITY.REVIEW_API)) {
-      const response = await runner.review(
-        {
-          cwd: this.projectRoot,
-          timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-          instructions: prompt,
-          delivery: "detached",
-        },
-        this.logger,
-      );
-      return this.parseReviewResult(reviewer, response.text);
-    }
-
-    return this.executeReview(step, prompt, reviewer, {
-      timeoutMs: options?.timeoutMs,
-      outputSchema: REVIEW_OUTPUT_SCHEMA,
-    });
   }
 
   private async executeRun(

@@ -134,10 +134,10 @@ const TEMPLATE_MAP: Partial<Record<FlowStep, string[]>> = {
   [FLOW_STEP.TEST_GENERATE]: ["test-generate"],
   [FLOW_STEP.IMPL_GENERATE]: ["impl-generate", "impl-retry"],
   [FLOW_STEP.TEST_SELF_QUALITY]: ["review-test-quality", "review-response-format"],
-  [FLOW_STEP.TEST_EXTERNAL_REVIEW]: ["review-codex-test", "review-response-format"],
+  [FLOW_STEP.TEST_EXTERNAL_REVIEW]: ["review-external-test", "review-response-format"],
   [FLOW_STEP.IMPL_SELF_CRITERIA]: ["review-impl-criteria", "review-response-format"],
   [FLOW_STEP.IMPL_SELF_QUALITY]: ["review-impl-quality", "review-response-format"],
-  [FLOW_STEP.IMPL_EXTERNAL_REVIEW]: ["review-codex-impl", "review-response-format"],
+  [FLOW_STEP.IMPL_EXTERNAL_REVIEW]: ["review-external-impl", "review-response-format"],
 };
 
 export function renderBenchmarkDiagnose(logDirs: string[], projectRoot: string): string {

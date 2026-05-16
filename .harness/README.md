@@ -293,8 +293,8 @@ harness（CLI エントリポイント）
 - `review-test-quality.md` — テストセルフレビュー
 - `review-impl-quality.md` — 実装品質レビュー
 - `review-impl-criteria.md` — レビュー観点チェック
-- `review-codex-test.md` — テスト外部レビュー
-- `review-codex-impl.md` — 実装外部レビュー
+- `review-external-test.md` — テスト外部レビュー
+- `review-external-impl.md` — 実装外部レビュー
 - `review-dual-fallback.md` — フォールバックレビュー
 - `test-generate.md` — テスト生成プロンプト
 - `impl-generate.md` — 実装生成プロンプト

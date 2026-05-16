@@ -73,16 +73,16 @@ flow: full
 fallbackRunner: claude
 
 steps:
-  test_generate: claude
-  test_self_quality: claude
-  test_external_review: codex
-  impl_generate: claude
-  impl_self_criteria: claude
-  impl_self_quality: claude
-  impl_external_review: codex
-  lint_fix: claude
-  apply_fixes: claude
-  judgment_summary: claude
-  judge_minor: claude
-  spec_generate: claude
-  test_case_generate: claude
+  test_generate: codex
+  test_self_quality: codex
+  test_external_review: claude
+  impl_generate: codex
+  impl_self_criteria: codex
+  impl_self_quality: codex
+  impl_external_review: claude
+  lint_fix: codex
+  apply_fixes: codex
+  judgment_summary: codex
+  judge_minor: codex
+  spec_generate: codex
+  test_case_generate: codex

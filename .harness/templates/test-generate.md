@@ -18,6 +18,52 @@
 - 1テスト1関心事を守る
 - モックは外部依存のみに限定する
 
+## 検証厳密性の原則
+- 対象 test case の検証焦点を満たすのに必要な観測点をすべてアサートする
+- 正しいものが含まれることだけでなく、重要なら誤ったものが含まれないことも確認する
+- count だけでは誤実装を見逃すなら、中身も確認する
+- 順序が重要なら順序も確認する
+- 主要フィールドが結果契約に含まれるなら、その主要フィールドを省略しない
+- 壊れていても通る余地が残るなら、その抜けを埋める追加アサートを書く
+
+## good / bad examples
+```python
+# bad: 件数だけ見ていて、中身が壊れていても通る
+assert len(result.headings) == 2
+
+# good: 件数に加えて中身を確認する
+assert len(result.headings) == 2
+assert [heading.text for heading in result.headings] == ["Overview", "Detail"]
+```
+
+```python
+# bad: 含まれることしか見ておらず、除外漏れを見逃す
+assert "H2" in texts
+assert "H3" in texts
+
+# good: 含まれるべきものと、含まれないべきものの両方を見る
+assert texts == ["H2", "H3"]
+assert "H4" not in texts
+```
+
+```python
+# bad: 主要フィールドの一部しか見ていない
+assert heading.text == "Hello World"
+
+# good: 契約上重要なフィールドをまとめて確認する
+assert heading.text == "Hello World"
+assert heading.level == 1
+assert heading.anchor == "hello-world"
+```
+
+```python
+# bad: 順序が意味を持つのに集合比較だけしている
+assert set(texts) == {"Overview", "Detail"}
+
+# good: 順序まで確認する
+assert texts == ["Overview", "Detail"]
+```
+
 ## 判定基準
 - `decision = "noop"`:
   - 対象テストケースを既存テストが満たしている

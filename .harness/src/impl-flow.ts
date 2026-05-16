@@ -43,12 +43,44 @@ const TEST_GENERATION_OUTPUT_SCHEMA = {
     },
   },
 } as const;
+const IMPL_GENERATION_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["decision", "why", "covered_requirements", "updated_requirements", "notes"],
+  properties: {
+    decision: { enum: ["noop", "updated"] },
+    why: {
+      type: "array",
+      items: { type: "string" },
+    },
+    covered_requirements: {
+      type: "array",
+      items: { type: "string" },
+    },
+    updated_requirements: {
+      type: "array",
+      items: { type: "string" },
+    },
+    notes: {
+      type: "array",
+      items: { type: "string" },
+    },
+  },
+} as const;
 
 type TestGenerationResult = {
   decision: "noop" | "updated";
   why: string[];
   coveredTestCases: string[];
   updatedTestCases: string[];
+  notes: string[];
+};
+
+type ImplGenerationResult = {
+  decision: "noop" | "updated";
+  why: string[];
+  coveredRequirements: string[];
+  updatedRequirements: string[];
   notes: string[];
 };
 
@@ -82,6 +114,33 @@ export function parseTestGenerationResult(raw: string): TestGenerationResult {
     why: stringArrayField(record.why, "why"),
     coveredTestCases: stringArrayField(record.covered_test_cases, "covered_test_cases"),
     updatedTestCases: stringArrayField(record.updated_test_cases, "updated_test_cases"),
+    notes: stringArrayField(record.notes, "notes"),
+  };
+}
+
+export function parseImplGenerationResult(raw: string): ImplGenerationResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new HarnessError("実装生成結果の JSON パースに失敗しました。");
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new HarnessError("実装生成結果がオブジェクトではありません。");
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const decision = record.decision;
+  if (decision !== "noop" && decision !== "updated") {
+    throw new HarnessError("実装生成結果の decision が不正です。");
+  }
+
+  return {
+    decision,
+    why: stringArrayField(record.why, "why"),
+    coveredRequirements: stringArrayField(record.covered_requirements, "covered_requirements"),
+    updatedRequirements: stringArrayField(record.updated_requirements, "updated_requirements"),
     notes: stringArrayField(record.notes, "notes"),
   };
 }
@@ -391,6 +450,7 @@ export class ImplFlow {
             sessionId,
             cwd: root,
             timeoutMs: DEFAULT_TIMEOUT_MS,
+            outputSchema: IMPL_GENERATION_OUTPUT_SCHEMA,
           },
           config,
           this.profile,
@@ -399,7 +459,17 @@ export class ImplFlow {
         ),
         logger,
       );
+      const parsedImplGenerationResult = parseImplGenerationResult(implResult.text);
       sessionId = implResult.sessionId ?? sessionId;
+
+      if (parsedImplGenerationResult.decision === "noop") {
+        const reasonText = parsedImplGenerationResult.why.length > 0
+          ? parsedImplGenerationResult.why.join(" / ")
+          : "理由なし";
+        throw new GuardError(
+          `実装生成が noop を返しましたが、直前の RED 確認ではテストが失敗しています。判定が不整合です。理由: ${reasonText}`,
+        );
+      }
 
       // 実装生成後にステージング
       await this.boundary.stageFiles(plan.scope);

@@ -6,7 +6,7 @@ import type { ResolvedProfileConfig } from "./config.ts";
 import type { FlowStep } from "./steps.ts";
 import { FLOW_STEP } from "./steps.ts";
 import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT } from "./types.ts";
-import type { ReviewIssue, ReviewResult, ReviewRecord } from "./types.ts";
+import type { ReviewChecklistEntry, ReviewIssue, ReviewResult, ReviewRecord } from "./types.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
 import { applyClaudeStepContext } from "./claude-context.ts";
 
@@ -16,8 +16,22 @@ const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const REVIEW_OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["issues"],
+  required: ["checklist", "issues"],
   properties: {
+    checklist: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["item", "verdict", "evidence"],
+        properties: {
+          item: { type: "string" },
+          verdict: { enum: ["pass", "fail", "n/a"] },
+          evidence: { type: "string" },
+        },
+      },
+    },
     issues: {
       type: "array",
       items: {
@@ -933,9 +947,41 @@ ${constraint}`;
         parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
       }
 
-      // schema validation: issues が配列であることを確認
+      // schema validation: checklist / issues が配列であることを確認
+      if (!Array.isArray(parsed.checklist)) {
+        throw new HarnessError(`checklist フィールドが配列ではありません (reviewer: ${reviewer})`);
+      }
       if (!Array.isArray(parsed.issues)) {
         throw new HarnessError(`issues フィールドが配列ではありません (reviewer: ${reviewer})`);
+      }
+
+      const validatedChecklist: ReviewChecklistEntry[] = [];
+      let invalidChecklistCount = 0;
+      for (const item of parsed.checklist) {
+        if (
+          typeof item === "object" && item !== null &&
+          typeof (item as Record<string, unknown>).item === "string" &&
+          typeof (item as Record<string, unknown>).verdict === "string" &&
+          typeof (item as Record<string, unknown>).evidence === "string"
+        ) {
+          const checklistItem = item as Record<string, unknown>;
+          const verdict = checklistItem.verdict as string;
+          if (!["pass", "fail", "n/a"].includes(verdict)) {
+            invalidChecklistCount++;
+            continue;
+          }
+          validatedChecklist.push({
+            item: checklistItem.item as string,
+            verdict: verdict as "pass" | "fail" | "n/a",
+            evidence: checklistItem.evidence as string,
+          });
+        } else {
+          invalidChecklistCount++;
+        }
+      }
+
+      if (validatedChecklist.length === 0) {
+        throw new HarnessError(`checklist が空です (reviewer: ${reviewer})`);
       }
 
       // 各 issue の最低限の形状を検証
@@ -962,14 +1008,15 @@ ${constraint}`;
       }
 
       // 不正要素がある場合: fail-closed
-      if (invalidCount > 0) {
+      if (invalidChecklistCount > 0 || invalidCount > 0) {
         throw new HarnessError(
-          `レビュー出力に ${invalidCount} 件の不正な issue が含まれています (reviewer: ${reviewer})。有効: ${validatedIssues.length} 件`,
+          `レビュー出力に不正要素が含まれています (reviewer: ${reviewer})。checklist不正: ${invalidChecklistCount} 件, issue不正: ${invalidCount} 件`,
         );
       }
 
       return {
         reviewer,
+        checklist: validatedChecklist,
         issues: validatedIssues,
         isLgtm: validatedIssues.length === 0,
       };
@@ -977,6 +1024,7 @@ ${constraint}`;
       // fail-closed: パース失敗時は LGTM にしない
       return {
         reviewer,
+        checklist: [],
         issues: [
           {
             description: `レビュー結果のパースに失敗しました。出力を手動確認してください。`,

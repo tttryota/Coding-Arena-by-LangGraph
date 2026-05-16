@@ -21,11 +21,11 @@ test("ReviewOrchestrator uses runner.run for external implementation review", as
     capabilities: new Set(),
     async run() {
       runCalls += 1;
-      return { text: "{\"issues\":[]}" };
+      return { text: "{\"checklist\":[{\"item\":\"spec\",\"verdict\":\"pass\",\"evidence\":\"checked target.ts\"}],\"issues\":[]}" };
     },
     async review() {
       reviewCalls += 1;
-      return { text: "{\"issues\":[{\"file\":\"x\",\"severity\":\"major\",\"description\":\"wrong path\"}]}" };
+      return { text: "{\"checklist\":[{\"item\":\"spec\",\"verdict\":\"fail\",\"evidence\":\"wrong path\"}],\"issues\":[{\"file\":\"x\",\"severity\":\"major\",\"description\":\"wrong path\"}]}" };
     },
   };
 
@@ -69,11 +69,11 @@ test("ReviewOrchestrator skips external test review when skipExternalReview is s
     capabilities: new Set(),
     async run() {
       runCalls += 1;
-      return { text: "{\"issues\":[]}" };
+      return { text: "{\"checklist\":[{\"item\":\"target cases\",\"verdict\":\"pass\",\"evidence\":\"checked target.test.ts\"}],\"issues\":[]}" };
     },
     async review() {
       reviewCalls += 1;
-      return { text: "{\"issues\":[]}" };
+      return { text: "{\"checklist\":[{\"item\":\"target cases\",\"verdict\":\"pass\",\"evidence\":\"checked target.test.ts\"}],\"issues\":[]}" };
     },
   };
 
@@ -110,4 +110,15 @@ test("ReviewOrchestrator skips external test review when skipExternalReview is s
   assert.equal(results.length, 1);
   assert.equal(runCalls, 1);
   assert.equal(reviewCalls, 0);
+});
+
+test("parseReviewResult fails closed when checklist is missing", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "harness-review-parse-"));
+  const logger = new HarnessLogger("review-parse-test", { baseDir: workspace });
+  const orchestrator = new ReviewOrchestrator(logger, {} as never, workspace, {} as never);
+
+  const result = (orchestrator as any).parseReviewResult("self_quality", "{\"issues\":[]}");
+
+  assert.equal(result.isLgtm, false);
+  assert.equal(result.issues[0]?.severity, "critical");
 });

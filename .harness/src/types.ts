@@ -80,8 +80,15 @@ export type ReviewIssue = {
   line?: number;
 };
 
+export type ReviewChecklistEntry = {
+  item: string;
+  verdict: "pass" | "fail" | "n/a";
+  evidence: string;
+};
+
 export type ReviewResult = {
   reviewer: string;
+  checklist: ReviewChecklistEntry[];
   issues: ReviewIssue[];
   isLgtm: boolean;
 };

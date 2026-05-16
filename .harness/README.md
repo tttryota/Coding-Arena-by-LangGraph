@@ -1,7 +1,7 @@
 # @tsuryoryo/tdd-harness
 
 LLM CLI を使った TDD 自動化オーケストレーター。
-Claude Code / Codex / GitHub Copilot CLI など任意の LLM CLI をプラガブルに差し替え可能。
+Claude Code / Codex App Server / GitHub Copilot CLI など任意の LLM 実行系をプラガブルに差し替え可能。
 
 ## セットアップ
 
@@ -13,8 +13,10 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提条件:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
+- `claude` CLI が PATH に存在（デフォルトの多くのステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
 - プロジェクトに応じた lint/test ツール（Python: ruff + mypy + pytest、TypeScript: eslint + tsc + vitest）
+
+この repo ではローカル wrapper `./harness` から起動する。npm パッケージとして導入した場合は `tdd-harness` が同じ CLI を提供する。
 
 セットアップガイドを表示:
 ```bash
@@ -72,6 +74,9 @@ profiles:
 runners:
   claude:
     type: claude
+  claude-opus-review:
+    type: claude
+    model: opus
   codex:
     type: codex
     sandbox: read-only
@@ -95,16 +100,18 @@ fallbackRunner: claude
 steps:
   test_generate: claude
   test_self_quality: claude
-  test_external_review: claude
+  test_external_review: codex
   impl_generate: claude
   impl_self_criteria: claude
   impl_self_quality: copilot     # ステップごとに差し替え可能
-  impl_external_review: claude
+  impl_external_review: claude-opus-review
   lint_fix: claude
   apply_fixes: claude
   judgment_summary: claude
   judge_minor: claude
 ```
+
+`profile` は lint / test / sourceLayout を選ぶための設定で、LLM サービスの切り替えには使わない。どのサービスを reviewer に使うかは `runners` と `steps` で決める。
 
 `.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
 
@@ -113,8 +120,8 @@ steps:
 ### Design Flow（仕様書・テストケース生成）
 
 ```bash
-tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
-tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能" --profile backend
+./harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
+./harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能" --profile backend
 ```
 
 1. 仕様書を生成（`docs/spec/{category}/{name}.md`）
@@ -125,7 +132,7 @@ tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する
 ### Impl Flow（TDD 実装）
 
 ```bash
-tdd-harness impl plan/current-task.md
+./harness impl plan/current-task.md
 ```
 
 実行前に対話的にステップごとのランナー割り当てを確認・変更できる:
@@ -135,7 +142,7 @@ tdd-harness impl plan/current-task.md
 ステップ割り当て:
   1. test_generate: claude
   2. test_self_quality: claude
-  3. test_external_review: claude
+  3. test_external_review: codex
   ...
 
 変更するステップ番号を入力 (Enter でそのまま実行):
@@ -157,24 +164,24 @@ tdd-harness impl plan/current-task.md
 
 ```bash
 # light フロー
-tdd-harness impl plan/task.md --flow light
+./harness impl plan/task.md --flow light
 
 # 対話プロンプトをスキップ
-tdd-harness impl plan/task.md --no-interactive
+./harness impl plan/task.md --no-interactive
 
 # チェックポイントから再開
-tdd-harness impl plan/task.md --resume
+./harness impl plan/task.md --resume
 ```
 
 ```bash
-tdd-harness component plan/components-task.md
-tdd-harness page plan/page-task.md
+./harness component plan/components-task.md
+./harness page plan/page-task.md
 ```
 
 ### Page Flow（Page UI 実装）
 
 ```bash
-tdd-harness page plan/page-task.md
+./harness page plan/page-task.md
 ```
 
 - page 実装を生成
@@ -186,7 +193,7 @@ tdd-harness page plan/page-task.md
 ### Component Flow（Component + Story 実装）
 
 ```bash
-tdd-harness component plan/components-task.md
+./harness component plan/components-task.md
 ```
 
 - `Targets` を 1 件ずつ順に処理
@@ -257,7 +264,8 @@ harness（CLI エントリポイント）
   ├── config（.harness/harness.yml 優先で読み込み + プロファイル解決）
   ├── runner-registry（ステップ → ランナー解決）
   │   ├── claude-runner（claude -p ラッパー）
-  │   ├── codex-runner（codex exec ラッパー）
+  │   ├── codex-runner（Codex App Server adapter）
+  │   ├── codex-app-server/（transport / service / protocol）
   │   └── generic-runner（任意 CLI ラッパー）
   ├── interactive（対話的ランナー割り当て）
   ├── boundary（パス検証・スコープ解決・ガード）
@@ -301,6 +309,7 @@ harness（CLI エントリポイント）
 - **迷走検知**: テストリトライ上限、同一エラー連続検出、タイムアウト、diff 肥大化
 - **ログ redact**: API キー・トークンパターンを自動除去
 - **sandbox**: Codex ランナーのデフォルトは `read-only`
+- **reviewer swap**: 外部レビューは step ごとに別 LLM へ差し替え可能
 
 ## レビューレポート
 
@@ -318,8 +327,14 @@ impl フロー完了時に `docs/reviews/{date}_{scope}.md` を自動生成。
 
 - `harness.jsonl` — イベントログ
 - `claude-code.log` — Claude CLI の入出力
+- `codex-app-server.log` — Codex App Server transcript
 - `review-data.json` — レビュー構造化データ
 - `checkpoint.json` — 再開用チェックポイント
+
+## ベンチマーク診断
+
+- `./harness benchmark-summary <log-dir> [<log-dir>]` — review/token/cost の総量比較
+- `./harness benchmark-diagnose <log-dir> [<log-dir>]` — 壁時計時間、review 収束性、prompt 適切性まで含めた診断
 
 ## ライセンス
 

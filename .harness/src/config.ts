@@ -9,8 +9,17 @@ import type { FlowMode, FlowStep } from "./steps.ts";
 // === Runner 型（変更なし） ===
 
 export type RunnerConfig =
-  | { type: "claude"; timeoutMs?: number }
-  | { type: "codex"; sandbox?: string; timeoutMs?: number }
+  | { type: "claude"; timeoutMs?: number; model?: string }
+  | {
+      type: "codex";
+      sandbox?: string;
+      timeoutMs?: number;
+      model?: string;
+      approvalPolicy?: "untrusted" | "on-failure" | "on-request" | "never";
+      summary?: "auto" | "brief" | "detailed";
+      effort?: "minimal" | "low" | "medium" | "high";
+      personality?: "default" | "strict" | "balanced";
+    }
   | {
       type: "generic";
       command: string;
@@ -393,9 +402,55 @@ function validateUserConfigShape(config: HarnessUserConfig): void {
           `runner "${name}" の timeoutMs は正の数値である必要があります。`,
         );
       }
+      if (r.type === "claude" && r.model !== undefined && typeof r.model !== "string") {
+        throw new GuardError(
+          `runner "${name}" (type: claude) の model は文字列である必要があります。`,
+        );
+      }
       if (r.type === "codex" && r.sandbox !== undefined && typeof r.sandbox !== "string") {
         throw new GuardError(
           `runner "${name}" (type: codex) の sandbox は文字列である必要があります。`,
+        );
+      }
+      if (r.type === "codex" && r.model !== undefined && typeof r.model !== "string") {
+        throw new GuardError(
+          `runner "${name}" (type: codex) の model は文字列である必要があります。`,
+        );
+      }
+      if (
+        r.type === "codex" &&
+        r.approvalPolicy !== undefined &&
+        !["untrusted", "on-failure", "on-request", "never"].includes(r.approvalPolicy as string)
+      ) {
+        throw new GuardError(
+          `runner "${name}" (type: codex) の approvalPolicy は untrusted/on-failure/on-request/never のいずれかである必要があります。`,
+        );
+      }
+      if (
+        r.type === "codex" &&
+        r.summary !== undefined &&
+        !["auto", "brief", "detailed"].includes(r.summary as string)
+      ) {
+        throw new GuardError(
+          `runner "${name}" (type: codex) の summary は auto/brief/detailed のいずれかである必要があります。`,
+        );
+      }
+      if (
+        r.type === "codex" &&
+        r.effort !== undefined &&
+        !["minimal", "low", "medium", "high"].includes(r.effort as string)
+      ) {
+        throw new GuardError(
+          `runner "${name}" (type: codex) の effort は minimal/low/medium/high のいずれかである必要があります。`,
+        );
+      }
+      if (
+        r.type === "codex" &&
+        r.personality !== undefined &&
+        !["default", "strict", "balanced"].includes(r.personality as string)
+      ) {
+        throw new GuardError(
+          `runner "${name}" (type: codex) の personality は default/strict/balanced のいずれかである必要があります。`,
         );
       }
     }

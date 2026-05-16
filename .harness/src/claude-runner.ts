@@ -18,6 +18,8 @@ export type ClaudeOptions = {
   timeoutMs?: number;
   agent?: string;
   mcpConfigs?: string[];
+  model?: string;
+  outputSchema?: Record<string, unknown>;
 };
 
 export async function runClaude(
@@ -57,6 +59,16 @@ export async function runClaude(
   return parsed;
 }
 
+export function extractClaudeText(result: ClaudeResult): string {
+  if (result.result) {
+    return result.result;
+  }
+  if (result.structured_output !== undefined) {
+    return JSON.stringify(result.structured_output);
+  }
+  return "";
+}
+
 function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string | null } {
   // prompt は stdin 経由で渡すので "-p" に "-" を指定
   const args = ["-p", "-"];
@@ -68,6 +80,10 @@ function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string |
 
   if (options.agent) {
     args.push("--agent", options.agent);
+  }
+
+  if (options.model) {
+    args.push("--model", options.model);
   }
 
   if (options.allowedTools && options.allowedTools.length > 0) {
@@ -90,6 +106,10 @@ function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string |
     args.push("--mcp-config", mcpConfig);
   }
 
+  if (options.outputSchema) {
+    args.push("--json-schema", JSON.stringify(options.outputSchema));
+  }
+
   return { args, tempFile };
 }
 
@@ -103,7 +123,7 @@ function cleanupTemp(filePath: string): void {
   }
 }
 
-export function createClaudeRunner(defaults?: { timeoutMs?: number }): Runner {
+export function createClaudeRunner(defaults?: { timeoutMs?: number; model?: string }): Runner {
   return {
     name: "claude",
     capabilities: new Set([
@@ -125,11 +145,13 @@ export function createClaudeRunner(defaults?: { timeoutMs?: number }): Runner {
           timeoutMs: request.timeoutMs ?? defaults?.timeoutMs,
           agent: request.agent,
           mcpConfigs: request.mcpConfigs,
+          model: request.model ?? defaults?.model,
+          outputSchema: request.outputSchema,
         },
         logger,
       );
       return {
-        text: result.result,
+        text: extractClaudeText(result),
         sessionId: result.session_id,
         metadata: {
           costUsd: result.total_cost_usd,

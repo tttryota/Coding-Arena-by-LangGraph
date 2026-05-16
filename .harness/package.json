@@ -17,7 +17,8 @@
   },
   "license": "MIT",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test src/*.test.ts src/**/*.test.ts"
   },
   "dependencies": {
     "yaml": "^2.8.3"

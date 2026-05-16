@@ -19,6 +19,78 @@ import { applyClaudeStepContext, joinPromptSections } from "./claude-context.ts"
 
 const MAX_GREEN_RETRIES = 3;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const TEST_GENERATION_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["decision", "why", "changed_files", "covered_test_cases", "updated_test_cases", "notes"],
+  properties: {
+    decision: { enum: ["noop", "updated"] },
+    why: {
+      type: "array",
+      items: { type: "string" },
+    },
+    changed_files: {
+      type: "array",
+      items: { type: "string" },
+    },
+    covered_test_cases: {
+      type: "array",
+      items: { type: "string" },
+    },
+    updated_test_cases: {
+      type: "array",
+      items: { type: "string" },
+    },
+    notes: {
+      type: "array",
+      items: { type: "string" },
+    },
+  },
+} as const;
+
+type TestGenerationResult = {
+  decision: "noop" | "updated";
+  why: string[];
+  changedFiles: string[];
+  coveredTestCases: string[];
+  updatedTestCases: string[];
+  notes: string[];
+};
+
+function stringArrayField(value: unknown, fieldName: string): string[] {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new HarnessError(`テスト生成結果の ${fieldName} が不正です。`);
+  }
+  return value;
+}
+
+export function parseTestGenerationResult(raw: string): TestGenerationResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new HarnessError("テスト生成結果の JSON パースに失敗しました。");
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new HarnessError("テスト生成結果がオブジェクトではありません。");
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const decision = record.decision;
+  if (decision !== "noop" && decision !== "updated") {
+    throw new HarnessError("テスト生成結果の decision が不正です。");
+  }
+
+  return {
+    decision,
+    why: stringArrayField(record.why, "why"),
+    changedFiles: stringArrayField(record.changed_files, "changed_files"),
+    coveredTestCases: stringArrayField(record.covered_test_cases, "covered_test_cases"),
+    updatedTestCases: stringArrayField(record.updated_test_cases, "updated_test_cases"),
+    notes: stringArrayField(record.notes, "notes"),
+  };
+}
 
 export class ImplFlow {
   private boundary: Boundary;
@@ -171,6 +243,7 @@ export class ImplFlow {
     const checkpoint = options?.resume ? logger.loadCheckpoint() : null;
     const resumeFrom = checkpoint?.completedStep ?? null;
     let sessionId = checkpoint?.sessionId ?? "";
+    let testGenerationDecision = checkpoint?.testGenerationDecision ?? "updated";
 
     if (resumeFrom) {
       console.log(`チェックポイントから再開: ${resumeFrom} 以降を実行`);
@@ -217,6 +290,7 @@ export class ImplFlow {
             appendSystemPrompt: generationSystemPrompt,
             cwd: root,
             timeoutMs: DEFAULT_TIMEOUT_MS,
+            outputSchema: TEST_GENERATION_OUTPUT_SCHEMA,
           },
           config,
           this.profile,
@@ -225,23 +299,32 @@ export class ImplFlow {
         ),
         logger,
       );
+      const parsedTestGenerationResult = parseTestGenerationResult(testGenResult.text);
       sessionId = testGenResult.sessionId ?? "";
-      await this.boundary.stageFiles(plan.scope);
-      await this.lintCheck(lintGuard, plan.scope, "テスト生成後", {
-        scopeTools: scopeTools,
-        root,
-      });
+      testGenerationDecision = parsedTestGenerationResult.decision;
+
+      if (testGenerationDecision === "updated") {
+        await this.boundary.stageFiles(plan.scope);
+        await this.lintCheck(lintGuard, plan.scope, "テスト生成後", {
+          scopeTools: scopeTools,
+          root,
+        });
+      }
       logger.saveCheckpoint({
         planPath, completedStep: "test_generated", sessionId,
+        testGenerationDecision,
         records: [], greenAttempt: 0, timestamp: new Date().toISOString(),
       });
     }
 
     // テストレビュー
     if (!this.shouldSkip(resumeFrom, "test_reviewed")) {
-      await this.runTestReview(reviewOrchestrator, plan, testPath);
+      await this.runTestReview(reviewOrchestrator, plan, testPath, {
+        skipExternalReview: testGenerationDecision === "noop",
+      });
       logger.saveCheckpoint({
         planPath, completedStep: "test_reviewed", sessionId,
+        testGenerationDecision,
         records: reviewOrchestrator.getRecords(), greenAttempt: 0,
         timestamp: new Date().toISOString(),
       });
@@ -282,6 +365,7 @@ export class ImplFlow {
       logger.log(EVENT.TEST_RUN, { result: "RED", output: redResult.output });
       logger.saveCheckpoint({
         planPath, completedStep: "red_confirmed", sessionId,
+        testGenerationDecision,
         records: reviewOrchestrator.getRecords(), greenAttempt: 0,
         timestamp: new Date().toISOString(),
       });
@@ -352,6 +436,7 @@ export class ImplFlow {
 
         logger.saveCheckpoint({
           planPath, completedStep: "green_confirmed", sessionId,
+          testGenerationDecision,
           records: reviewOrchestrator.getRecords(), greenAttempt: attempt,
           timestamp: new Date().toISOString(),
         });
@@ -438,6 +523,7 @@ ${issueList}
     orchestrator: ReviewOrchestrator,
     plan: TaskPlan,
     testPath: string,
+    options?: { skipExternalReview?: boolean },
   ): Promise<void> {
     const testFiles = await this.boundary.findTestFiles(plan.scope);
     if (testFiles.length === 0) return;
@@ -457,6 +543,7 @@ ${issueList}
       scopeAllowedTools: this.boundary.testAllowedTools(plan.scope),
       getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
       reviewMode: "test",
+      skipExternalReview: options?.skipExternalReview,
       testCasesPath: resolve(this.boundary.getProjectRoot(), plan.testCasesPath),
     });
   }

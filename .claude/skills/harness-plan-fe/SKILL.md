@@ -17,7 +17,7 @@ ready の仕様書 + コンポーネント定義書 + Figma キャッシュか�
 | Figma キャッシュ | `docs/design/features/{feature}/` | ディレクトリが存在 |
 | テストケース | `tests/test-cases/features/{feature}.md` | ファイルが存在（Logic/Page で必要） |
 
-いずれかが不足している場合はユーザーに伝えて、先行ステップ（design-fe 等）を案内する。
+いずれかが不足している場合はユーザーに伝えて、先行ステップ（仕様書 / コンポーネント定義書 / Figma キャッシュ準備）を案内する。
 
 ## 生成手順
 

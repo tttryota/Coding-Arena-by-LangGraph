@@ -75,11 +75,11 @@ fallbackRunner: claude
 steps:
   test_generate: claude
   test_self_quality: claude
-  test_external_review: claude
+  test_external_review: codex
   impl_generate: claude
   impl_self_criteria: claude
   impl_self_quality: claude
-  impl_external_review: claude
+  impl_external_review: codex
   lint_fix: claude
   apply_fixes: claude
   judgment_summary: claude

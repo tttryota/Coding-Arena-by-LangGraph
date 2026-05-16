@@ -1,4 +1,5 @@
 ---
+profile: backend
 scope: benchmark/markdown-toc
 spec: docs/spec/benchmark/markdown-toc.md
 test_cases: tests/test-cases/benchmark/markdown-toc.md

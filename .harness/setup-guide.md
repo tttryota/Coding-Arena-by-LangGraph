@@ -10,8 +10,10 @@ pnpm add @tsuryoryo/tdd-harness
 
 前提:
 - Node.js 22.18+
-- `claude` CLI が PATH に存在（デフォルトの全ステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
+- `claude` CLI が PATH に存在（デフォルトの多くのステップで使用。他の CLI のみ使う場合は `.harness/harness.yml` または `.harness.yml` で `runners` と `steps` を明示設定）
 - プロジェクトに応じた lint/test ツール
+
+この repo では `./harness` から起動する。npm パッケージ版では `tdd-harness` を使う。
 
 ## 設定ファイル
 
@@ -85,6 +87,9 @@ profiles:
 runners:
   claude:
     type: claude
+  claude-opus-review:
+    type: claude
+    model: opus
   codex:
     type: codex
     sandbox: read-only
@@ -99,6 +104,8 @@ claude:
 ```
 
 `profiles` は必須。未定義の場合はエラーになる。`tdd-harness init` でこのガイドを表示できる。
+
+`profile` は lint / test / sourceLayout を選ぶためのもので、LLM サービス選択には使わない。reviewer を切り替える場合は `runners` と `steps` を使う。
 
 ## 利用可能なツール
 
@@ -123,7 +130,7 @@ claude:
 | type | 説明 |
 |---|---|
 | claude | Claude Code CLI (`claude -p`) |
-| codex | OpenAI Codex CLI (`codex exec`) |
+| codex | OpenAI Codex App Server (`codex app-server`) |
 | generic | 任意の CLI コマンド |
 
 ### generic runner の設定
@@ -186,16 +193,16 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 ### Design Flow（仕様書・テストケース生成）
 
 ```bash
-tdd-harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
+./harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
 ```
 
 ### Impl Flow（TDD 実装）
 
 ```bash
-tdd-harness impl plan/task.md
-tdd-harness impl plan/task.md --flow light    # 外部レビュー省略
-tdd-harness impl plan/task.md --resume        # チェックポイントから再開
-tdd-harness impl plan/task.md --no-interactive # 対話プロンプトスキップ
+./harness impl plan/task.md
+./harness impl plan/task.md --flow light    # 外部レビュー省略
+./harness impl plan/task.md --resume        # チェックポイントから再開
+./harness impl plan/task.md --no-interactive # 対話プロンプトスキップ
 ```
 
 ## プロファイル設定項目

@@ -16,6 +16,7 @@ import { resolveLintAdapter, resolveTestAdapter } from "./tool-adapter.ts";
 import type { BaseAdapter } from "./tool-adapter.ts";
 import type { FlowMode, FlowStep } from "./steps.ts";
 import { renderBenchmarkSummary } from "./benchmark-summary.ts";
+import { renderBenchmarkDiagnose } from "./benchmark-diagnose.ts";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
     console.log("  tdd-harness page <plan-file> [--flow full|light] [--no-interactive]");
     console.log('  tdd-harness design <feature-name> "<requirements>" [--profile <name>]');
     console.log("  tdd-harness benchmark-summary <log-dir> [<log-dir>]");
+    console.log("  tdd-harness benchmark-diagnose <log-dir> [<log-dir>]");
     console.log("  tdd-harness init");
     process.exit(1);
   }
@@ -170,6 +172,15 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       console.log(renderBenchmarkSummary(logDirs));
+      break;
+    }
+    case "benchmark-diagnose": {
+      const logDirs = args.slice(1);
+      if (logDirs.length === 0 || logDirs.length > 2) {
+        console.error("Error: benchmark-diagnose requires one or two log directories");
+        process.exit(1);
+      }
+      console.log(renderBenchmarkDiagnose(logDirs, projectRoot));
       break;
     }
     case "init": {

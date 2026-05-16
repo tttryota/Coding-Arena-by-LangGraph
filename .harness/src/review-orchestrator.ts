@@ -9,9 +9,42 @@ import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT
 import type { ReviewIssue, ReviewResult, ReviewRecord } from "./types.ts";
 import { loadTemplate, renderTemplate } from "./templates.ts";
 import { applyClaudeStepContext } from "./claude-context.ts";
+import { RUNNER_CAPABILITY } from "./runner.ts";
 
 const MAX_REVIEW_CYCLES = 5;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+
+const REVIEW_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["issues"],
+  properties: {
+    issues: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["file", "line", "severity", "description"],
+        properties: {
+          file: { type: "string" },
+          line: { type: ["number", "null"] },
+          severity: { enum: ["critical", "major", "minor"] },
+          description: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
+const MINOR_ACCEPTANCE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["safe", "reason"],
+  properties: {
+    safe: { type: "boolean" },
+    reason: { type: "string" },
+  },
+} as const;
 
 type ReviewParams = {
   targetFiles: string[];
@@ -23,6 +56,7 @@ type ReviewParams = {
   getFileDiff?: (files: string[]) => Promise<string>;
   designDecisions?: string[];
   reviewMode: "test" | "implementation";
+  skipExternalReview?: boolean;
   testCasesPath?: string;
 };
 
@@ -219,7 +253,11 @@ export class ReviewOrchestrator {
     params: ReviewParams,
     results: ReviewResult[],
   ): Promise<ReviewResult[]> {
-    this.logger.log(EVENT.REVIEW_START, { mode: "test-2-step" });
+    this.logger.log(EVENT.REVIEW_START, {
+      mode: params.skipExternalReview || this.registry.isStepSkipped(FLOW_STEP.TEST_EXTERNAL_REVIEW)
+        ? "test-1-step"
+        : "test-2-step",
+    });
 
     // Step 1: テスト品質チェック（テストケース文書との整合性）
     const step1Result = await this.reviewStep(
@@ -231,12 +269,12 @@ export class ReviewOrchestrator {
     results.push(step1Result);
 
     // Step 2: 外部レビュー（テストデータの妥当性）
-    if (this.registry.isStepSkipped(FLOW_STEP.TEST_EXTERNAL_REVIEW)) {
+    if (params.skipExternalReview || this.registry.isStepSkipped(FLOW_STEP.TEST_EXTERNAL_REVIEW)) {
       // light フロー: 外部レビューをスキップ
     } else {
       try {
         const step2Result = await this.reviewStep(
-          () => this.codexTestReview(params.targetFiles, params.specPath, params.testCasesPath ?? ""),
+          () => this.externalTestReview(params.targetFiles, params.specPath, params.testCasesPath ?? ""),
           params,
         );
         results.push(step2Result);
@@ -282,7 +320,7 @@ export class ReviewOrchestrator {
     } else {
       try {
         const step3Result = await this.reviewStep(
-          () => this.codexReview(params.targetFiles, params.specPath),
+          () => this.externalImplementationReview(params.targetFiles, params.specPath),
           params,
         );
         results.push(step3Result);
@@ -425,7 +463,9 @@ export class ReviewOrchestrator {
     const prompt = renderTemplate(template, { fileContents, testCases, spec, responseFormat });
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "test_quality" });
-    return this.executeReview(FLOW_STEP.TEST_SELF_QUALITY, prompt, "test_self_quality");
+    return this.executeReview(FLOW_STEP.TEST_SELF_QUALITY, prompt, "test_self_quality", {
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
   }
 
   private async selfReviewCriteria(
@@ -443,7 +483,10 @@ export class ReviewOrchestrator {
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "criteria" });
     // Pass criteria as appendSystemPrompt option
-    return this.executeReview(FLOW_STEP.IMPL_SELF_CRITERIA, prompt, "self_criteria", { appendSystemPrompt: criteria });
+    return this.executeReview(FLOW_STEP.IMPL_SELF_CRITERIA, prompt, "self_criteria", {
+      appendSystemPrompt: criteria,
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
   }
 
   private async selfReviewQuality(
@@ -458,10 +501,12 @@ export class ReviewOrchestrator {
     const prompt = renderTemplate(template, { fileContents, spec, responseFormat });
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "quality" });
-    return this.executeReview(FLOW_STEP.IMPL_SELF_QUALITY, prompt, "self_quality");
+    return this.executeReview(FLOW_STEP.IMPL_SELF_QUALITY, prompt, "self_quality", {
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
   }
 
-  private async codexTestReview(
+  private async externalTestReview(
     targetFiles: string[],
     specPath: string,
     testCasesPath: string,
@@ -474,10 +519,10 @@ export class ReviewOrchestrator {
     const template = loadTemplate("review-codex-test", this.projectRoot, config.templates);
     const prompt = renderTemplate(template, { fileContents, testCases, spec, responseFormat });
 
-    return this.executeReview(FLOW_STEP.TEST_EXTERNAL_REVIEW, prompt, "test_external");
+    return this.executeExternalReview(FLOW_STEP.TEST_EXTERNAL_REVIEW, prompt, "test_external");
   }
 
-  private async codexReview(
+  private async externalImplementationReview(
     targetFiles: string[],
     specPath: string,
   ): Promise<ReviewResult> {
@@ -488,7 +533,7 @@ export class ReviewOrchestrator {
     const template = loadTemplate("review-codex-impl", this.projectRoot, config.templates);
     const prompt = renderTemplate(template, { fileContents, spec, responseFormat });
 
-    return this.executeReview(FLOW_STEP.IMPL_EXTERNAL_REVIEW, prompt, "impl_external");
+    return this.executeExternalReview(FLOW_STEP.IMPL_EXTERNAL_REVIEW, prompt, "impl_external");
   }
 
   private async pageDesignReview(
@@ -553,7 +598,10 @@ export class ReviewOrchestrator {
       FLOW_STEP.PAGE_REVIEW_CODE,
       prompt,
       "page_code",
-      { appendSystemPrompt: criteria },
+      {
+        appendSystemPrompt: criteria,
+        outputSchema: REVIEW_OUTPUT_SCHEMA,
+      },
     );
   }
 
@@ -962,8 +1010,10 @@ ${spec.slice(0, 3000)}
 または
 {"safe": false, "reason": "判断理由"}`;
 
-      const rawResult = await this.executeRun(FLOW_STEP.JUDGE_MINOR, prompt, { allowedTools: ["Read"] });
-
+      const rawResult = await this.executeRun(FLOW_STEP.JUDGE_MINOR, prompt, {
+        allowedTools: ["Read"],
+        outputSchema: MINOR_ACCEPTANCE_SCHEMA,
+      });
       const cleaned = rawResult.replace(/```(?:json)?\s*\n([\s\S]*?)```/g, "$1");
       const parsed = JSON.parse(cleaned) as { safe?: boolean; reason?: string };
       return {
@@ -993,6 +1043,7 @@ ${spec.slice(0, 3000)}
       allowedTools?: string[];
       appendSystemPrompt?: string;
       timeoutMs?: number;
+      outputSchema?: Record<string, unknown>;
     },
   ): Promise<ReviewResult> {
     const runner = this.registry.getRunner(step);
@@ -1003,6 +1054,7 @@ ${spec.slice(0, 3000)}
           allowedTools: options?.allowedTools ?? ["Read"],
           timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
           appendSystemPrompt: options?.appendSystemPrompt,
+          outputSchema: options?.outputSchema,
         },
         this.registry.getConfig(),
         this.profile,
@@ -1014,6 +1066,34 @@ ${spec.slice(0, 3000)}
     return this.parseReviewResult(reviewer, response.text);
   }
 
+  private async executeExternalReview(
+    step: FlowStep,
+    prompt: string,
+    reviewer: string,
+    options?: {
+      timeoutMs?: number;
+    },
+  ): Promise<ReviewResult> {
+    const runner = this.registry.getRunner(step);
+    if (runner.review && runner.capabilities.has(RUNNER_CAPABILITY.REVIEW_API)) {
+      const response = await runner.review(
+        {
+          cwd: this.projectRoot,
+          timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+          instructions: prompt,
+          delivery: "detached",
+        },
+        this.logger,
+      );
+      return this.parseReviewResult(reviewer, response.text);
+    }
+
+    return this.executeReview(step, prompt, reviewer, {
+      timeoutMs: options?.timeoutMs,
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
+  }
+
   private async executeRun(
     step: FlowStep,
     prompt: string,
@@ -1022,6 +1102,7 @@ ${spec.slice(0, 3000)}
       appendSystemPrompt?: string;
       cwd?: string;
       timeoutMs?: number;
+      outputSchema?: Record<string, unknown>;
     },
   ): Promise<string> {
     const runner = this.registry.getRunner(step);
@@ -1033,6 +1114,7 @@ ${spec.slice(0, 3000)}
           appendSystemPrompt: options?.appendSystemPrompt,
           cwd: options?.cwd,
           timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+          outputSchema: options?.outputSchema,
         },
         this.registry.getConfig(),
         this.profile,

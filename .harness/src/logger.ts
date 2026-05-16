@@ -130,6 +130,24 @@ export class HarnessLogger {
     appendFileSync(logPath, entry, "utf-8");
   }
 
+  logTranscript(
+    tool: string,
+    direction: "client" | "server" | "stderr",
+    message: string,
+  ): void {
+    const logFileName =
+      tool === "codex-app-server" ? "codex-app-server.log" : `${tool}.log`;
+    const logPath = join(this.logDir, logFileName);
+    const rawEntry = [
+      `=== ${new Date().toISOString()} ===`,
+      `[${direction}]`,
+      message,
+      "",
+    ].join("\n");
+    const entry = this.redactOutput ? redact(rawEntry) : rawEntry;
+    appendFileSync(logPath, entry, "utf-8");
+  }
+
   saveReviewData(data: unknown): void {
     const dataPath = join(this.logDir, "review-data.json");
     const content = JSON.stringify(data, null, 2);

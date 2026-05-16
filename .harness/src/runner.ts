@@ -6,6 +6,7 @@ export const RUNNER_CAPABILITY = {
   SYSTEM_PROMPT: "system_prompt",
   AGENT: "agent",
   MCP_CONFIG: "mcp_config",
+  REVIEW_API: "review_api",
 } as const;
 
 export type RunnerCapability = (typeof RUNNER_CAPABILITY)[keyof typeof RUNNER_CAPABILITY];
@@ -19,6 +20,21 @@ export type RunnerRequest = {
   sessionId?: string;
   agent?: string;
   mcpConfigs?: string[];
+  model?: string;
+  effort?: "minimal" | "low" | "medium" | "high";
+  summary?: "auto" | "brief" | "detailed";
+  personality?: "default" | "strict" | "balanced";
+  approvalPolicy?: "untrusted" | "on-failure" | "on-request" | "never";
+  sandboxPolicy?: "read-only" | "workspace-write" | "danger-full-access";
+  outputSchema?: Record<string, unknown>;
+};
+
+export type RunnerReviewRequest = {
+  cwd?: string;
+  timeoutMs?: number;
+  sessionId?: string;
+  instructions: string;
+  delivery?: "inline" | "detached";
 };
 
 export type RunnerResponse = {
@@ -37,6 +53,7 @@ export type Runner = {
   readonly name: string;
   readonly capabilities: ReadonlySet<RunnerCapability>;
   run(request: RunnerRequest, logger?: HarnessLogger): Promise<RunnerResponse>;
+  review?(request: RunnerReviewRequest, logger?: HarnessLogger): Promise<RunnerResponse>;
 };
 
 export function prepareRequest(runner: Runner, request: RunnerRequest): RunnerRequest {

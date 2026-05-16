@@ -97,10 +97,7 @@ def _is_closing_fence(
     if fence is None:
         return False
     closing_character, closing_count = fence
-    if closing_character != fence_character or closing_count < fence_count:
-        return False
-    rest = line[closing_count:]
-    return rest.strip() == ""
+    return closing_character == fence_character and closing_count >= fence_count
 
 
 def _extract_raw_headings(lines: list[str]) -> list[tuple[str, int]]:

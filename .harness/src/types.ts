@@ -2,6 +2,7 @@
 
 export type ClaudeResult = {
   result: string;
+  structured_output?: unknown;
   session_id: string;
   is_error: boolean;
   total_cost_usd: number | null;
@@ -175,6 +176,7 @@ export type CheckpointData = {
   planPath: string;
   completedStep: CompletedStep;
   sessionId: string;
+  testGenerationDecision?: "noop" | "updated";
   records: ReviewRecord[];
   greenAttempt: number;
   timestamp: string;

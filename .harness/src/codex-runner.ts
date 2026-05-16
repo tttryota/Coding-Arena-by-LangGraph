@@ -1,41 +1,90 @@
+import { CodexConversationService } from "./codex-app-server/service.ts";
+import { StdioCodexAppServerTransport } from "./codex-app-server/transport.ts";
+import { RUNNER_CAPABILITY } from "./runner.ts";
 import type { Runner, RunnerResponse } from "./runner.ts";
-import { spawnWithStdin } from "./spawn.ts";
-import { HarnessError, RunnerRateLimitError } from "./types.ts";
 
 export function createCodexRunner(defaults?: {
   timeoutMs?: number;
   sandbox?: string;
   projectRoot?: string;
+  model?: string;
+  approvalPolicy?: "untrusted" | "on-failure" | "on-request" | "never";
+  summary?: "auto" | "brief" | "detailed";
+  effort?: "minimal" | "low" | "medium" | "high";
+  personality?: "default" | "strict" | "balanced";
 }): Runner {
+  const sandbox = normalizeSandbox(defaults?.sandbox);
+
   return {
     name: "codex",
-    capabilities: new Set([]),
+    capabilities: new Set([
+      RUNNER_CAPABILITY.SESSION_RESUME,
+      RUNNER_CAPABILITY.SYSTEM_PROMPT,
+      RUNNER_CAPABILITY.REVIEW_API,
+    ]),
     async run(request, logger) {
-      const args = ["exec"];
-      args.push("--sandbox", defaults?.sandbox ?? "read-only");
-      const cwd = request.cwd ?? defaults?.projectRoot;
-      if (cwd) args.push("--cd", cwd);
-      args.push("-");
-
-      const fullPrompt = request.appendSystemPrompt
-        ? `${request.prompt}\n\n---\n${request.appendSystemPrompt}`
-        : request.prompt;
-
-      const result = await spawnWithStdin(
-        "codex", args, fullPrompt, undefined,
-        request.timeoutMs ?? defaults?.timeoutMs,
-      );
-
-      if (logger) logger.logCommand("codex", args, result);
-
-      if (result.exitCode !== 0) {
-        if (/rate|limit|429/i.test(result.stderr)) {
-          throw new RunnerRateLimitError("codex", result.stderr);
-        }
-        throw new HarnessError(`codex exec failed (exit ${result.exitCode}): ${result.stderr}`);
+      const transport = new StdioCodexAppServerTransport({
+        cwd: defaults?.projectRoot,
+        logger,
+      });
+      const service = new CodexConversationService(transport);
+      try {
+        return await service.runTurn(
+          {
+            ...request,
+            timeoutMs: request.timeoutMs ?? defaults?.timeoutMs,
+            model: request.model ?? defaults?.model,
+            approvalPolicy: request.approvalPolicy ?? defaults?.approvalPolicy,
+            summary: request.summary ?? defaults?.summary,
+            effort: request.effort ?? defaults?.effort,
+            personality: request.personality ?? defaults?.personality,
+            sandboxPolicy: request.sandboxPolicy ?? sandbox,
+          },
+          {
+            cwd: defaults?.projectRoot,
+            sandbox,
+            model: defaults?.model,
+            approvalPolicy: defaults?.approvalPolicy,
+            personality: defaults?.personality,
+          },
+        );
+      } finally {
+        await transport.close();
       }
-
-      return { text: result.stdout } satisfies RunnerResponse;
+    },
+    async review(request, logger) {
+      const transport = new StdioCodexAppServerTransport({
+        cwd: defaults?.projectRoot,
+        logger,
+      });
+      const service = new CodexConversationService(transport);
+      try {
+        return await service.runReview(
+          {
+            ...request,
+            timeoutMs: request.timeoutMs ?? defaults?.timeoutMs,
+          },
+          {
+            cwd: defaults?.projectRoot,
+            sandbox,
+            model: defaults?.model,
+            approvalPolicy: defaults?.approvalPolicy,
+            personality: defaults?.personality,
+          },
+        );
+      } finally {
+        await transport.close();
+      }
     },
   };
+}
+
+function normalizeSandbox(
+  sandbox: string | undefined,
+): "read-only" | "workspace-write" | "danger-full-access" | undefined {
+  if (!sandbox) return undefined;
+  if (sandbox === "read-only" || sandbox === "workspace-write" || sandbox === "danger-full-access") {
+    return sandbox;
+  }
+  throw new Error(`Unsupported codex sandbox mode: ${sandbox}`);
 }

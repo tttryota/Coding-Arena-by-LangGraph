@@ -9,6 +9,7 @@ import { createGenericRunner } from "./generic-runner.ts";
 import { HarnessError } from "./types.ts";
 import type { HarnessLogger } from "./logger.ts";
 import { EVENT } from "./types.ts";
+import type { RunnerReviewRequest } from "./runner.ts";
 
 export type RunnerRegistry = {
   getRunner(step: FlowStep): Runner;
@@ -30,11 +31,18 @@ export function createRunnerRegistry(
   for (const [name, rc] of Object.entries(config.runners)) {
     switch (rc.type) {
       case "claude":
-        runners.set(name, createClaudeRunner({ timeoutMs: rc.timeoutMs }));
+        runners.set(name, createClaudeRunner({ timeoutMs: rc.timeoutMs, model: rc.model }));
         break;
       case "codex":
         runners.set(name, createCodexRunner({
-          timeoutMs: rc.timeoutMs, sandbox: rc.sandbox, projectRoot,
+          timeoutMs: rc.timeoutMs,
+          sandbox: rc.sandbox,
+          projectRoot,
+          model: rc.model,
+          approvalPolicy: rc.approvalPolicy,
+          summary: rc.summary,
+          effort: rc.effort,
+          personality: rc.personality,
         }));
         break;
       case "generic":
@@ -56,6 +64,24 @@ export function createRunnerRegistry(
       capabilities: runner.capabilities,
       async run(request: RunnerRequest, logger?: HarnessLogger): Promise<RunnerResponse> {
         const response = await runner.run(prepareRequest(runner, request), logger);
+        if (logger && response.metadata && step) {
+          logger.log(EVENT.RUNNER_USAGE, {
+            step,
+            runner: runner.name,
+            inputTokens: response.metadata.inputTokens ?? null,
+            outputTokens: response.metadata.outputTokens ?? null,
+            cacheCreationInputTokens: response.metadata.cacheCreationInputTokens ?? null,
+            cacheReadInputTokens: response.metadata.cacheReadInputTokens ?? null,
+            costUsd: response.metadata.costUsd ?? null,
+          });
+        }
+        return response;
+      },
+      async review(request: RunnerReviewRequest, logger?: HarnessLogger): Promise<RunnerResponse> {
+        if (!runner.review) {
+          throw new HarnessError(`Runner does not support review API: ${runner.name}`);
+        }
+        const response = await runner.review(request, logger);
         if (logger && response.metadata && step) {
           logger.log(EVENT.RUNNER_USAGE, {
             step,

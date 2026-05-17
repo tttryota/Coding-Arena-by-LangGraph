@@ -60,6 +60,9 @@ export function findSkillFilePath(projectRoot: string, skillName: string): strin
   const preferred = join(projectRoot, ".codex", "skills", skillName, "SKILL.md");
   if (existsSync(preferred)) return preferred;
 
+  const bundled = join(projectRoot, ".harness", "resources", "skills", skillName, "SKILL.md");
+  if (existsSync(bundled)) return bundled;
+
   const legacy = join(projectRoot, ".claude", "skills", skillName, "SKILL.md");
   if (existsSync(legacy)) return legacy;
 
@@ -70,7 +73,7 @@ function loadSkillPrompt(projectRoot: string, skillNames: string[]): string {
   const sections = skillNames.map((skillName) => {
     const skillPath = findSkillFilePath(projectRoot, skillName);
     if (!skillPath) {
-      throw new GuardError(`Harness skill not found: .codex/skills/${skillName}/SKILL.md`);
+      throw new GuardError(`Harness skill not found: .codex/skills/${skillName}/SKILL.md or .harness/resources/skills/${skillName}/SKILL.md`);
     }
     const content = readFileSync(skillPath, "utf-8").trim();
     return `## Loaded Skill: ${skillName}\n${content}`;

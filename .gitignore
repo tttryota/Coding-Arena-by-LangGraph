@@ -27,6 +27,8 @@ logs/*
 !logs/README.md
 .harness/logs/*
 !.harness/logs/README.md
+.codex/skills/harness-*/
+.claude/skills/harness-*/
 
 # ChromaDB
 chroma_data/

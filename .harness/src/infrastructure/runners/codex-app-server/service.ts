@@ -1,4 +1,4 @@
-import type { HarnessLogger } from "../../logging/logger.ts";
+import type { Logger } from "../../../application/ports/logger.ts";
 import type { RunnerRequest, RunnerResponse, RunnerReviewRequest } from "../runner.ts";
 import { HarnessError, RunnerRateLimitError } from "../../../domain/model/types.ts";
 import type {
@@ -29,11 +29,11 @@ export class CodexConversationService {
   private transport: AppServerTransport;
   private initialized = false;
   private initializePromise: Promise<void> | null = null;
-  private logger?: HarnessLogger;
+  private logger?: Logger;
 
   constructor(
     transport: AppServerTransport,
-    options?: { logger?: HarnessLogger },
+    options?: { logger?: Logger },
   ) {
     this.transport = transport;
     this.logger = options?.logger;

@@ -6,6 +6,11 @@ import { join } from "node:path";
 import { GuardError, HarnessError } from "../../domain/model/types.ts";
 import { Boundary } from "../../domain/services/boundary.ts";
 import { parseImplGenerationResult, parseTestGenerationResult, ImplFlow } from "./impl-flow.ts";
+import { DefaultFlowRuntimeFactory } from "../../infrastructure/runtime/default-flow-runtime-factory.ts";
+import { LauncherToolExecutor } from "../../infrastructure/process/launcher-tool-executor.ts";
+import { buildValidatedImplPlan } from "../plan/validated-plan.ts";
+import { resolveCriteriaPaths } from "../resolvers/criteria-resolver.ts";
+import { buildMswInstructions, resolveRuleName, resolveRulesContent } from "../resolvers/rules-resolver.ts";
 
 test("parseTestGenerationResult accepts noop result", () => {
   const result = parseTestGenerationResult(JSON.stringify({
@@ -73,12 +78,17 @@ test("impl generation result parsers fail closed on malformed payloads", () => {
 
 test("ImplFlow helper methods resolve criteria, rules, and MSW instructions", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-impl-helpers-"));
-  mkdirSync(join(root, ".harness", "rules"), { recursive: true });
-  writeFileSync(join(root, ".harness", "review-criteria-common.md"), "# common\n", "utf-8");
-  writeFileSync(join(root, ".harness", "review-criteria-backend.md"), "# backend\n", "utf-8");
-  writeFileSync(join(root, ".harness", "review-criteria-frontend.md"), "# frontend\n", "utf-8");
-  writeFileSync(join(root, ".harness", "rules", "impl.md"), "# impl rules\n", "utf-8");
-  writeFileSync(join(root, ".harness", "rules", "logic.md"), "# logic rules\n", "utf-8");
+  mkdirSync(join(root, ".harness", "resources", "criteria"), { recursive: true });
+  mkdirSync(join(root, ".harness", "resources", "rules"), { recursive: true });
+  mkdirSync(join(root, "docs", "spec", "quiz"), { recursive: true });
+  mkdirSync(join(root, "tests", "test-cases", "quiz"), { recursive: true });
+  writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-common.md"), "# common\n", "utf-8");
+  writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-backend.md"), "# backend\n", "utf-8");
+  writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-frontend.md"), "# frontend\n", "utf-8");
+  writeFileSync(join(root, ".harness", "resources", "rules", "impl.md"), "# impl rules\n", "utf-8");
+  writeFileSync(join(root, ".harness", "resources", "rules", "logic.md"), "# logic rules\n", "utf-8");
+  writeFileSync(join(root, "docs", "spec", "quiz", "result.md"), "---\nstatus: approved\n---\n", "utf-8");
+  writeFileSync(join(root, "tests", "test-cases", "quiz", "result.md"), "---\nstatus: approved\n---\n", "utf-8");
 
   const profile = {
     reviewCriteria: [],
@@ -91,20 +101,41 @@ test("ImplFlow helper methods resolve criteria, rules, and MSW instructions", ()
     },
   } as any;
   const boundary = new Boundary(root, profile.sourceLayout, ["ts"], []);
-  const flow = new ImplFlow(boundary, {} as never, profile, {} as never, []);
+  const flow = new ImplFlow(boundary, {} as never, profile, {} as never, [], new DefaultFlowRuntimeFactory(), new LauncherToolExecutor());
+  const validatedPlan = buildValidatedImplPlan(boundary, {
+    type: "impl",
+    profile: "frontend",
+    scope: "orders/create",
+    specPath: "docs/spec/quiz/result.md",
+    testCasesPath: "tests/test-cases/quiz/result.md",
+    msw: true,
+    description: "impl",
+    targets: [],
+    dependencies: [],
+    browserScenarios: [],
+    targetTestCases: ["case 1"],
+    exclusions: [],
+    completionCriteria: [],
+    designDecisions: [],
+  } as any);
 
   assert.equal((flow as any).shouldSkip(null, "impl_generate"), false);
   assert.equal((flow as any).shouldSkip("impl_generate", "test_generate"), true);
-  assert.deepEqual((flow as any).resolveCriteriaPaths(), [
-    join(root, ".harness", "review-criteria-common.md"),
-    join(root, ".harness", "review-criteria-backend.md"),
+  assert.deepEqual(resolveCriteriaPaths({
+    projectRoot: root,
+    explicitCriteria: profile.reviewCriteria,
+    criteriaPreset: profile.criteriaPreset,
+    defaultFallbackNames: ["review-criteria-common", "review-criteria-backend"],
+  }).paths, [
+    join(root, ".harness", "resources", "criteria", "review-criteria-common.md"),
+    join(root, ".harness", "resources", "criteria", "review-criteria-backend.md"),
   ]);
-  assert.match((flow as any).resolveRulesContent({ type: "impl", profile: "backend" }), /impl rules/);
-  assert.match((flow as any).resolveRulesContent({ type: "impl", profile: "frontend" }), /logic rules/);
-  assert.equal((flow as any).resolveRuleName({ type: "component", profile: "frontend" }), "component");
-  assert.match((flow as any).buildMswInstructions({ msw: true }, "test"), /MSW セットアップ/);
-  assert.match((flow as any).buildMswInstructions({ msw: true }, "impl"), /MSW ハンドラ生成/);
-  assert.equal((flow as any).buildMswInstructions({ msw: false }, "impl"), "");
+  assert.match(resolveRulesContent(root, resolveRuleName("impl", "backend")).content, /impl rules/);
+  assert.match(resolveRulesContent(root, resolveRuleName(validatedPlan.type, validatedPlan.profile)).content, /logic rules/);
+  assert.equal(resolveRuleName("component", "frontend"), "component");
+  assert.match(buildMswInstructions(true, "test"), /MSW セットアップ/);
+  assert.match(buildMswInstructions(true, "impl"), /MSW ハンドラ生成/);
+  assert.equal(buildMswInstructions(false, "impl"), "");
 });
 
 test("ImplFlow resolveCriteriaPaths rejects missing explicit criteria files", () => {
@@ -120,7 +151,10 @@ test("ImplFlow resolveCriteriaPaths rejects missing explicit criteria files", ()
     },
   } as any;
   const boundary = new Boundary(root, profile.sourceLayout, ["ts"], []);
-  const flow = new ImplFlow(boundary, {} as never, profile, {} as never, []);
-
-  assert.throws(() => (flow as any).resolveCriteriaPaths(), GuardError);
+  assert.throws(() => resolveCriteriaPaths({
+    projectRoot: root,
+    explicitCriteria: profile.reviewCriteria,
+    criteriaPreset: profile.criteriaPreset,
+    defaultFallbackNames: ["review-criteria-common", "review-criteria-backend"],
+  }), GuardError);
 });

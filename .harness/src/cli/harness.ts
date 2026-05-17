@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { HarnessLogger, DEFAULT_LOG_BASE_DIR } from "../infrastructure/logging/logger.ts";
 import { HarnessError } from "../domain/model/types.ts";
-import { Boundary } from "../domain/services/boundary.ts";
 import { DesignFlow } from "../application/flows/design-flow.ts";
 import { ComponentFlow } from "../application/flows/component-flow.ts";
 import { ImplFlow } from "../application/flows/impl-flow.ts";
@@ -14,6 +13,9 @@ import { createRunnerRegistry } from "../infrastructure/runners/runner-registry.
 import { interactiveRunnerAssignment } from "./interactive.ts";
 import { parsePlan } from "../domain/services/plan-parser.ts";
 import { resolveLintAdapter, resolveTestAdapter } from "../infrastructure/tooling/tool-adapter.ts";
+import { FsProjectBoundary } from "../infrastructure/project/fs-project-boundary.ts";
+import { LauncherToolExecutor } from "../infrastructure/process/launcher-tool-executor.ts";
+import { DefaultFlowRuntimeFactory } from "../infrastructure/runtime/default-flow-runtime-factory.ts";
 import type {
   BaseAdapter,
   LintAdapter,
@@ -22,11 +24,16 @@ import type {
 import type { FlowMode, FlowStep } from "../domain/model/steps.ts";
 import { renderBenchmarkSummary } from "../application/diagnostics/benchmark-summary.ts";
 import { renderBenchmarkDiagnose } from "../application/diagnostics/benchmark-diagnose.ts";
+import { syncBundledSkills } from "../infrastructure/skills/sync-skills.ts";
 import type { HarnessConfig, ResolvedProfileConfig } from "../infrastructure/config/config.ts";
 import type { RunnerRegistry } from "../infrastructure/runners/runner-registry.ts";
 import type { TaskPlan } from "../domain/model/types.ts";
+import type { ProjectBoundary } from "../application/ports/project-boundary.ts";
+import type { FlowRuntimeFactory } from "../application/ports/flow-runtime-factory.ts";
+import type { Logger } from "../application/ports/logger.ts";
+import type { ToolExecutor } from "../application/ports/tool-executor.ts";
 
-export const LOCAL_CLI_NAME = "./.harness/harness";
+export const LOCAL_CLI_NAME = "./.harness/bin/harness";
 
 export type CliRuntime = {
   cwd: () => string;
@@ -37,11 +44,13 @@ export type CliRuntime = {
 };
 
 type FlowResources = {
-  boundary: Boundary;
+  boundary: ProjectBoundary;
   registry: RunnerRegistry;
   profile: ResolvedProfileConfig;
   lintAdapters: LintAdapter[];
   testAdapter: TestAdapter;
+  toolExecutor: ToolExecutor;
+  runtimeFactory: FlowRuntimeFactory;
   effectiveFlow: FlowMode;
   overrides?: Partial<Record<FlowStep, string>>;
 };
@@ -55,36 +64,45 @@ export type CliDeps = {
   resolveTestAdapter: typeof resolveTestAdapter;
   createRunnerRegistry: typeof createRunnerRegistry;
   interactiveRunnerAssignment: typeof interactiveRunnerAssignment;
-  createBoundary: (projectRoot: string, profile: ResolvedProfileConfig, adapters: BaseAdapter[]) => Boundary;
+  createProjectBoundary: (projectRoot: string, profile: ResolvedProfileConfig, adapters: BaseAdapter[]) => ProjectBoundary;
+  createToolExecutor: () => ToolExecutor;
+  createFlowRuntimeFactory: () => FlowRuntimeFactory;
   createImplFlow: (
-    boundary: Boundary,
+    boundary: ProjectBoundary,
     registry: RunnerRegistry,
     profile: ResolvedProfileConfig,
     testAdapter: TestAdapter,
     lintAdapters: LintAdapter[],
+    runtimeFactory: FlowRuntimeFactory,
+    toolExecutor: ToolExecutor,
   ) => ImplFlow;
   createPageFlow: (
-    boundary: Boundary,
+    boundary: ProjectBoundary,
     registry: RunnerRegistry,
     profile: ResolvedProfileConfig,
     testAdapter: TestAdapter,
     lintAdapters: LintAdapter[],
+    runtimeFactory: FlowRuntimeFactory,
+    toolExecutor: ToolExecutor,
   ) => PageFlow;
   createComponentFlow: (
-    boundary: Boundary,
+    boundary: ProjectBoundary,
     registry: RunnerRegistry,
     profile: ResolvedProfileConfig,
     testAdapter: TestAdapter,
     lintAdapters: LintAdapter[],
+    runtimeFactory: FlowRuntimeFactory,
+    toolExecutor: ToolExecutor,
   ) => ComponentFlow;
   createDesignFlow: (
-    boundary: Boundary,
+    boundary: ProjectBoundary,
     registry: RunnerRegistry,
     profile?: ResolvedProfileConfig,
   ) => DesignFlow;
-  createLogger: (featureName: string, projectRoot: string) => HarnessLogger;
+  createLogger: (featureName: string, projectRoot: string) => Logger;
   renderBenchmarkSummary: typeof renderBenchmarkSummary;
   renderBenchmarkDiagnose: typeof renderBenchmarkDiagnose;
+  syncBundledSkills: typeof syncBundledSkills;
 };
 
 const defaultRuntime: CliRuntime = {
@@ -104,22 +122,30 @@ const defaultDeps: CliDeps = {
   resolveTestAdapter,
   createRunnerRegistry,
   interactiveRunnerAssignment,
-  createBoundary(projectRoot, profile, adapters) {
+  createProjectBoundary(projectRoot, profile, adapters) {
     const extensions = [...new Set(adapters.flatMap((adapter) => [...adapter.fileExtensions]))];
     const excludeDirs = [...new Set(adapters.flatMap((adapter) => [...adapter.excludeDirs]))];
-    return new Boundary(projectRoot, profile.sourceLayout, extensions, excludeDirs);
+    return new FsProjectBoundary(projectRoot, {
+      sourceDir: profile.sourceLayout.sourceDir,
+      testDir: profile.sourceLayout.testDir,
+      scopePattern: profile.sourceLayout.scopePattern,
+      additionalAllowedPrefixes: [...profile.sourceLayout.additionalAllowedPrefixes],
+    }, extensions, excludeDirs);
   },
-  createImplFlow: (boundary, registry, profile, testAdapter, lintAdapters) =>
-    new ImplFlow(boundary, registry, profile, testAdapter, lintAdapters),
-  createPageFlow: (boundary, registry, profile, testAdapter, lintAdapters) =>
-    new PageFlow(boundary, registry, profile, testAdapter, lintAdapters),
-  createComponentFlow: (boundary, registry, profile, testAdapter, lintAdapters) =>
-    new ComponentFlow(boundary, registry, profile, testAdapter, lintAdapters),
+  createToolExecutor: () => new LauncherToolExecutor(),
+  createFlowRuntimeFactory: () => new DefaultFlowRuntimeFactory(),
+  createImplFlow: (boundary, registry, profile, testAdapter, lintAdapters, runtimeFactory, toolExecutor) =>
+    new ImplFlow(boundary, registry, profile, testAdapter, lintAdapters, runtimeFactory, toolExecutor),
+  createPageFlow: (boundary, registry, profile, testAdapter, lintAdapters, runtimeFactory, toolExecutor) =>
+    new PageFlow(boundary, registry, profile, testAdapter, lintAdapters, runtimeFactory, toolExecutor),
+  createComponentFlow: (boundary, registry, profile, testAdapter, lintAdapters, runtimeFactory, toolExecutor) =>
+    new ComponentFlow(boundary, registry, profile, testAdapter, lintAdapters, runtimeFactory, toolExecutor),
   createDesignFlow: (boundary, registry, profile) => new DesignFlow(boundary, registry, profile),
   createLogger: (featureName, projectRoot) =>
     new HarnessLogger(`design_${featureName}`, { baseDir: join(projectRoot, DEFAULT_LOG_BASE_DIR) }),
   renderBenchmarkSummary,
   renderBenchmarkDiagnose,
+  syncBundledSkills,
 };
 
 export function usageLines(cliName = LOCAL_CLI_NAME): string[] {
@@ -131,6 +157,7 @@ export function usageLines(cliName = LOCAL_CLI_NAME): string[] {
     `  ${cliName} design <feature-name> "<requirements>" [--profile <name>]`,
     `  ${cliName} benchmark-summary <log-dir> [<log-dir>]`,
     `  ${cliName} benchmark-diagnose <log-dir> [<log-dir>]`,
+    `  ${cliName} sync-skills`,
     `  ${cliName} init`,
   ];
 }
@@ -170,7 +197,9 @@ async function resolveFlowResources(
   const lintAdapters = profile.lint.map(deps.resolveLintAdapter);
   const testAdapter = deps.resolveTestAdapter(profile.test);
   const allAdapters: BaseAdapter[] = [...lintAdapters, testAdapter];
-  const boundary = deps.createBoundary(projectRoot, profile, allAdapters);
+  const boundary = deps.createProjectBoundary(projectRoot, profile, allAdapters);
+  const toolExecutor = deps.createToolExecutor();
+  const runtimeFactory = deps.createFlowRuntimeFactory();
 
   let overrides: Partial<Record<FlowStep, string>> | undefined;
   const noInteractive = args.includes("--no-interactive");
@@ -190,7 +219,7 @@ async function resolveFlowResources(
     effectiveFlow,
   );
 
-  return { plan, boundary, registry, profile, lintAdapters, testAdapter, effectiveFlow, overrides };
+  return { plan, boundary, registry, profile, lintAdapters, testAdapter, toolExecutor, runtimeFactory, effectiveFlow, overrides };
 }
 
 async function runImplCommand(
@@ -209,6 +238,8 @@ async function runImplCommand(
     resources.profile,
     resources.testAdapter,
     resources.lintAdapters,
+    resources.runtimeFactory,
+    resources.toolExecutor,
   );
   await implFlow.run(planPath, { resume, plan: resources.plan });
   return 0;
@@ -229,6 +260,8 @@ async function runPageCommand(
     resources.profile,
     resources.testAdapter,
     resources.lintAdapters,
+    resources.runtimeFactory,
+    resources.toolExecutor,
   );
   await pageFlow.run(planPath, { plan: resources.plan });
   return 0;
@@ -249,6 +282,8 @@ async function runComponentCommand(
     resources.profile,
     resources.testAdapter,
     resources.lintAdapters,
+    resources.runtimeFactory,
+    resources.toolExecutor,
   );
   await componentFlow.run(planPath, { plan: resources.plan });
   return 0;
@@ -264,7 +299,7 @@ async function runDesignCommand(
   const requirements = requireValue(args[2], "Error: feature name and requirements required");
   const profileFlagIndex = args.indexOf("--profile");
   const profileName = profileFlagIndex !== -1 ? args[profileFlagIndex + 1] : undefined;
-  const boundary = new Boundary(projectRoot);
+  const boundary = new FsProjectBoundary(projectRoot);
   const profile = deps.resolveProfile(config, profileName ?? deps.inferProfile(config));
   const registry = deps.createRunnerRegistry(config, projectRoot, profile);
   const logger = deps.createLogger(featureName, projectRoot);
@@ -297,13 +332,19 @@ function runBenchmarkDiagnoseCommand(
 }
 
 function runInitCommand(runtime: CliRuntime): number {
-  const guidePath = join(import.meta.dirname ?? "", "..", "..", "setup-guide.md");
+  const guidePath = join(import.meta.dirname ?? "", "..", "..", "docs", "setup-guide.md");
   try {
     runtime.writeStdout(runtime.readGuide(guidePath));
     return 0;
   } catch {
     throw new HarnessError("setup-guide.md が見つかりません。ハーネスが正しく配置されていることを確認してください。");
   }
+}
+
+function runSyncSkillsCommand(projectRoot: string, runtime: CliRuntime, deps: CliDeps): number {
+  const skills = deps.syncBundledSkills(projectRoot);
+  runtime.writeStdout(`Synced harness skills to .codex/skills and .claude/skills: ${skills.join(", ")}`);
+  return 0;
 }
 
 export async function runCli(
@@ -322,6 +363,9 @@ export async function runCli(
   }
 
   const projectRoot = runtime.cwd();
+  if (command === "sync-skills") {
+    return runSyncSkillsCommand(projectRoot, runtime, deps);
+  }
   const config = deps.loadConfig(projectRoot);
 
   switch (command) {

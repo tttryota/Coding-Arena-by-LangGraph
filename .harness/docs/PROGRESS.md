@@ -31,7 +31,7 @@
 2. `runTests` を TestAdapter + runTool 経由に変更
 3. review-orchestrator の `testCommand: string[]` → `runTests: () => Promise<void>` コールバック化
 4. CriteriaResolver を impl-flow に実装（Boundary.determineCriteriaPaths shim を削除）
-5. テスト/実装生成プロンプトのテンプレート化（`templates/test-generate.md`, `templates/impl-generate.md`）
+5. テスト/実装生成プロンプトのテンプレート化（`resources/templates/test-generate.md`, `resources/templates/impl-generate.md`）
 6. `Boundary.parsePlanFile` shim を削除（plan-parser.ts に一本化完了）
 7. `lintCheck` で `findSourceFiles` を使用（`findPythonFiles` エイリアス削除）
 8. **tsc (project-only) 対応**: LintAdapter に `filePass: "files" | "project"` を追加。lint-guard で project モードの adapter はファイル引数なしで実行し、parseOutput の結果を scope 内ファイルにフィルタする。tsc はプロジェクト全体で実行するが、scope 隔離モデルを維持するため出力を scope 内に絞る。
@@ -54,10 +54,10 @@
 .harness/src/impl-flow.ts     — 全面書き換え（ctor 拡張、CriteriaResolver、TestAdapter+runTool、テンプレート化、runTests コールバック）
 .harness/src/review-orchestrator.ts — ReviewParams testCommand→runTests、runTests メソッド削除
 .harness/src/drift-guard.ts   — codexAvailable デフォルト false
-.harness/templates/test-generate.md — 新規作成（テスト生成プロンプト）
-.harness/templates/impl-generate.md — 新規作成（実装生成プロンプト）
-.harness/templates/impl-retry.md — 新規作成（実装リトライプロンプト）
-.harness/setup-guide.md       — 新規作成（`./.harness/harness init` 用セットアップガイド）
+.harness/resources/templates/test-generate.md — 新規作成（テスト生成プロンプト）
+.harness/resources/templates/impl-generate.md — 新規作成（実装生成プロンプト）
+.harness/resources/templates/impl-retry.md — 新規作成（実装リトライプロンプト）
+.harness/docs/setup-guide.md  — 新規作成（`./.harness/bin/harness init` 用セットアップガイド）
 .harness/README.md            — profiles セクション追加、前提条件汎用化、ツール一覧追加
 .harness/package.json         — ローカル実行用 scripts を整備
 .harness/src/types.ts         — TaskPlan に profile? 追加

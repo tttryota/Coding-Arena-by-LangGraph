@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { Boundary } from "../../domain/services/boundary.ts";
 import { ImplFlow } from "./impl-flow.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
+import { DefaultFlowRuntimeFactory } from "../../infrastructure/runtime/default-flow-runtime-factory.ts";
+import { LauncherToolExecutor } from "../../infrastructure/process/launcher-tool-executor.ts";
 
 function initGitRepo(root: string): void {
   execFileSync("git", ["init"], { cwd: root });
@@ -115,7 +117,7 @@ test("ImplFlow runs through RED to GREEN and generates a report", async () => {
       };
     },
   } as any;
-  const flow = new ImplFlow(boundary, registry, profile, fakeTestAdapter(), []);
+  const flow = new ImplFlow(boundary, registry, profile, fakeTestAdapter(), [], new DefaultFlowRuntimeFactory(), new LauncherToolExecutor());
   const plan = {
     type: "impl",
     profile: "backend",

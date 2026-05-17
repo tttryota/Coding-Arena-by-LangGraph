@@ -3,10 +3,10 @@
 ## 完了済み
 
 - [x] CLI ランナーのプラガブル化（claude / codex / generic）
-- [x] 設定ファイル（`.harness.yml`）によるランナー割り当て・フロー選択
+- [x] 設定ファイル（`.harness/config/harness.yml`）によるランナー割り当て・フロー選択
 - [x] 簡易フロー（light）— 外部レビューのみ省略
 - [x] 対話的ランナー割り当て（`--no-interactive` で CI 対応）
-- [x] レビュー観点のテンプレート化（`templates/` + プレースホルダ置換）
+- [x] レビュー観点のテンプレート化（`resources/templates/` + プレースホルダ置換）
 - [x] LICENSE (MIT) / README
 - [x] レビュープロンプトのワンショット例（良い例・悪い例の対比）
 - [x] チェックポイント resume 機能（`logDir` 保持）

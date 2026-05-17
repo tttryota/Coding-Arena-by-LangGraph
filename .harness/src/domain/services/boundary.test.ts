@@ -45,6 +45,8 @@ test("Boundary validates scope and path segments", () => {
   const boundary = new Boundary(root);
 
   assert.throws(() => boundary.validateScope("single"), GuardError);
+  assert.throws(() => boundary.extractCategory("single"), GuardError);
+  assert.throws(() => boundary.extractName("single"), GuardError);
   assert.throws(() => boundary.extractCategory("../bad"), GuardError);
   assert.throws(() => boundary.extractName("bad/na)me"), GuardError);
 });
@@ -79,6 +81,29 @@ test("Boundary discovers source and test files and builds allowed tools", async 
   assert.match(boundary.implAllowedTools("quiz/result")[1] ?? "", /frontend\/src\/quiz\/result\/\*\*\/\*\.\{ts,tsx\}/);
 });
 
+test("Boundary discovers source files when sourceDir and testDir are separate trees", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-boundary-split-layout-"));
+  mkdirSync(join(root, "frontend", "src", "quiz", "result"), { recursive: true });
+  mkdirSync(join(root, "frontend", "tests", "quiz", "result"), { recursive: true });
+  writeFileSync(join(root, "frontend", "src", "quiz", "result", "ResultPage.tsx"), "export const x = 1;\n", "utf-8");
+  writeFileSync(join(root, "frontend", "tests", "quiz", "result", "ResultPage.test.tsx"), "test\n", "utf-8");
+  initGitRepo(root);
+  writeFileSync(join(root, "frontend", "tests", "quiz", "result", "ResultPage.test.tsx"), "updated\n", "utf-8");
+
+  const boundary = new Boundary(root, {
+    sourceDir: "frontend/src/{{category}}/{{name}}",
+    testDir: "frontend/tests/{{category}}/{{name}}",
+    scopePattern: "frontend/src/{{category}}/{{name}}/*",
+    additionalAllowedPrefixes: [],
+  }, ["ts", "tsx"], []);
+
+  assert.equal((await boundary.findSourceFiles("quiz/result")).length, 2);
+  assert.equal((await boundary.findImplementationFiles("quiz/result")).length, 1);
+  assert.equal((await boundary.findTestFiles("quiz/result")).length, 1);
+  await boundary.stageFiles("quiz/result");
+  await boundary.verifyChangedFilesWithinScope("quiz/result");
+});
+
 test("Boundary stages and verifies changed files within scope", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-git-"));
   mkdirSync(join(root, "backend", "ingestion", "tests"), { recursive: true });
@@ -90,8 +115,8 @@ test("Boundary stages and verifies changed files within scope", async () => {
   writeFileSync(join(root, "backend", "ingestion", "mod.py"), "value = 2\n", "utf-8");
   await boundary.stageFiles("ingestion/chunk");
   await boundary.verifyChangedFilesWithinScope("ingestion/chunk");
-  assert.equal((await boundary.getCurrentCommitHash()).length > 0, true);
-  assert.equal(await boundary.countDiffLines() > 0, true);
+  assert.match(await boundary.getCurrentCommitHash(), /^[0-9a-f]{40}$/);
+  assert.equal(await boundary.countDiffLines(), 2);
   assert.match(await boundary.getFileDiff([join(root, "backend", "ingestion", "mod.py")]), /value = 2/);
 
   writeFileSync(join(root, "README.md"), "oops\n", "utf-8");
@@ -119,7 +144,7 @@ test("Boundary rejects project-external symlinks", async () => {
   );
 });
 
-test("Boundary implementationGuard, frontmatter parsing, and additional tool scopes cover guard branches", async () => {
+test("Boundary implementationGuard and additional tool scopes enforce review contracts", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-boundary-guard-"));
   mkdirSync(join(root, "backend", "quiz", "tests"), { recursive: true });
   mkdirSync(join(root, ".harness", "reviews"), { recursive: true });
@@ -143,7 +168,6 @@ test("Boundary implementationGuard, frontmatter parsing, and additional tool sco
     targetTestCases: ["covers spec"],
   } as any);
   assert.equal(boundary.readFrontmatter(join(root, "spec.md")).owner, "codex");
-  assert.deepEqual(boundary.readFrontmatter(join(root, "backend", "quiz", "impl.py")), {});
   assert.deepEqual(boundary.testAllowedTools("quiz/result"), [
     "Read",
     "Write(backend/quiz/tests/**)",
@@ -155,7 +179,6 @@ test("Boundary implementationGuard, frontmatter parsing, and additional tool sco
   writeFileSync(join(root, ".harness", "reviews", "note.md"), "review\n", "utf-8");
   await boundary.stageFiles("quiz/result");
   await boundary.verifyChangedFilesWithinScope("quiz/result");
-  assert.equal(await boundary.getFileDiff([]), "");
 
   assert.throws(
     () => boundary.implementationGuard({ specPath: "spec.md", testCasesPath: "cases.md", scope: "quiz/result", targetTestCases: [] } as any),
@@ -187,4 +210,32 @@ test("Boundary covers missing-plan fields, empty directories, and non-git fallba
   for (const entry of missingFieldCases) {
     assert.throws(() => boundary.implementationGuard(entry.plan as any), entry.pattern);
   }
+});
+
+test("Boundary implementationGuard rejects draft spec and test case statuses", () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-boundary-draft-status-"));
+  writeFileSync(join(root, "spec.md"), "---\nstatus: draft\n---\n# spec\n", "utf-8");
+  writeFileSync(join(root, "cases.md"), "---\nstatus: draft\n---\n# cases\n", "utf-8");
+  const boundary = new Boundary(root);
+
+  assert.throws(
+    () => boundary.implementationGuard({
+      scope: "quiz/result",
+      specPath: "spec.md",
+      testCasesPath: "cases.md",
+      targetTestCases: ["case"],
+    } as any),
+    /仕様書が ready ではありません/,
+  );
+
+  writeFileSync(join(root, "spec.md"), "---\nstatus: approved\n---\n# spec\n", "utf-8");
+  assert.throws(
+    () => boundary.implementationGuard({
+      scope: "quiz/result",
+      specPath: "spec.md",
+      testCasesPath: "cases.md",
+      targetTestCases: ["case"],
+    } as any),
+    /テストケースが ready ではありません/,
+  );
 });

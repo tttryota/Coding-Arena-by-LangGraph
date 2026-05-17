@@ -1,27 +1,28 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { HarnessLogger } from "../../infrastructure/logging/logger.ts";
-import type { Boundary } from "../../domain/services/boundary.ts";
+import type { Logger } from "../ports/logger.ts";
+import type { ProjectBoundary } from "../ports/project-boundary.ts";
 import type { RunnerRegistry } from "../../infrastructure/runners/runner-registry.ts";
 import type { ResolvedProfileConfig } from "../../infrastructure/config/config.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
 import { GuardError } from "../../domain/model/types.ts";
 import { applyStepContext, joinPromptSections } from "../../infrastructure/runners/step-context.ts";
+import { isReadyLikeStatus } from "../policies/plan-readiness-policy.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
 export class DesignFlow {
-  private boundary: Boundary;
+  private boundary: ProjectBoundary;
   private registry: RunnerRegistry;
   private profile?: ResolvedProfileConfig;
 
-  constructor(boundary: Boundary, registry: RunnerRegistry, profile?: ResolvedProfileConfig) {
+  constructor(boundary: ProjectBoundary, registry: RunnerRegistry, profile?: ResolvedProfileConfig) {
     this.boundary = boundary;
     this.registry = registry;
     this.profile = profile;
   }
 
-  async run(featureName: string, requirements: string, logger: HarnessLogger): Promise<void> {
+  async run(featureName: string, requirements: string, logger: Logger): Promise<void> {
     const root = this.boundary.getProjectRoot();
     const category = this.boundary.extractCategory(featureName);
     const name = this.boundary.extractName(featureName);
@@ -51,7 +52,7 @@ export class DesignFlow {
     }
 
     const specFm = this.boundary.readFrontmatter(specPath);
-    if (!this.isReadyLikeStatus(specFm.status)) {
+    if (!isReadyLikeStatus(specFm.status)) {
       console.log("仕様書を確認し、frontmatter の status を ready に更新してから再実行してください。");
       return;
     }
@@ -69,7 +70,7 @@ export class DesignFlow {
     }
 
     const tcFm = this.boundary.readFrontmatter(tcPath);
-    if (!this.isReadyLikeStatus(tcFm.status)) {
+    if (!isReadyLikeStatus(tcFm.status)) {
       console.log("テストケースを確認し、frontmatter の status を ready に更新してください。");
       return;
     }
@@ -77,13 +78,9 @@ export class DesignFlow {
     console.log("仕様書・テストケースともに ready です。impl フローに進めます。");
   }
 
-  private isReadyLikeStatus(status: string | undefined): boolean {
-    return status === "ready" || status === "approved";
-  }
-
   private async generateSpec(
     featureName: string, outputPath: string, requirements: string,
-    allowedTools: string[], logger: HarnessLogger,
+    allowedTools: string[], logger: Logger,
   ): Promise<void> {
     const root = this.boundary.getProjectRoot();
     const templatePath = join(root, "docs/spec/TEMPLATE.md");
@@ -128,7 +125,7 @@ ${template}
 
   private async generateTestCases(
     featureName: string, specPath: string, outputPath: string,
-    allowedTools: string[], logger: HarnessLogger,
+    allowedTools: string[], logger: Logger,
   ): Promise<void> {
     const root = this.boundary.getProjectRoot();
     const spec = readFileSync(specPath, "utf-8");

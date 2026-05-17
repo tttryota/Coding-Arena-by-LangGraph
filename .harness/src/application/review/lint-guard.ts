@@ -1,26 +1,29 @@
 import { resolve } from "node:path";
-import type { HarnessLogger } from "../../infrastructure/logging/logger.ts";
 import { DriftError, HarnessError, ESCALATION_LEVEL, EVENT } from "../../domain/model/types.ts";
 import type { LintViolation } from "../../domain/model/types.ts";
 import type { LintAdapter, LintAdapterContext } from "../../infrastructure/tooling/tool-adapter.ts";
-import { runTool } from "../../infrastructure/process/launcher.ts";
 import type { LauncherOptions } from "../../infrastructure/process/launcher.ts";
+import type { Logger } from "../ports/logger.ts";
+import type { ToolExecutor } from "../ports/tool-executor.ts";
 
 const MAX_LINT_RETRIES = 5;
 
 export class LintGuard {
-  private logger: HarnessLogger;
+  private logger: Logger;
   private adapters: LintAdapter[];
   private launcherOptions: LauncherOptions;
+  private toolExecutor: ToolExecutor;
 
   constructor(
-    logger: HarnessLogger,
+    logger: Logger,
     adapters: LintAdapter[],
     launcherOptions: LauncherOptions,
+    toolExecutor: ToolExecutor,
   ) {
     this.logger = logger;
     this.adapters = adapters;
     this.launcherOptions = launcherOptions;
+    this.toolExecutor = toolExecutor;
   }
 
   async check(
@@ -62,7 +65,7 @@ export class LintGuard {
         if (isProjectMode) {
           // project モード: ファイル引数なしで check のみ実行
           const checkArgs = adapter.checkArgs([], ctx);
-          const checkResult = await runTool(
+          const checkResult = await this.toolExecutor.run(
             adapter.name,
             checkArgs,
             this.launcherOptions,
@@ -94,7 +97,7 @@ export class LintGuard {
           // files モード
           // format
           if (adapter.formatArgs) {
-            const formatResult = await runTool(
+            const formatResult = await this.toolExecutor.run(
               adapter.name,
               adapter.formatArgs(filteredFiles, ctx),
               this.launcherOptions,
@@ -108,7 +111,7 @@ export class LintGuard {
 
           // auto-fix
           if (adapter.fixArgs) {
-            await runTool(
+            await this.toolExecutor.run(
               adapter.name,
               adapter.fixArgs(filteredFiles, ctx),
               this.launcherOptions,
@@ -117,7 +120,7 @@ export class LintGuard {
 
           // check
           const checkArgs = adapter.checkArgs(filteredFiles, ctx);
-          const checkResult = await runTool(
+          const checkResult = await this.toolExecutor.run(
             adapter.name,
             checkArgs,
             this.launcherOptions,

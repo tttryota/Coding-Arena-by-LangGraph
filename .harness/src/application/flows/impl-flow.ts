@@ -1,10 +1,9 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { resolve, join, basename } from "node:path";
-import { HarnessLogger, DEFAULT_LOG_BASE_DIR, redact } from "../../infrastructure/logging/logger.ts";
-import { LintGuard } from "../review/lint-guard.ts";
-import { DriftGuard } from "../review/drift-guard.ts";
-import { ReviewOrchestrator } from "../review/review-orchestrator.ts";
-import type { Boundary } from "../../domain/services/boundary.ts";
+import { redact } from "../../infrastructure/logging/logger.ts";
+import type { ProjectBoundary } from "../ports/project-boundary.ts";
+import type { FlowRuntimeFactory } from "../ports/flow-runtime-factory.ts";
+import type { ToolExecutor } from "../ports/tool-executor.ts";
 import type { RunnerRegistry } from "../../infrastructure/runners/runner-registry.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
 import { GuardError, HarnessError, ESCALATION_LEVEL, EVENT, STEP_ORDER } from "../../domain/model/types.ts";
@@ -12,12 +11,18 @@ import type { TaskPlan, ReviewRecord, LintViolation, CompletedStep } from "../..
 import type { ResolvedProfileConfig } from "../../infrastructure/config/config.ts";
 import type { LintAdapter, TestAdapter } from "../../infrastructure/tooling/tool-adapter.ts";
 import { loadTemplate, renderTemplate } from "../../infrastructure/templates/templates.ts";
-import { runTool } from "../../infrastructure/process/launcher.ts";
 import type { LauncherOptions } from "../../infrastructure/process/launcher.ts";
 import { parsePlan } from "../../domain/services/plan-parser.ts";
 import { applyStepContext, joinPromptSections } from "../../infrastructure/runners/step-context.ts";
+import type { Logger } from "../ports/logger.ts";
+import { LintGuard } from "../review/lint-guard.ts";
+import { DriftGuard } from "../review/drift-guard.ts";
+import { ReviewOrchestrator } from "../review/review-orchestrator.ts";
+import { buildValidatedImplPlan, type ValidatedImplPlan } from "../plan/validated-plan.ts";
+import { RETRY_POLICY } from "../policies/retry-policy.ts";
+import { resolveCriteriaPaths } from "../resolvers/criteria-resolver.ts";
+import { buildMswInstructions, resolveRuleName, resolveRulesContent } from "../resolvers/rules-resolver.ts";
 
-const MAX_GREEN_RETRIES = 3;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const TEST_GENERATION_OUTPUT_SCHEMA = {
   type: "object",
@@ -146,24 +151,30 @@ export function parseImplGenerationResult(raw: string): ImplGenerationResult {
 }
 
 export class ImplFlow {
-  private boundary: Boundary;
+  private boundary: ProjectBoundary;
   private registry: RunnerRegistry;
   private profile: ResolvedProfileConfig;
   private testAdapter: TestAdapter;
   private lintAdapters: LintAdapter[];
+  private runtimeFactory: FlowRuntimeFactory;
+  private toolExecutor: ToolExecutor;
 
   constructor(
-    boundary: Boundary,
+    boundary: ProjectBoundary,
     registry: RunnerRegistry,
     profile: ResolvedProfileConfig,
     testAdapter: TestAdapter,
     lintAdapters: LintAdapter[],
+    runtimeFactory: FlowRuntimeFactory,
+    toolExecutor: ToolExecutor,
   ) {
     this.boundary = boundary;
     this.registry = registry;
     this.profile = profile;
     this.testAdapter = testAdapter;
     this.lintAdapters = lintAdapters;
+    this.runtimeFactory = runtimeFactory;
+    this.toolExecutor = toolExecutor;
   }
 
   private shouldSkip(completedStep: CompletedStep | null, target: CompletedStep): boolean {
@@ -171,109 +182,10 @@ export class ImplFlow {
     return STEP_ORDER.indexOf(completedStep) >= STEP_ORDER.indexOf(target);
   }
 
-  private resolveCriteriaPaths(): string[] {
-    const root = this.boundary.getProjectRoot();
-    const paths: string[] = [];
-
-    // 1. profile.reviewCriteria（ユーザー明示パス）
-    for (const c of this.profile.reviewCriteria) {
-      const fullPath = resolve(root, c);
-      if (!existsSync(fullPath)) {
-        throw new GuardError(`Review criteria not found: ${c}`);
-      }
-      paths.push(fullPath);
-    }
-
-    // 2. profile.criteriaPreset（組み込みプリセット）
-    if (this.profile.criteriaPreset) {
-      const presetNames = [
-        "review-criteria-common",
-        `review-criteria-${this.profile.criteriaPreset}`,
-      ];
-      for (const name of presetNames) {
-        const projectPath = join(root, ".harness", `${name}.md`);
-        if (existsSync(projectPath)) {
-          paths.push(projectPath);
-          continue;
-        }
-        const packagePath = join(import.meta.dirname ?? "", "..", "..", "..", `${name}.md`);
-        if (existsSync(packagePath)) {
-          paths.push(packagePath);
-          continue;
-        }
-        throw new GuardError(`Review criteria not found: ${name}.md`);
-      }
-    }
-
-    // 3. どちらも未指定の場合: common + backend（後方互換）
-    if (this.profile.reviewCriteria.length === 0 && !this.profile.criteriaPreset) {
-      const fallbackNames = ["review-criteria-common", "review-criteria-backend"];
-      for (const name of fallbackNames) {
-        const projectPath = join(root, ".harness", `${name}.md`);
-        if (existsSync(projectPath)) {
-          paths.push(projectPath);
-          continue;
-        }
-        const packagePath = join(import.meta.dirname ?? "", "..", "..", "..", `${name}.md`);
-        if (existsSync(packagePath)) {
-          paths.push(packagePath);
-        }
-      }
-    }
-
-    return paths;
-  }
-
-  private resolveRulesContent(plan: TaskPlan): string {
-    const ruleName = this.resolveRuleName(plan);
-    if (!ruleName) return "";
-
-    const root = this.boundary.getProjectRoot();
-    const projectPath = join(root, ".harness", "rules", `${ruleName}.md`);
-    if (existsSync(projectPath)) {
-      return readFileSync(projectPath, "utf-8");
-    }
-
-    const packagePath = join(import.meta.dirname ?? "", "..", "..", "..", "rules", `${ruleName}.md`);
-    if (existsSync(packagePath)) {
-      return readFileSync(packagePath, "utf-8");
-    }
-
-    return "";
-  }
-
-  private resolveRuleName(plan: TaskPlan): string | undefined {
-    if (plan.type === "impl" && plan.profile === "frontend") {
-      return "logic";
-    }
-    return plan.type;
-  }
-
-  private buildMswInstructions(plan: TaskPlan, mode: "test" | "impl"): string {
-    if (!plan.msw) return "";
-
-    if (mode === "test") {
-      return `## MSW セットアップ
-- テストファイルに MSW server のセットアップ (beforeAll/afterEach/afterAll) を含める
-- API モック用の handler import を含める（handler ファイルは実装フェーズで生成される）
-- handler の配置先: frontend/src/mocks/handlers/
-- server.use(...handlers) でモックを適用する`;
-    }
-
-    return `## MSW ハンドラ生成
-- frontend/src/mocks/handlers/ に共有ハンドラファイルを生成する
-- ハンドラのレスポンス形状はバックエンド API の契約と一致させる
-- テストファイルから import されるパスと一致させる`;
-  }
-
   async run(planPath: string, options?: { resume?: boolean; plan?: import("../../domain/model/types.ts").TaskPlan }): Promise<void> {
-    const plan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
+    const rawPlan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
+    const plan = buildValidatedImplPlan(this.boundary, rawPlan);
     const root = this.boundary.getProjectRoot();
-    const logger = new HarnessLogger(`impl_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, DEFAULT_LOG_BASE_DIR), resume: options?.resume });
-    const lintGuard = new LintGuard(logger, this.lintAdapters, {
-      toolRoot: this.profile.toolRoot,
-      execOverride: this.profile.exec,
-    });
     // codexAvailable: ImplFlow の迷走対処に寄与する step で codex が使えるか
     // impl フローで実際に使う step のうち、外部レビュー系のみを判定対象とする
     const implFlowSteps: import("../../domain/model/steps.ts").FlowStep[] = [
@@ -289,8 +201,16 @@ export class ImplFlow {
       const runner = runnerConfig.runners[runnerName];
       return runner?.type === "codex";
     });
-    const driftGuard = new DriftGuard(logger, { codexAvailable: hasCodex });
-    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry, this.profile);
+    const { logger, lintGuard, driftGuard, reviewOrchestrator } = this.runtimeFactory.createImplRuntime({
+      taskName: `impl_${plan.scope.replace(/\//g, "_")}`,
+      projectRoot: root,
+      profile: this.profile,
+      registry: this.registry,
+      lintAdapters: this.lintAdapters,
+      toolExecutor: this.toolExecutor,
+      resume: options?.resume,
+      codexAvailable: hasCodex,
+    });
 
     // チェックポイント復元
     const checkpoint = options?.resume ? logger.loadCheckpoint() : null;
@@ -306,8 +226,6 @@ export class ImplFlow {
       }
     }
 
-    // ガードチェック
-    this.boundary.implementationGuard(plan);
     logger.log(EVENT.GUARD_CHECK, { scope: plan.scope, result: "pass" });
 
     const LINES_PER_TEST_CASE = 30;
@@ -317,9 +235,14 @@ export class ImplFlow {
     const scopeTools = this.boundary.scopeAllowedTools(plan.scope);
     const testTools = this.boundary.testAllowedTools(plan.scope);
 
-    const spec = readFileSync(resolve(root, plan.specPath), "utf-8");
-    const criteriaPaths = this.resolveCriteriaPaths();
-    const rules = this.resolveRulesContent(plan);
+    const spec = readFileSync(plan.resolvedPaths.specPath, "utf-8");
+    const criteriaPaths = resolveCriteriaPaths({
+      projectRoot: root,
+      explicitCriteria: this.profile.reviewCriteria,
+      criteriaPreset: this.profile.criteriaPreset,
+      defaultFallbackNames: ["review-criteria-common", "review-criteria-backend"],
+    }).paths;
+    const rules = resolveRulesContent(root, resolveRuleName(plan.type, plan.profile)).content;
     const generationSystemPrompt = joinPromptSections([rules]);
 
     logger.log(EVENT.TDD_START, { testCases: plan.targetTestCases });
@@ -335,7 +258,7 @@ export class ImplFlow {
         spec,
         frameworkName: this.testAdapter.frameworkName,
         testPath,
-        mswInstructions: this.buildMswInstructions(plan, "test"),
+        mswInstructions: buildMswInstructions(plan.msw, "test"),
       });
       const testGenResult = await runner.run(
         applyStepContext(
@@ -430,8 +353,8 @@ export class ImplFlow {
     // 実装 → GREEN リトライループ
     let lastFailureOutput = redFailureOutput;
     if (!this.shouldSkip(resumeFrom, "green_confirmed")) {
-    for (let attempt = 1; attempt <= MAX_GREEN_RETRIES; attempt++) {
-      console.log(`実装コードを生成中... (試行 ${attempt}/${MAX_GREEN_RETRIES})`);
+    for (let attempt = 1; attempt <= RETRY_POLICY.implGreen.maxAttempts; attempt++) {
+      console.log(`実装コードを生成中... (試行 ${attempt}/${RETRY_POLICY.implGreen.maxAttempts})`);
 
       const config = this.registry.getConfig();
       const implTemplate = attempt === 1
@@ -440,7 +363,7 @@ export class ImplFlow {
       const implPrompt = renderTemplate(implTemplate, {
         testOutput: lastFailureOutput,
         spec,
-        mswInstructions: this.buildMswInstructions(plan, "impl"),
+        mswInstructions: buildMswInstructions(plan.msw, "impl"),
       });
 
       const implRunner = this.registry.getRunner(FLOW_STEP.IMPL_GENERATE);
@@ -528,9 +451,9 @@ export class ImplFlow {
       }
     }
 
-    throw new GuardError(
-      `${MAX_GREEN_RETRIES} 回の試行でテストが GREEN になりませんでした。`,
-    );
+        throw new GuardError(
+          `${RETRY_POLICY.implGreen.maxAttempts} 回の試行でテストが GREEN になりませんでした。`,
+        );
     } // end if !shouldSkip green_confirmed
 
     // GREEN確認済みからの再開: 実装レビューのみ実行
@@ -586,7 +509,7 @@ ${issueList}
 
   private async runTestReview(
     orchestrator: ReviewOrchestrator,
-    plan: TaskPlan,
+    plan: ValidatedImplPlan,
     testPath: string,
     options?: { skipExternalReview?: boolean },
   ): Promise<void> {
@@ -596,7 +519,7 @@ ${issueList}
     console.log("テストレビュー実行中...");
     await orchestrator.runReview({
       targetFiles: testFiles,
-      specPath: resolve(this.boundary.getProjectRoot(), plan.specPath),
+      specPath: plan.resolvedPaths.specPath,
       criteriaPaths: [],
       runTests: async () => {
         const result = await this.runTests(testPath);
@@ -610,7 +533,7 @@ ${issueList}
       reviewMode: "test",
       targetTestCases: plan.targetTestCases,
       skipExternalReview: options?.skipExternalReview,
-      testCasesPath: resolve(this.boundary.getProjectRoot(), plan.testCasesPath),
+      testCasesPath: plan.resolvedPaths.testCasesPath,
     });
   }
 
@@ -652,7 +575,7 @@ ${issueList}
 
   private async runImplReview(
     orchestrator: ReviewOrchestrator,
-    plan: TaskPlan,
+    plan: ValidatedImplPlan,
     criteriaPaths: string[],
     testPath: string,
   ): Promise<void> {
@@ -662,7 +585,7 @@ ${issueList}
     console.log("実装レビュー実行中...");
     await orchestrator.runReview({
       targetFiles: implFiles,
-      specPath: resolve(this.boundary.getProjectRoot(), plan.specPath),
+      specPath: plan.resolvedPaths.specPath,
       criteriaPaths,
       runTests: async () => {
         const result = await this.runTests(testPath);
@@ -689,7 +612,7 @@ ${issueList}
       toolRoot: this.profile.toolRoot,
       execOverride: this.profile.exec,
     };
-    const result = await runTool(this.testAdapter.name, args, launcherOptions);
+    const result = await this.toolExecutor.run(this.testAdapter.name, args, launcherOptions);
     const testResult = this.testAdapter.parseResult(
       result.stdout,
       result.stderr,
@@ -721,8 +644,8 @@ ${issueList}
   }
 
   private generateReport(
-    plan: TaskPlan,
-    logger: HarnessLogger,
+    plan: ValidatedImplPlan,
+    logger: Logger,
     records: ReviewRecord[],
     tdd: { greenAttempts: number; alreadyGreen: boolean },
   ): void {
@@ -843,7 +766,10 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
     md += `| Output Tokens | ${usageSummary.total.outputTokens} |\n`;
     md += `| Cost USD | ${usageSummary.total.costUsd.toFixed(4)} |\n`;
 
-    const usageSteps = Object.entries(usageSummary.byStep);
+    const usageSteps = Object.entries(usageSummary.byStep) as Array<[
+      string,
+      { runs: number; inputTokens: number; outputTokens: number; costUsd: number },
+    ]>;
     if (usageSteps.length > 0) {
       md += `\n### Claude Usage By Step\n\n`;
       md += `| Step | Runs | Input | Output | Cost USD |\n|---|---:|---:|---:|---:|\n`;

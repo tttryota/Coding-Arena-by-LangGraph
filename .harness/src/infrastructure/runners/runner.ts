@@ -1,4 +1,4 @@
-import type { HarnessLogger } from "../logging/logger.ts";
+import type { Logger } from "../../application/ports/logger.ts";
 
 export const RUNNER_CAPABILITY = {
   SESSION_RESUME: "session_resume",
@@ -52,8 +52,8 @@ export type RunnerResponse = {
 export type Runner = {
   readonly name: string;
   readonly capabilities: ReadonlySet<RunnerCapability>;
-  run(request: RunnerRequest, logger?: HarnessLogger): Promise<RunnerResponse>;
-  review?(request: RunnerReviewRequest, logger?: HarnessLogger): Promise<RunnerResponse>;
+  run(request: RunnerRequest, logger?: Logger): Promise<RunnerResponse>;
+  review?(request: RunnerReviewRequest, logger?: Logger): Promise<RunnerResponse>;
 };
 
 export function prepareRequest(runner: Runner, request: RunnerRequest): RunnerRequest {

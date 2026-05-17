@@ -1,10 +1,10 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { stringify as stringifyYaml } from "yaml";
-import { HarnessLogger, DEFAULT_LOG_BASE_DIR } from "../../infrastructure/logging/logger.ts";
+import type { FlowRuntimeFactory } from "../ports/flow-runtime-factory.ts";
+import type { ProjectBoundary } from "../ports/project-boundary.ts";
+import type { ToolExecutor } from "../ports/tool-executor.ts";
 import { LintGuard } from "../review/lint-guard.ts";
-import { ReviewOrchestrator } from "../review/review-orchestrator.ts";
-import type { Boundary } from "../../domain/services/boundary.ts";
 import type { RunnerRegistry } from "../../infrastructure/runners/runner-registry.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
 import type { TaskPlan, BrowserVerificationResult, ReviewIssue, BrowserScenarioResult } from "../../domain/model/types.ts";
@@ -12,47 +12,63 @@ import { DriftError, GuardError, HarnessError, ESCALATION_LEVEL } from "../../do
 import type { ResolvedProfileConfig } from "../../infrastructure/config/config.ts";
 import type { LintAdapter, TestAdapter } from "../../infrastructure/tooling/tool-adapter.ts";
 import { loadTemplate, renderTemplate } from "../../infrastructure/templates/templates.ts";
-import { runTool } from "../../infrastructure/process/launcher.ts";
 import type { LauncherOptions } from "../../infrastructure/process/launcher.ts";
 import { parsePlan } from "../../domain/services/plan-parser.ts";
 import { applyStepContext } from "../../infrastructure/runners/step-context.ts";
+import type { LintViolation } from "../../domain/model/types.ts";
+import { buildValidatedPagePlan, type ValidatedPagePlan } from "../plan/validated-plan.ts";
+import { RETRY_POLICY } from "../policies/retry-policy.ts";
+import { browserIssuesFromResult } from "../policies/review-issue-policy.ts";
+import { resolveCriteriaPaths } from "../resolvers/criteria-resolver.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-const MAX_BROWSER_ATTEMPTS = 2;
 
 export class PageFlow {
-  private boundary: Boundary;
+  private boundary: ProjectBoundary;
   private registry: RunnerRegistry;
   private profile: ResolvedProfileConfig;
   private testAdapter: TestAdapter;
   private lintAdapters: LintAdapter[];
+  private runtimeFactory: FlowRuntimeFactory;
+  private toolExecutor: ToolExecutor;
 
   constructor(
-    boundary: Boundary,
+    boundary: ProjectBoundary,
     registry: RunnerRegistry,
     profile: ResolvedProfileConfig,
     testAdapter: TestAdapter,
     lintAdapters: LintAdapter[],
+    runtimeFactory: FlowRuntimeFactory,
+    toolExecutor: ToolExecutor,
   ) {
     this.boundary = boundary;
     this.registry = registry;
     this.profile = profile;
     this.testAdapter = testAdapter;
     this.lintAdapters = lintAdapters;
+    this.runtimeFactory = runtimeFactory;
+    this.toolExecutor = toolExecutor;
   }
 
   async run(planPath: string, options?: { plan?: TaskPlan }): Promise<void> {
-    const plan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
-    this.validatePagePlan(plan);
+    const rawPlan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
+    const plan = buildValidatedPagePlan(this.boundary, rawPlan);
 
     const root = this.boundary.getProjectRoot();
-    const logger = new HarnessLogger(`page_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, DEFAULT_LOG_BASE_DIR) });
-    const lintGuard = new LintGuard(logger, this.lintAdapters, {
-      toolRoot: this.profile.toolRoot,
-      execOverride: this.profile.exec,
+    const { lintGuard, reviewOrchestrator } = this.runtimeFactory.createPageRuntime({
+      taskName: `page_${plan.scope.replace(/\//g, "_")}`,
+      projectRoot: root,
+      profile: this.profile,
+      registry: this.registry,
+      lintAdapters: this.lintAdapters,
+      toolExecutor: this.toolExecutor,
     });
-    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry, this.profile);
-    const criteriaPaths = this.resolveCriteriaPaths();
+    const criteriaPaths = resolveCriteriaPaths({
+      projectRoot: root,
+      explicitCriteria: this.profile.reviewCriteria,
+      criteriaPreset: this.profile.criteriaPreset,
+      defaultFallbackNames: ["review-criteria-common", "review-criteria-frontend"],
+    }).paths;
     const scopeTools = this.boundary.scopeAllowedTools(plan.scope);
     const implFilesRescan = () => this.boundary.findImplementationFiles(plan.scope);
 
@@ -65,7 +81,7 @@ export class PageFlow {
     console.log("ページレビュー実行中...");
     await reviewOrchestrator.runPageReview({
       targetFiles: await implFilesRescan(),
-      specPath: resolve(root, plan.specPath),
+      specPath: plan.resolvedPaths.specPath,
       criteriaPaths,
       runTests: async () => {
         const result = await this.runTests(this.boundary.testPathForScope(plan.scope));
@@ -78,9 +94,9 @@ export class PageFlow {
       getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
       designDecisions: plan.designDecisions,
       reviewMode: "implementation",
-      testCasesPath: resolve(root, plan.testCasesPath),
-      componentSpecPath: resolve(root, plan.componentSpecPath ?? ""),
-      figmaSlice: plan.figmaSlice ?? "",
+      testCasesPath: plan.resolvedPaths.testCasesPath,
+      componentSpecPath: plan.resolvedPaths.componentSpecPath,
+      figmaSlice: plan.figmaSlice,
       dependenciesText: stringifyYaml(
         plan.dependencies.map((dependency) => ({
           name: dependency.name,
@@ -91,8 +107,8 @@ export class PageFlow {
     });
     await this.boundary.verifyChangedFilesWithinScope(plan.scope);
 
-    for (let attempt = 1; attempt <= MAX_BROWSER_ATTEMPTS; attempt++) {
-      console.log(`ブラウザ検証中... (試行 ${attempt}/${MAX_BROWSER_ATTEMPTS})`);
+    for (let attempt = 1; attempt <= RETRY_POLICY.pageBrowser.maxAttempts; attempt++) {
+      console.log(`ブラウザ検証中... (試行 ${attempt}/${RETRY_POLICY.pageBrowser.maxAttempts})`);
       const pageFiles = await implFilesRescan();
       const browserResult = await this.runBrowserVerification(plan, pageFiles);
       if (browserResult.overall === "pass") {
@@ -100,22 +116,22 @@ export class PageFlow {
         return;
       }
 
-      if (attempt >= MAX_BROWSER_ATTEMPTS) {
+      if (attempt >= RETRY_POLICY.pageBrowser.maxAttempts) {
         throw new DriftError(
           ESCALATION_LEVEL.LEVEL_1,
           "page_browser_verification",
-          `Browser Verification が ${MAX_BROWSER_ATTEMPTS} 回の試行でも通過しませんでした。`,
+          `Browser Verification が ${RETRY_POLICY.pageBrowser.maxAttempts} 回の試行でも通過しませんでした。`,
         );
       }
 
-      const browserIssues = this.browserIssuesFromResult(browserResult);
+      const browserIssues = browserIssuesFromResult(browserResult);
       console.log("ブラウザ検証で指摘が出たため修正し、レビューに戻ります...");
       await this.applyBrowserFixes(browserIssues, scopeTools);
       await this.runStaticChecks(lintGuard, plan, scopeTools);
       await this.boundary.verifyChangedFilesWithinScope(plan.scope);
       await reviewOrchestrator.runPageReview({
         targetFiles: await implFilesRescan(),
-        specPath: resolve(root, plan.specPath),
+        specPath: plan.resolvedPaths.specPath,
         criteriaPaths,
         runTests: async () => {
           const result = await this.runTests(this.boundary.testPathForScope(plan.scope));
@@ -128,9 +144,9 @@ export class PageFlow {
         getFileDiff: (files: string[]) => this.boundary.getFileDiff(files),
         designDecisions: plan.designDecisions,
         reviewMode: "implementation",
-        testCasesPath: resolve(root, plan.testCasesPath),
-        componentSpecPath: resolve(root, plan.componentSpecPath ?? ""),
-        figmaSlice: plan.figmaSlice ?? "",
+        testCasesPath: plan.resolvedPaths.testCasesPath,
+        componentSpecPath: plan.resolvedPaths.componentSpecPath,
+        figmaSlice: plan.figmaSlice,
         dependenciesText: stringifyYaml(
           plan.dependencies.map((dependency) => ({
             name: dependency.name,
@@ -143,136 +159,10 @@ export class PageFlow {
     }
   }
 
-  private validatePagePlan(plan: TaskPlan): void {
-    if (plan.type !== "page") {
-      throw new GuardError(`page コマンドには type: page の plan が必要です。現在: ${plan.type ?? "未指定"}`);
-    }
-    if (!plan.profile) {
-      throw new GuardError("page plan には profile が必要です。");
-    }
-    if (!plan.scope) {
-      throw new GuardError("page plan には scope が必要です。");
-    }
-    if (!plan.specPath) {
-      throw new GuardError("page plan には spec が必要です。");
-    }
-    if (!plan.testCasesPath) {
-      throw new GuardError("page plan には test_cases が必要です。");
-    }
-    if (!plan.componentSpecPath) {
-      throw new GuardError("page plan には component_spec が必要です。");
-    }
-    if (!plan.figmaCachePath) {
-      throw new GuardError("page plan には figma_cache が必要です。");
-    }
-    if (plan.msw === undefined) {
-      throw new GuardError("page plan には msw が必要です。");
-    }
-    if (plan.dependencies.length === 0) {
-      throw new GuardError("page plan には Dependencies セクションが必要です。");
-    }
-    if (!plan.figmaSlice || plan.figmaSlice.trim() === "") {
-      throw new GuardError("page plan には Figma Slice セクションが必要です。");
-    }
-    if (plan.browserScenarios.length === 0) {
-      throw new GuardError("page plan には Browser Scenarios セクションが必要です。");
-    }
-    if (plan.targetTestCases.length === 0) {
-      throw new GuardError("page plan には 対象テストケース セクションが必要です。");
-    }
-    if (plan.completionCriteria.length === 0) {
-      throw new GuardError("page plan には 完了条件 セクションが必要です。");
-    }
-
-    this.boundary.validateScope(plan.scope);
-
+  private async generatePage(plan: ValidatedPagePlan, scopeTools: string[]): Promise<void> {
     const root = this.boundary.getProjectRoot();
-    const requiredPaths = [
-      resolve(root, plan.specPath),
-      resolve(root, plan.testCasesPath),
-      resolve(root, plan.componentSpecPath),
-      resolve(root, plan.figmaCachePath),
-    ];
-    for (const fullPath of requiredPaths) {
-      this.boundary.assertWithinProject(fullPath);
-      if (!existsSync(fullPath)) {
-        throw new GuardError(`page plan の参照ファイルが存在しません: ${fullPath}`);
-      }
-    }
-
-    const specStatus = this.boundary.readFrontmatter(resolve(root, plan.specPath)).status;
-    if (!this.isReadyLikeStatus(specStatus)) {
-      throw new GuardError(`仕様書が ready ではありません（現在: ${specStatus ?? "なし"}）`);
-    }
-    const testCasesStatus = this.boundary.readFrontmatter(resolve(root, plan.testCasesPath)).status;
-    if (!this.isReadyLikeStatus(testCasesStatus)) {
-      throw new GuardError(`テストケースが ready ではありません（現在: ${testCasesStatus ?? "なし"}）`);
-    }
-    const componentSpecStatus = this.boundary.readFrontmatter(resolve(root, plan.componentSpecPath)).status;
-    if (!this.isReadyLikeStatus(componentSpecStatus)) {
-      throw new GuardError(`コンポーネント定義書が ready ではありません（現在: ${componentSpecStatus ?? "なし"}）`);
-    }
-  }
-
-  private isReadyLikeStatus(status: string | undefined): boolean {
-    return status === "ready" || status === "approved";
-  }
-
-  private resolveCriteriaPaths(): string[] {
-    const root = this.boundary.getProjectRoot();
-    const paths: string[] = [];
-
-    for (const criteriaPath of this.profile.reviewCriteria) {
-      const fullPath = resolve(root, criteriaPath);
-      if (!existsSync(fullPath)) {
-        throw new GuardError(`Review criteria not found: ${criteriaPath}`);
-      }
-      paths.push(fullPath);
-    }
-
-    if (this.profile.criteriaPreset) {
-      const presetNames = [
-        "review-criteria-common",
-        `review-criteria-${this.profile.criteriaPreset}`,
-      ];
-      for (const name of presetNames) {
-        const projectPath = join(root, ".harness", `${name}.md`);
-        if (existsSync(projectPath)) {
-          paths.push(projectPath);
-          continue;
-        }
-        const packagePath = join(import.meta.dirname ?? "", "..", "..", "..", `${name}.md`);
-        if (existsSync(packagePath)) {
-          paths.push(packagePath);
-          continue;
-        }
-        throw new GuardError(`Review criteria not found: ${name}.md`);
-      }
-    }
-
-    if (paths.length === 0) {
-      const fallbackNames = ["review-criteria-common", "review-criteria-frontend"];
-      for (const name of fallbackNames) {
-        const projectPath = join(root, ".harness", `${name}.md`);
-        if (existsSync(projectPath)) {
-          paths.push(projectPath);
-          continue;
-        }
-        const packagePath = join(import.meta.dirname ?? "", "..", "..", "..", `${name}.md`);
-        if (existsSync(packagePath)) {
-          paths.push(packagePath);
-        }
-      }
-    }
-
-    return paths;
-  }
-
-  private async generatePage(plan: TaskPlan, scopeTools: string[]): Promise<void> {
-    const root = this.boundary.getProjectRoot();
-    const spec = readFileSync(resolve(root, plan.specPath), "utf-8");
-    const componentSpec = readFileSync(resolve(root, plan.componentSpecPath ?? ""), "utf-8");
-    const figmaSlice = plan.figmaSlice ?? "";
+    const spec = readFileSync(plan.resolvedPaths.specPath, "utf-8");
+    const componentSpec = readFileSync(plan.resolvedPaths.componentSpecPath, "utf-8");
     const dependencies = stringifyYaml(
       plan.dependencies.map((dependency) => ({
         name: dependency.name,
@@ -287,7 +177,7 @@ export class PageFlow {
       spec,
       componentSpec,
       dependencies,
-      figmaSlice,
+      figmaSlice: plan.figmaSlice,
       browserScenarios,
       targetTestCases: plan.targetTestCases.join("\n"),
     });
@@ -311,16 +201,16 @@ export class PageFlow {
 
   private async runStaticChecks(
     lintGuard: LintGuard,
-    plan: TaskPlan,
+    plan: ValidatedPagePlan,
     scopeTools: string[],
   ): Promise<void> {
     console.log("静的チェック実行中...");
     const sourceFiles = await this.boundary.findSourceFiles(plan.scope);
     if (sourceFiles.length > 0) {
       await lintGuard.check(sourceFiles, {
-        claudeFix: async (violations) => {
+        claudeFix: async (violations: LintViolation[]) => {
           const issueList = violations
-            .map((violation) => `${violation.tool}: ${violation.file}:${violation.line} - ${violation.message}`)
+            .map((violation: LintViolation) => `${violation.tool}: ${violation.file}:${violation.line} - ${violation.message}`)
             .join("\n");
           const runner = this.registry.getRunner(FLOW_STEP.LINT_FIX);
           await runner.run(
@@ -362,7 +252,7 @@ ${issueList}
       toolRoot: this.profile.toolRoot,
       execOverride: this.profile.exec,
     };
-    const result = await runTool(this.testAdapter.name, args, launcherOptions);
+    const result = await this.toolExecutor.run(this.testAdapter.name, args, launcherOptions);
     const testResult = this.testAdapter.parseResult(
       result.stdout,
       result.stderr,
@@ -385,11 +275,11 @@ ${issueList}
   }
 
   private async runBrowserVerification(
-    plan: TaskPlan,
+    plan: ValidatedPagePlan,
     targetFiles: string[],
   ): Promise<BrowserVerificationResult> {
     const root = this.boundary.getProjectRoot();
-    const spec = readFileSync(resolve(root, plan.specPath), "utf-8");
+    const spec = readFileSync(plan.resolvedPaths.specPath, "utf-8");
     const config = this.registry.getConfig();
     const template = loadTemplate("review-page-browser", root, config.templates);
     const prompt = renderTemplate(template, {
@@ -465,29 +355,6 @@ ${issueList}
       observed: this.optionalStringList(record.observed),
       notes: this.optionalString(record.notes),
     };
-  }
-
-  private browserIssuesFromResult(result: BrowserVerificationResult): ReviewIssue[] {
-    const issues = result.scenarios
-      .filter((scenario) => scenario.status !== "pass")
-      .map((scenario) => {
-        const expected = scenario.expected?.join(" / ") ?? "期待結果不明";
-        const observed = scenario.observed?.join(" / ") ?? "観測結果不明";
-        const failureDetail = scenario.failedStep ? `失敗ステップ: ${scenario.failedStep}` : "失敗ステップ不明";
-        return {
-          description: `Browser Verification 失敗: ${scenario.name}. ${failureDetail}. expected=${expected}. observed=${observed}. ${scenario.notes ?? ""}`.trim(),
-          severity: scenario.status === "blocked" ? "critical" : "major",
-          file: "",
-        } satisfies ReviewIssue;
-      });
-    if (issues.length === 0 && result.overall !== "pass") {
-      issues.push({
-        description: `Browser Verification 全体が ${result.overall} で終了しました。scenario 単位の詳細が返っていません。`,
-        severity: "critical",
-        file: "",
-      });
-    }
-    return issues;
   }
 
   private async applyBrowserFixes(

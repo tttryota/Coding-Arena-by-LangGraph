@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import type { HarnessLogger } from "../../infrastructure/logging/logger.ts";
 import type { LintGuard } from "./lint-guard.ts";
 import type { RunnerRegistry } from "../../infrastructure/runners/runner-registry.ts";
 import type { ResolvedProfileConfig } from "../../infrastructure/config/config.ts";
@@ -9,8 +8,11 @@ import { DriftError, HarnessError, RunnerRateLimitError, ESCALATION_LEVEL, EVENT
 import type { ReviewChecklistEntry, ReviewIssue, ReviewResult, ReviewRecord } from "../../domain/model/types.ts";
 import { loadTemplate, renderTemplate } from "../../infrastructure/templates/templates.ts";
 import { applyStepContext } from "../../infrastructure/runners/step-context.ts";
+import type { Logger } from "../ports/logger.ts";
+import { nextMinorOnlyCycles, shouldAcceptMinorVerdict, shouldJudgeMinorAcceptance } from "../policies/review-acceptance-policy.ts";
+import { RETRY_POLICY } from "../policies/retry-policy.ts";
+import { hasCriticalOrMajorIssues, hasParseFailure, reconcileReviewIssues } from "../policies/review-issue-policy.ts";
 
-const MAX_REVIEW_CYCLES = 5;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
 const REVIEW_OUTPUT_SCHEMA = {
@@ -82,7 +84,7 @@ type PageReviewParams = ReviewParams & {
 };
 
 export class ReviewOrchestrator {
-  private logger: HarnessLogger;
+  private logger: Logger;
   private lintGuard: LintGuard;
   private projectRoot: string;
   private registry: RunnerRegistry;
@@ -90,7 +92,7 @@ export class ReviewOrchestrator {
   private records: ReviewRecord[] = [];
 
   constructor(
-    logger: HarnessLogger,
+    logger: Logger,
     lintGuard: LintGuard,
     projectRoot: string,
     registry: RunnerRegistry,
@@ -130,7 +132,7 @@ export class ReviewOrchestrator {
 
     this.logger.log(EVENT.REVIEW_START, { mode: "page-3-step" });
 
-    for (let cycle = 0; cycle < MAX_REVIEW_CYCLES; cycle++) {
+    for (let cycle = 0; cycle < RETRY_POLICY.review.maxCycles; cycle++) {
       const diffBefore = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
         : "";
@@ -170,10 +172,7 @@ export class ReviewOrchestrator {
         return results;
       }
 
-      const hasParseFailure = combinedIssues.some(
-        (issue) => issue.file === "" && issue.severity === "critical",
-      );
-      if (hasParseFailure) {
+      if (hasParseFailure(combinedIssues)) {
         this.records.push({
           step: "page_review",
           cycle: cycle + 1,
@@ -191,19 +190,15 @@ export class ReviewOrchestrator {
         );
       }
 
-      const hasCriticalOrMajor = combinedIssues.some(
-        (issue) => issue.severity === "critical" || issue.severity === "major",
-      );
-
-      if (!hasCriticalOrMajor) {
-        minorOnlyCycles++;
-        if (minorOnlyCycles >= 2) {
+      minorOnlyCycles = nextMinorOnlyCycles(minorOnlyCycles, combinedIssues);
+      if (!hasCriticalOrMajorIssues(combinedIssues)) {
+        if (shouldJudgeMinorAcceptance(minorOnlyCycles)) {
           const verdict = await this.judgeMinorAcceptance(
             combinedIssues,
             diffBefore,
             params.specPath,
           );
-          if (verdict.safe) {
+          if (shouldAcceptMinorVerdict(minorOnlyCycles, verdict)) {
             this.records.push({
               step: "page_review",
               cycle: cycle + 1,
@@ -217,8 +212,6 @@ export class ReviewOrchestrator {
             return results;
           }
         }
-      } else {
-        minorOnlyCycles = 0;
       }
 
       await this.applyFixes(combinedIssues, params);
@@ -241,7 +234,7 @@ export class ReviewOrchestrator {
     throw new DriftError(
       ESCALATION_LEVEL.LEVEL_1,
       "page_review_cycle",
-      `ページレビューが ${MAX_REVIEW_CYCLES} サイクルで収束しませんでした`,
+      `ページレビューが ${RETRY_POLICY.review.maxCycles} サイクルで収束しませんでした`,
     );
   }
 
@@ -378,7 +371,7 @@ export class ReviewOrchestrator {
     const results: ReviewResult[] = [];
     let cycle = 0;
 
-    while (cycle < MAX_REVIEW_CYCLES) {
+    while (cycle < RETRY_POLICY.review.maxCycles) {
       cycle++;
       const diffBefore = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
@@ -406,15 +399,13 @@ export class ReviewOrchestrator {
       });
 
       // パース失敗チェック（両エージェント）
-      const hasParseFailure = [...reviewA.issues, ...reviewB.issues].some(
-        (i) => i.file === "" && i.severity === "critical",
-      );
-      if (hasParseFailure) {
+      const combinedIssues = [...reviewA.issues, ...reviewB.issues];
+      if (hasParseFailure(combinedIssues)) {
         this.records.push({
           step: "dual_fallback",
           cycle,
           reviewer: "fallback_a+fallback_b",
-          findings: [...reviewA.issues, ...reviewB.issues],
+          findings: combinedIssues,
           decision: "escalated",
           diffBefore,
           diffAfter: "",
@@ -471,7 +462,7 @@ export class ReviewOrchestrator {
     throw new DriftError(
       ESCALATION_LEVEL.LEVEL_1,
       "review_cycle",
-      `レビューが ${MAX_REVIEW_CYCLES} サイクルで収束しませんでした`,
+      `レビューが ${RETRY_POLICY.review.maxCycles} サイクルで収束しませんでした`,
     );
   }
 
@@ -699,54 +690,29 @@ export class ReviewOrchestrator {
     a: ReviewResult,
     b: ReviewResult,
   ): ReviewIssue[] {
-    // 全件残す方式: 両エージェントの指摘を統合し severity で判断
-    // - critical/major: 常に修正対象
-    // - minor: 両方が指摘した場合のみ修正対象
-    const toFix: ReviewIssue[] = [];
-
-    const allIssues = [
-      ...a.issues.map((i) => ({ ...i, source: "A" as const })),
-      ...b.issues.map((i) => ({ ...i, source: "B" as const })),
-    ];
-
-    for (const issue of allIssues) {
-      if (issue.severity === "critical" || issue.severity === "major") {
-        toFix.push(issue);
-      } else {
-        // minor: 相手側にも似た指摘があれば修正対象
-        const otherIssues = issue.source === "A" ? b.issues : a.issues;
-        const confirmedByOther = otherIssues.some(
-          (other) => other.file === issue.file && other.description === issue.description,
-        );
-        if (confirmedByOther) {
-          toFix.push(issue);
-        } else {
-          // 片方のみの minor → 対応不要として記録
-          this.records.push({
-            step: "dual_fallback",
-            cycle: 0,
-            reviewer: issue.source === "A" ? "fallback_a" : "fallback_b",
-            findings: [issue],
-            decision: "accepted",
-            diffBefore: "",
-            diffAfter: "",
-            judgmentSummary: `片方のエージェントのみが指摘した minor 指摘のため対応不要と判断`,
-          });
-        }
-      }
+    const reconciled = reconcileReviewIssues(a, b);
+    for (const accepted of reconciled.accepted) {
+      this.records.push({
+        step: "dual_fallback",
+        cycle: 0,
+        reviewer: accepted.reviewer,
+        findings: [accepted.issue],
+        decision: "accepted",
+        diffBefore: "",
+        diffAfter: "",
+        judgmentSummary: accepted.judgmentSummary,
+      });
     }
-
-    return toFix;
+    return reconciled.toFix;
   }
 
   private async reviewStep(
     reviewFn: () => Promise<ReviewResult>,
     params: ReviewParams,
   ): Promise<ReviewResult> {
-    const MAX_MINOR_ONLY_CYCLES = 2;
     let minorOnlyCycles = 0;
 
-    for (let cycle = 0; cycle < MAX_REVIEW_CYCLES; cycle++) {
+    for (let cycle = 0; cycle < RETRY_POLICY.review.maxCycles; cycle++) {
       const diffBefore = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
         : "";
@@ -767,10 +733,7 @@ export class ReviewOrchestrator {
       }
 
       // パース失敗等の擬似 issue は自動修正せずエスカレーション
-      const hasParseFailure = result.issues.some(
-        (i) => i.file === "" && i.severity === "critical",
-      );
-      if (hasParseFailure) {
+      if (hasParseFailure(result.issues)) {
         this.records.push({
           step: result.reviewer,
           cycle: cycle + 1,
@@ -788,19 +751,14 @@ export class ReviewOrchestrator {
         );
       }
 
-      // minor のみの判定
-      const hasCriticalOrMajor = result.issues.some(
-        (i) => i.severity === "critical" || i.severity === "major",
-      );
-
-      if (!hasCriticalOrMajor) {
-        minorOnlyCycles++;
-        if (minorOnlyCycles >= MAX_MINOR_ONLY_CYCLES) {
+      minorOnlyCycles = nextMinorOnlyCycles(minorOnlyCycles, result.issues);
+      if (!hasCriticalOrMajorIssues(result.issues)) {
+        if (shouldJudgeMinorAcceptance(minorOnlyCycles)) {
           // 第三者 Claude に許容可否を判断させる
           const verdict = await this.judgeMinorAcceptance(
             result.issues, diffBefore, params.specPath,
           );
-          if (verdict.safe) {
+          if (shouldAcceptMinorVerdict(minorOnlyCycles, verdict)) {
             for (const issue of result.issues) {
               this.records.push({
                 step: result.reviewer,
@@ -847,8 +805,6 @@ export class ReviewOrchestrator {
           });
           return retryResult;
         }
-      } else {
-        minorOnlyCycles = 0;
       }
 
       await this.applyFixes(result.issues, params);
@@ -875,7 +831,7 @@ export class ReviewOrchestrator {
     throw new DriftError(
       ESCALATION_LEVEL.LEVEL_1,
       "review_cycle",
-      `レビューが ${MAX_REVIEW_CYCLES} サイクルで収束しませんでした`,
+      `レビューが ${RETRY_POLICY.review.maxCycles} サイクルで収束しませんでした`,
     );
   }
 

@@ -1,27 +1,27 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
-import { promisify } from "node:util";
-import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 import { stringify as stringifyYaml } from "yaml";
-import { HarnessLogger, DEFAULT_LOG_BASE_DIR } from "../../infrastructure/logging/logger.ts";
+import type { FlowRuntimeFactory } from "../ports/flow-runtime-factory.ts";
+import type { ProjectBoundary } from "../ports/project-boundary.ts";
+import type { ToolExecutor } from "../ports/tool-executor.ts";
 import { LintGuard } from "../review/lint-guard.ts";
 import { ReviewOrchestrator } from "../review/review-orchestrator.ts";
-import type { Boundary } from "../../domain/services/boundary.ts";
 import type { RunnerRegistry } from "../../infrastructure/runners/runner-registry.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
 import type { ResolvedProfileConfig, StorybookConfig } from "../../infrastructure/config/config.ts";
 import type { LintAdapter } from "../../infrastructure/tooling/tool-adapter.ts";
 import type { ReviewIssue, ReviewResult, TaskPlan } from "../../domain/model/types.ts";
-import { GuardError, EVENT } from "../../domain/model/types.ts";
+import { EVENT } from "../../domain/model/types.ts";
 import { loadTemplate, renderTemplate } from "../../infrastructure/templates/templates.ts";
 import { parsePlan } from "../../domain/services/plan-parser.ts";
 import { applyStepContext } from "../../infrastructure/runners/step-context.ts";
+import { buildValidatedComponentPlan, type ValidatedComponentPlan } from "../plan/validated-plan.ts";
+import { RETRY_POLICY } from "../policies/retry-policy.ts";
+import { filterIssuesToScope, toScopedFiles } from "../policies/review-issue-policy.ts";
+import { resolveBundledDoc } from "../resolvers/criteria-resolver.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-const MAX_COMPONENT_FIX_RETRIES = 2;
-const STORYBOOK_TIMEOUT_MS = 5 * 60 * 1000;
-const execFileAsync = promisify(execFile);
 
 type TargetOutcome = {
   target: string;
@@ -32,36 +32,44 @@ type TargetOutcome = {
 };
 
 export class ComponentFlow {
-  private boundary: Boundary;
+  private boundary: ProjectBoundary;
   private registry: RunnerRegistry;
   private profile: ResolvedProfileConfig;
   private lintAdapters: LintAdapter[];
+  private runtimeFactory: FlowRuntimeFactory;
+  private toolExecutor: ToolExecutor;
 
   constructor(
-    boundary: Boundary,
+    boundary: ProjectBoundary,
     registry: RunnerRegistry,
     profile: ResolvedProfileConfig,
     _testAdapter: import("../../infrastructure/tooling/tool-adapter.ts").TestAdapter,
     lintAdapters: LintAdapter[],
+    runtimeFactory: FlowRuntimeFactory,
+    toolExecutor: ToolExecutor,
   ) {
     this.boundary = boundary;
     this.registry = registry;
     this.profile = profile;
     this.lintAdapters = lintAdapters;
+    this.runtimeFactory = runtimeFactory;
+    this.toolExecutor = toolExecutor;
   }
 
   async run(planPath: string, options?: { plan?: TaskPlan }): Promise<void> {
-    const plan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
-    this.validateComponentPlan(plan);
+    const rawPlan = options?.plan ?? parsePlan(this.boundary.getProjectRoot(), planPath);
+    const plan = buildValidatedComponentPlan(this.boundary, rawPlan, this.profile);
 
     const root = this.boundary.getProjectRoot();
-    const logger = new HarnessLogger(`component_${plan.scope.replace(/\//g, "_")}`, { baseDir: join(root, DEFAULT_LOG_BASE_DIR) });
-    const lintGuard = new LintGuard(logger, this.lintAdapters, {
-      toolRoot: this.profile.toolRoot,
-      execOverride: this.profile.exec,
+    const { logger, lintGuard, reviewOrchestrator } = this.runtimeFactory.createComponentRuntime({
+      taskName: `component_${plan.scope.replace(/\//g, "_")}`,
+      projectRoot: root,
+      profile: this.profile,
+      registry: this.registry,
+      lintAdapters: this.lintAdapters,
+      toolExecutor: this.toolExecutor,
     });
-    const reviewOrchestrator = new ReviewOrchestrator(logger, lintGuard, root, this.registry, this.profile);
-    const criteriaPath = this.resolveComponentCriteriaPath();
+    const criteriaPath = resolveBundledDoc(root, "review-criteria-component.md", "review-criteria-component.md が見つかりません。");
     const scopeTools = this.boundary.scopeAllowedTools(plan.scope);
 
     const outcomes: TargetOutcome[] = [];
@@ -92,90 +100,14 @@ export class ComponentFlow {
     console.log(`未収束 target: ${unresolvedCount}`);
   }
 
-  private validateComponentPlan(plan: TaskPlan): void {
-    if (plan.type !== "component") {
-      throw new GuardError(`component コマンドには type: component の plan が必要です。現在: ${plan.type ?? "未指定"}`);
-    }
-    if (!plan.profile) {
-      throw new GuardError("component plan には profile が必要です。");
-    }
-    if (!plan.scope) {
-      throw new GuardError("component plan には scope が必要です。");
-    }
-    if (!plan.specPath) {
-      throw new GuardError("component plan には spec が必要です。");
-    }
-    if (!plan.componentSpecPath) {
-      throw new GuardError("component plan には component_spec が必要です。");
-    }
-    if (!plan.figmaCachePath) {
-      throw new GuardError("component plan には figma_cache が必要です。");
-    }
-    if (plan.targets.length === 0) {
-      throw new GuardError("component plan には Targets セクションが必要です。");
-    }
-    if (plan.dependencies.length === 0) {
-      throw new GuardError("component plan には Dependencies セクションが必要です。");
-    }
-    if (!plan.figmaSlice || plan.figmaSlice.trim() === "") {
-      throw new GuardError("component plan には Figma Slice セクションが必要です。");
-    }
-    if (plan.completionCriteria.length === 0) {
-      throw new GuardError("component plan には 完了条件 セクションが必要です。");
-    }
-
-    this.boundary.validateScope(plan.scope);
-
-    const root = this.boundary.getProjectRoot();
-    const requiredPaths = [
-      resolve(root, plan.specPath),
-      resolve(root, plan.componentSpecPath),
-      resolve(root, plan.figmaCachePath),
-    ];
-    for (const fullPath of requiredPaths) {
-      this.boundary.assertWithinProject(fullPath);
-      if (!existsSync(fullPath)) {
-        throw new GuardError(`component plan の参照ファイルが存在しません: ${fullPath}`);
-      }
-    }
-
-    const specStatus = this.boundary.readFrontmatter(resolve(root, plan.specPath)).status;
-    if (!this.isReadyLikeStatus(specStatus)) {
-      throw new GuardError(`仕様書が ready ではありません（現在: ${specStatus ?? "なし"}）`);
-    }
-    const componentSpecStatus = this.boundary.readFrontmatter(resolve(root, plan.componentSpecPath)).status;
-    if (!this.isReadyLikeStatus(componentSpecStatus)) {
-      throw new GuardError(`コンポーネント定義書が ready ではありません（現在: ${componentSpecStatus ?? "なし"}）`);
-    }
-
-    if (!this.profile.storybook) {
-      throw new GuardError("component フローには profile.storybook.renderCommand / smokeCommand の設定が必要です。");
-    }
-  }
-
-  private isReadyLikeStatus(status: string | undefined): boolean {
-    return status === "ready" || status === "approved";
-  }
-
-  private resolveComponentCriteriaPath(): string {
-    const root = this.boundary.getProjectRoot();
-    const projectPath = join(root, ".harness", "review-criteria-component.md");
-    if (existsSync(projectPath)) return projectPath;
-
-    const packagePath = join(import.meta.dirname ?? "", "..", "..", "..", "review-criteria-component.md");
-    if (existsSync(packagePath)) return packagePath;
-
-    throw new GuardError("review-criteria-component.md が見つかりません。");
-  }
-
   private async generateTarget(
-    plan: TaskPlan,
+    plan: ValidatedComponentPlan,
     target: string,
     scopeTools: string[],
   ): Promise<void> {
     const root = this.boundary.getProjectRoot();
-    const spec = readFileSync(resolve(root, plan.specPath), "utf-8");
-    const componentSpec = readFileSync(resolve(root, plan.componentSpecPath ?? ""), "utf-8");
+    const spec = readFileSync(plan.resolvedPaths.specPath, "utf-8");
+    const componentSpec = readFileSync(plan.resolvedPaths.componentSpecPath, "utf-8");
     const template = loadTemplate("component-generate", root, this.registry.getConfig().templates);
     const prompt = renderTemplate(template, {
       target,
@@ -187,7 +119,7 @@ export class ComponentFlow {
           import: dependency.importPath,
         })),
       ),
-      figmaSlice: plan.figmaSlice ?? "",
+      figmaSlice: plan.figmaSlice,
       designDecisions: plan.designDecisions.join("\n"),
     });
 
@@ -209,7 +141,7 @@ export class ComponentFlow {
   }
 
   private async processTarget(
-    plan: TaskPlan,
+    plan: ValidatedComponentPlan,
     target: string,
     beforeSnapshot: Map<string, string>,
     lintGuard: LintGuard,
@@ -241,7 +173,7 @@ export class ComponentFlow {
         };
       }
 
-      if (fixAttempts >= MAX_COMPONENT_FIX_RETRIES) {
+      if (fixAttempts >= RETRY_POLICY.componentFix.maxAttempts) {
         return {
           target,
           resolved: false,
@@ -252,7 +184,7 @@ export class ComponentFlow {
       }
 
       fixAttempts++;
-      console.log(`指摘を修正中... (${target} ${fixAttempts}/${MAX_COMPONENT_FIX_RETRIES})`);
+      console.log(`指摘を修正中... (${target} ${fixAttempts}/${RETRY_POLICY.componentFix.maxAttempts})`);
       await this.applyFixes(target, lastIssues, scopeTools);
       await this.boundary.stageFiles(plan.scope);
       await this.boundary.verifyChangedFilesWithinScope(plan.scope);
@@ -286,17 +218,9 @@ export class ComponentFlow {
     issues.push(...storyIssues);
 
     const reviewResult = await reviewOrchestrator.runComponentReview(changedFiles, [criteriaPath]);
-    issues.push(...this.scopeReviewIssues(reviewResult, changedFiles));
+    issues.push(...filterIssuesToScope(reviewResult.issues, toScopedFiles(changedFiles)));
 
     return issues;
-  }
-
-  private scopeReviewIssues(result: ReviewResult, changedFiles: string[]): ReviewIssue[] {
-    const allowed = new Set(changedFiles.map((file) => resolve(file)));
-    return result.issues.filter((issue) => {
-      if (!issue.file) return true;
-      return allowed.has(resolve(issue.file));
-    });
   }
 
   private async runStoryGates(target: string, changedFiles: string[]): Promise<ReviewIssue[]> {
@@ -311,7 +235,7 @@ export class ComponentFlow {
 
     const storyFile = storyFiles[0];
     const issues: ReviewIssue[] = [];
-    const renderIssues = await this.runStorybookCommand("render", target, storyFile, this.profile.storybook!);
+      const renderIssues = await this.runStorybookCommand("render", target, storyFile, this.profile.storybook!);
     issues.push(...renderIssues);
     if (renderIssues.length === 0) {
       const smokeIssues = await this.runStorybookCommand("smoke", target, storyFile, this.profile.storybook!);
@@ -331,22 +255,25 @@ export class ComponentFlow {
     const [tool, ...args] = command;
 
     try {
-      const { stdout, stderr } = await execFileAsync(tool, args, {
-        cwd: this.profile.toolRoot,
-        timeout: STORYBOOK_TIMEOUT_MS,
+      const result = await this.toolExecutor.run(tool, args, {
+        toolRoot: this.profile.toolRoot,
+        execOverride: [],
       });
-      const output = `${stdout}${stderr}`.trim();
-      if (output) {
-        // no-op; command output remains in process logs only
+      if (result.exitCode !== 0) {
+        const output = `${result.stdout}${result.stderr}`.trim();
+        return [{
+          file: storyFile,
+          severity: "major",
+          description: `Storybook ${mode} command が失敗しました。command=${command.join(" ")}. output=${output.slice(0, 1200)}`,
+        }];
       }
       return [];
     } catch (error: unknown) {
-      const execError = error as { stdout?: string; stderr?: string; code?: string | number; message?: string };
-      const output = `${execError.stdout ?? ""}${execError.stderr ?? ""}`.trim();
+      const execError = error as { message?: string };
       return [{
         file: storyFile,
         severity: "major",
-        description: `Storybook ${mode} command が失敗しました。command=${command.join(" ")}. output=${(output || execError.message || "").slice(0, 1200)}`,
+        description: `Storybook ${mode} command が失敗しました。command=${command.join(" ")}. output=${(execError.message || "").slice(0, 1200)}`,
       }];
     }
   }

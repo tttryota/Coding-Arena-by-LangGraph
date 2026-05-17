@@ -111,13 +111,21 @@ test("runPageReview accepts clean pages, escalates parse failures, and can accep
   const { orchestrator: minorFlow, specPath: minorSpec } = createOrchestrator();
   const minorAny = minorFlow as any;
   let pageFixes = 0;
+  let judgeCalls = 0;
+  let reviewCycles = 0;
   minorAny.pageDesignReview = async () => ({ reviewer: "design", checklist: [], issues: [minor("tiny")], isLgtm: false });
   minorAny.pageBehaviorReview = async () => ({ reviewer: "behavior", checklist: [], issues: [], isLgtm: true });
-  minorAny.pageCodeReview = async () => ({ reviewer: "code", checklist: [], issues: [], isLgtm: true });
+  minorAny.pageCodeReview = async () => {
+    reviewCycles++;
+    return { reviewer: "code", checklist: [], issues: [], isLgtm: true };
+  };
   minorAny.applyFixes = async () => { pageFixes++; };
   minorAny.generateJudgmentSummary = async () => "fixed";
-  minorAny.judgeMinorAcceptance = async () => ({ safe: true, reason: "acceptable" });
-  const accepted = await minorFlow.runPageReview({
+  minorAny.judgeMinorAcceptance = async () => {
+    judgeCalls++;
+    return { safe: true, reason: "acceptable" };
+  };
+  await minorFlow.runPageReview({
     targetFiles: ["target.ts"],
     specPath: minorSpec,
     componentSpecPath: minorSpec,
@@ -128,8 +136,12 @@ test("runPageReview accepts clean pages, escalates parse failures, and can accep
     scopeAllowedTools: [],
     getFileDiff: async () => "",
   } as any);
-  assert.equal(accepted.length, 6);
+  const records = minorFlow.getRecords();
+  assert.equal(reviewCycles, 2);
   assert.equal(pageFixes, 1);
+  assert.equal(judgeCalls, 1);
+  assert.equal(records.at(-1)?.decision, "accepted");
+  assert.equal(records.at(-1)?.reviewer, "page_review");
 });
 
 test("reviewStep fixes major issues and can retry unsafe minor issues", async () => {

@@ -3,6 +3,15 @@
 LLM CLI を使った TDD 自動化オーケストレーター。
 Claude Code / Codex App Server / GitHub Copilot CLI など任意の LLM 実行系をプラガブルに差し替え可能。
 
+## AI First
+
+ローカル LLM にこのハーネスを扱わせるときは、まずこの README を読ませる。
+追加で必要になったら次も読む。
+
+- `/.harness/docs/setup-guide.md`
+- `/.harness/docs/architecture.md`
+- `/.harness/resources/skills/`
+
 ## セットアップ
 
 前提条件:
@@ -10,16 +19,27 @@ Claude Code / Codex App Server / GitHub Copilot CLI など任意の LLM 実行�
 - `claude` CLI が PATH に存在（external review などで使う場合）
 - プロジェクトに応じた lint/test ツール（Python: ruff + mypy + pytest、TypeScript: eslint + tsc + vitest）
 
-この repo では `./.harness/harness` が実行入口。
+この repo では `./.harness/bin/harness` が実行入口。
 
 セットアップガイドを表示:
 ```bash
-./.harness/harness init
+./.harness/bin/harness init
+```
+
+配布用 skill を `.codex/skills/` と `.claude/skills/` に同期:
+```bash
+./.harness/bin/harness sync-skills
 ```
 
 ## 設定
 
-設定ファイルは `.harness/harness.yml` を推奨（後方互換で `.harness.yml` も読み込み可）:
+設定ファイルの追跡対象は `.harness/config/harness.example.yml` です。実運用ではこれを `.harness/config/harness.yml` にコピーして使います。
+
+```bash
+cp .harness/config/harness.example.yml .harness/config/harness.yml
+```
+
+実際に読み込む設定ファイルは `.harness/config/harness.yml` です:
 
 ### プロファイル
 
@@ -131,15 +151,15 @@ runners:
 
 project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込み、存在しない場合のみ `.claude/skills/<name>/SKILL.md` を後方互換で参照します。
 
-`.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`./.harness/harness init` でセットアップガイドを表示できる。
+`.harness/config/harness.yml` に `profiles` が定義されていない場合はエラーになる。`./.harness/bin/harness init` でセットアップガイドを表示できる。
 
 ## 使い方
 
 ### Design Flow（仕様書・テストケース生成）
 
 ```bash
-./.harness/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
-./.harness/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能" --profile backend
+./.harness/bin/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
+./.harness/bin/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能" --profile backend
 ```
 
 1. 仕様書を生成（`docs/spec/{category}/{name}.md`）
@@ -150,7 +170,7 @@ project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込
 ### Impl Flow（TDD 実装）
 
 ```bash
-./.harness/harness impl plan/current-task.md
+./.harness/bin/harness impl plan/current-task.md
 ```
 
 実行前に対話的にステップごとのランナー割り当てを確認・変更できる:
@@ -182,24 +202,24 @@ project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込
 
 ```bash
 # light フロー
-./.harness/harness impl plan/task.md --flow light
+./.harness/bin/harness impl plan/task.md --flow light
 
 # 対話プロンプトをスキップ
-./.harness/harness impl plan/task.md --no-interactive
+./.harness/bin/harness impl plan/task.md --no-interactive
 
 # チェックポイントから再開
-./.harness/harness impl plan/task.md --resume
+./.harness/bin/harness impl plan/task.md --resume
 ```
 
 ```bash
-./.harness/harness component plan/components-task.md
-./.harness/harness page plan/page-task.md
+./.harness/bin/harness component plan/components-task.md
+./.harness/bin/harness page plan/page-task.md
 ```
 
 ### Page Flow（Page UI 実装）
 
 ```bash
-./.harness/harness page plan/page-task.md
+./.harness/bin/harness page plan/page-task.md
 ```
 
 - page 実装を生成
@@ -211,7 +231,7 @@ project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込
 ### Component Flow（Component + Story 実装）
 
 ```bash
-./.harness/harness component plan/components-task.md
+./.harness/bin/harness component plan/components-task.md
 ```
 
 - `Targets` を 1 件ずつ順に処理
@@ -288,20 +308,22 @@ harness（CLI エントリポイント）
   │   ├── model/（steps / types）
   │   └── services/（boundary / plan-parser）
   └── infrastructure/
-      ├── config/（.harness/harness.yml 読み込み + profile 解決）
+      ├── config/（.harness/config/harness.yml 読み込み + profile 解決）
       ├── runners/（claude / codex / generic / registry / codex-app-server）
       ├── logging/（JSONL 構造化ログ + redact）
       ├── process/（spawn / launcher）
-      ├── templates/（プロンプトテンプレート）
+      ├── resources/（criteria / templates / rules / skills）
       └── tooling/（lint / test adapter）
 ```
 
 ## レビュー観点のカスタマイズ
 
 レビュープロンプトはテンプレートファイルとして外部化されています。
-プロジェクトの `.harness/templates/` に同名ファイルを配置すると上書きできます。
+プロジェクトの `.harness/resources/templates/` に同名ファイルを配置すると上書きできます。
 
 テンプレート内では `{{変数名}}` でプレースホルダ置換が行われます。
+
+runtime skill の正本は `.harness/resources/skills/` に置きます。ローカル LLM が直接呼び出す `.codex/skills/` と `.claude/skills/` の managed copy は `./.harness/bin/harness sync-skills` で生成します。
 
 同梱テンプレート:
 - `review-response-format.md` — レビュー回答形式の共通指示
@@ -347,10 +369,12 @@ impl フロー完了時に `.harness/reviews/{date}_{scope}.md` を自動生成�
 - `review-data.json` — レビュー構造化データ
 - `checkpoint.json` — 再開用チェックポイント
 
+`.harness/config/harness.yml`、`.harness/logs/` 配下の実行ログ、`.harness/reviews/` 配下の生成レポート、`.harness/node_modules/` は `.gitignore` で除外されます。
+
 ## ベンチマーク診断
 
-- `./.harness/harness benchmark-summary <log-dir> [<log-dir>]` — review/token/cost の総量比較
-- `./.harness/harness benchmark-diagnose <log-dir> [<log-dir>]` — 壁時計時間、review 収束性、prompt 適切性まで含めた診断
+- `./.harness/bin/harness benchmark-summary <log-dir> [<log-dir>]` — review/token/cost の総量比較
+- `./.harness/bin/harness benchmark-diagnose <log-dir> [<log-dir>]` — 壁時計時間、review 収束性、prompt 適切性まで含めた診断
 
 ## ライセンス
 

@@ -46,7 +46,9 @@ function makeDeps(overrides?: Partial<CliDeps>): CliDeps {
     resolveTestAdapter: () => ({ fileExtensions: ["ts"], excludeDirs: [] }) as any,
     createRunnerRegistry: () => ({}) as any,
     interactiveRunnerAssignment: async () => ({ impl_generate: "codex" }) as any,
-    createBoundary: () => ({}) as any,
+    createProjectBoundary: () => ({}) as any,
+    createToolExecutor: () => ({ run: async () => ({ stdout: "", stderr: "", exitCode: 0 }) }) as any,
+    createFlowRuntimeFactory: () => ({}) as any,
     createImplFlow: () => ({ run: async () => { runCalls.push("impl"); } }) as any,
     createPageFlow: () => ({ run: async () => { runCalls.push("page"); } }) as any,
     createComponentFlow: () => ({ run: async () => { runCalls.push("component"); } }) as any,
@@ -54,6 +56,7 @@ function makeDeps(overrides?: Partial<CliDeps>): CliDeps {
     createLogger: () => ({}) as any,
     renderBenchmarkSummary: (dirs) => `summary:${dirs.join(",")}`,
     renderBenchmarkDiagnose: (dirs) => `diagnose:${dirs.join(",")}`,
+    syncBundledSkills: () => ["harness-pilot", "harness-plan-fe"],
     ...overrides,
   };
   (base as any).runCalls = runCalls;
@@ -109,6 +112,8 @@ test("runCli renders benchmark commands and init", async () => {
   assert.equal(stdout.pop(), "diagnose:a,b");
   assert.equal(await runCli(["init"], runtime, deps), 0);
   assert.equal(stdout.pop(), "guide");
+  assert.equal(await runCli(["sync-skills"], runtime, deps), 0);
+  assert.match(stdout.pop() ?? "", /harness-pilot/);
 });
 
 test("runCli rejects missing arguments and invalid benchmark arity", async () => {
@@ -136,8 +141,8 @@ test("runCli reports init guide read failures", async () => {
   assert.match(stderr[0] ?? "", /setup-guide\.md が見つかりません/);
 });
 
-test("repo-local wrapper launches the CLI from .harness/harness", () => {
-  const wrapperPath = join(import.meta.dirname ?? "", "..", "..", "harness");
+test("repo-local wrapper launches the CLI from .harness/bin/harness", () => {
+  const wrapperPath = join(import.meta.dirname ?? "", "..", "..", "bin", "harness");
   const output = execFileSync(wrapperPath, ["init"], { encoding: "utf-8" });
   assert.match(output, /Harness セットアップガイド/);
 });

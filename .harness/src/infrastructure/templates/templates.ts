@@ -14,12 +14,12 @@ export function loadTemplate(
     if (existsSync(fullPath)) return readFileSync(fullPath, "utf-8");
   }
 
-  // 2. プロジェクト規約パス: {projectRoot}/.harness/templates/{name}.md
-  const conventionPath = join(projectRoot, ".harness", "templates", `${name}.md`);
+  // 2. プロジェクト規約パス: {projectRoot}/.harness/resources/templates/{name}.md
+  const conventionPath = join(projectRoot, ".harness", "resources", "templates", `${name}.md`);
   if (existsSync(conventionPath)) return readFileSync(conventionPath, "utf-8");
 
-  // 3. ハーネス同梱デフォルト: パッケージ内 templates/{name}.md
-  const builtinPath = join(import.meta.dirname ?? "", "..", "..", "..", "templates", `${name}.md`);
+  // 3. ハーネス同梱デフォルト: パッケージ内 resources/templates/{name}.md
+  const builtinPath = join(import.meta.dirname ?? "", "..", "..", "..", "resources", "templates", `${name}.md`);
   if (existsSync(builtinPath)) return readFileSync(builtinPath, "utf-8");
 
   throw new HarnessError(`Template not found: ${name}`);

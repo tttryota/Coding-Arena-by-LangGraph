@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import type { HarnessLogger } from "../../logging/logger.ts";
 import { HarnessError } from "../../../domain/model/types.ts";
+import type { Logger } from "../../../application/ports/logger.ts";
 import type {
   JsonRpcFailure,
   JsonRpcId,
@@ -33,7 +33,7 @@ type SpawnLike = (
 ) => ChildProcessWithoutNullStreams;
 
 export class StdioCodexAppServerTransport implements AppServerTransport {
-  private logger?: HarnessLogger;
+  private logger?: Logger;
   private cwd?: string;
   private spawnImpl: SpawnLike;
   private command: string;
@@ -48,7 +48,7 @@ export class StdioCodexAppServerTransport implements AppServerTransport {
 
   constructor(options?: {
     cwd?: string;
-    logger?: HarnessLogger;
+    logger?: Logger;
     spawnImpl?: SpawnLike;
     command?: string;
     commandArgs?: string[];
@@ -60,7 +60,7 @@ export class StdioCodexAppServerTransport implements AppServerTransport {
     this.commandArgs = options?.commandArgs ?? ["app-server", "--listen", "stdio://"];
   }
 
-  setLogger(logger?: HarnessLogger): void {
+  setLogger(logger?: Logger): void {
     this.logger = logger;
   }
 

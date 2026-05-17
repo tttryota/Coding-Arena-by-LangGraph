@@ -49,7 +49,8 @@ Codex SDK（`@openai/codex-sdk`）は `codex` CLI をラップする高水準 AP
     ├── logging/             # JSONL ログ
     ├── process/             # spawn / launcher
     ├── runners/             # claude / codex / generic / registry / step-context
-    ├── templates/           # プロンプトテンプレート解決
+    ├── templates/           # resources/templates の解決ロジック
+    └── skills/              # resources/skills の同期・配布
     └── tooling/             # lint / test adapter
 ```
 
@@ -118,7 +119,7 @@ Codex SDK（`@openai/codex-sdk`）は `codex` CLI をラップする高水準 AP
 
 **LLM セルフレビュー — 設計判断のチェック**
 
-機械で検出できない意味的なルール違反を担当。review-criteria-*.md がチェックリスト。
+機械で検出できない意味的なルール違反を担当。`.harness/resources/criteria/review-criteria-*.md` がチェックリスト。
 
 - 変数名の省略形（`msg` → `message` 等。ruff N は PEP8 準拠のみで意味的省略は検出できない）
 - マジックナンバー（ruff にマジックナンバー検出ルールはない）

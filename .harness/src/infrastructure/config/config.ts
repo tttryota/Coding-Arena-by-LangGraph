@@ -120,14 +120,8 @@ export type ResolvedConfig = {
 
 export type HarnessConfig = ResolvedConfig;
 
-const PREFERRED_CONFIG_PATH = ".harness/harness.yml";
-const LEGACY_CONFIG_PATH = ".harness.yml";
-const CONFIG_FILENAMES = [
-  PREFERRED_CONFIG_PATH,
-  ".harness/harness.yaml",
-  LEGACY_CONFIG_PATH,
-  ".harness.yaml",
-];
+const PREFERRED_CONFIG_PATH = ".harness/config/harness.yml";
+const CONFIG_FILENAMES = [PREFERRED_CONFIG_PATH];
 const ALL_FLOW_STEPS = Object.values(FLOW_STEP);
 
 export function loadConfig(projectRoot: string): ResolvedConfig {
@@ -470,7 +464,7 @@ function requireProfiles(config: HarnessUserConfig): HarnessUserConfig {
     return config;
   }
   throw new GuardError(
-    `profiles が定義されていません。${configLocationMessage()} に profiles を追加してください。\n\`./.harness/harness init\` でセットアップガイドを表示できます。`,
+    `profiles が定義されていません。${configLocationMessage()} に profiles を追加してください。\n\`./.harness/bin/harness init\` でセットアップガイドを表示できます。`,
   );
 }
 
@@ -827,5 +821,5 @@ function relativeConfigPath(projectRoot: string, filePath: string): string {
 }
 
 function configLocationMessage(): string {
-  return `${PREFERRED_CONFIG_PATH}（後方互換で ${LEGACY_CONFIG_PATH} も可）`;
+  return PREFERRED_CONFIG_PATH;
 }

@@ -7,8 +7,8 @@ import { inferProfile, loadConfig, resolveProfile } from "./config.ts";
 import { GuardError } from "../../domain/model/types.ts";
 
 function writeConfig(workspace: string, body: string): void {
-  mkdirSync(join(workspace, ".harness"), { recursive: true });
-  writeFileSync(join(workspace, ".harness", "harness.yml"), body, "utf-8");
+  mkdirSync(join(workspace, ".harness", "config"), { recursive: true });
+  writeFileSync(join(workspace, ".harness", "config", "harness.yml"), body, "utf-8");
 }
 
 function baseYaml(): string {
@@ -152,9 +152,9 @@ runners:
   );
 });
 
-test("loadConfig accepts legacy config path names and preserves template overrides", () => {
-  const workspace = mkdtempSync(join(tmpdir(), "harness-config-legacy-path-"));
-  writeFileSync(join(workspace, ".harness.yml"), `${baseYaml()}templates:\n  review-response-format: custom.md\n`, "utf-8");
+test("loadConfig reads .harness/config/harness.yml and preserves template overrides", () => {
+  const workspace = mkdtempSync(join(tmpdir(), "harness-config-path-"));
+  writeConfig(workspace, `${baseYaml()}templates:\n  review-response-format: custom.md\n`);
 
   const config = loadConfig(workspace);
 
@@ -413,7 +413,7 @@ runners:
 
   assert.throws(
     () => loadConfig(mkdtempSync(join(tmpdir(), "harness-config-missing-profiles-"))),
-    /`\.\/\.harness\/harness init`/,
+    /`\.\/\.harness\/bin\/harness init`/,
   );
   assert.throws(() => resolveProfile(config, "missing"), /profile "missing" が見つかりません/);
 });

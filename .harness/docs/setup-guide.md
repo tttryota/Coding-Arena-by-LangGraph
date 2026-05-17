@@ -1,5 +1,7 @@
 # Harness セットアップガイド
 
+ローカル LLM にまず読ませる文書は `/.harness/README.md`。このファイルは初期セットアップと設定コピーの詳細用。
+
 ## インストール
 
 前提:
@@ -7,11 +9,21 @@
 - `claude` CLI が PATH に存在（external review などで使う場合）
 - プロジェクトに応じた lint/test ツール
 
-この repo では `./.harness/harness` から起動する。
+この repo では `./.harness/bin/harness` から起動する。
+
+配布用 skill を `.codex/skills/` と `.claude/skills/` に同期したい場合:
+
+```bash
+./.harness/bin/harness sync-skills
+```
 
 ## 設定ファイル
 
-設定ファイルは `.harness/harness.yml` を推奨（後方互換で `.harness.yml` も読み込み可）。
+追跡対象のサンプル設定は `.harness/config/harness.example.yml`。実際に読み込む設定は `.harness/config/harness.yml`。
+
+```bash
+cp .harness/config/harness.example.yml .harness/config/harness.yml
+```
 
 ### 例1: Python バックエンド
 
@@ -181,7 +193,7 @@ runners:
     sandbox: read-only
 ```
 
-`profiles` は必須。未定義の場合はエラーになる。`./.harness/harness init` でこのガイドを表示できる。
+`profiles` は必須。未定義の場合はエラーになる。`./.harness/bin/harness init` でこのガイドを表示できる。
 
 `profile` は実行単位です。lint / test / sourceLayout に加え、`flow` / `fallbackRunner` / `steps` / `context` も profile 内に置きます。
 
@@ -271,16 +283,16 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 ### Design Flow（仕様書・テストケース生成）
 
 ```bash
-./.harness/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
+./.harness/bin/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
 ```
 
 ### Impl Flow（TDD 実装）
 
 ```bash
-./.harness/harness impl plan/task.md
-./.harness/harness impl plan/task.md --flow light    # 外部レビュー省略
-./.harness/harness impl plan/task.md --resume        # チェックポイントから再開
-./.harness/harness impl plan/task.md --no-interactive # 対話プロンプトスキップ
+./.harness/bin/harness impl plan/task.md
+./.harness/bin/harness impl plan/task.md --flow light    # 外部レビュー省略
+./.harness/bin/harness impl plan/task.md --resume        # チェックポイントから再開
+./.harness/bin/harness impl plan/task.md --no-interactive # 対話プロンプトスキップ
 ```
 
 ## プロファイル設定項目

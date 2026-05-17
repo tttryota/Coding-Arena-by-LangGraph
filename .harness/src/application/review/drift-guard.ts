@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import type { HarnessLogger } from "../../infrastructure/logging/logger.ts";
 import { DriftError, ESCALATION_LEVEL, EVENT } from "../../domain/model/types.ts";
 import type { EscalationLevel } from "../../domain/model/types.ts";
+import type { Logger } from "../ports/logger.ts";
 
 const MAX_TEST_RETRIES = 3;
 const MAX_SAME_ERROR_COUNT = 3;
@@ -20,12 +20,12 @@ type DriftState = {
 };
 
 export class DriftGuard {
-  private logger: HarnessLogger;
+  private logger: Logger;
   private codexAvailable: boolean;
   private state: DriftState;
 
   constructor(
-    logger: HarnessLogger,
+    logger: Logger,
     options?: { codexAvailable?: boolean },
   ) {
     this.logger = logger;

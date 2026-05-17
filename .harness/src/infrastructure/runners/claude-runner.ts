@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { HarnessError } from "../../domain/model/types.ts";
 import type { ClaudeResult } from "../../domain/model/types.ts";
-import type { HarnessLogger } from "../logging/logger.ts";
+import type { Logger } from "../../application/ports/logger.ts";
 import { spawnWithStdin } from "../process/spawn.ts";
 import { RUNNER_CAPABILITY } from "./runner.ts";
 import type { Runner, RunnerResponse } from "./runner.ts";
@@ -32,7 +32,7 @@ export type ClaudeDeps = {
 
 export async function runClaude(
   options: ClaudeOptions,
-  logger?: HarnessLogger,
+  logger?: Logger,
   deps: ClaudeDeps = {},
 ): Promise<ClaudeResult> {
   const { args, tempFile } = buildArgs(

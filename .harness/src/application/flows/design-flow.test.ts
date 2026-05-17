@@ -7,6 +7,7 @@ import { Boundary } from "../../domain/services/boundary.ts";
 import { DesignFlow } from "./design-flow.ts";
 import { HarnessLogger } from "../../infrastructure/logging/logger.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
+import { isReadyLikeStatus } from "../policies/plan-readiness-policy.ts";
 
 function createRegistry(root: string) {
   return {
@@ -56,6 +57,6 @@ test("DesignFlow stops when existing spec is not ready", async () => {
 
   await flow.run("quiz/result", "結果ページを作る", logger);
 
-  assert.equal((flow as any).isReadyLikeStatus("approved"), true);
-  assert.equal((flow as any).isReadyLikeStatus("draft"), false);
+  assert.equal(isReadyLikeStatus("approved"), true);
+  assert.equal(isReadyLikeStatus("draft"), false);
 });

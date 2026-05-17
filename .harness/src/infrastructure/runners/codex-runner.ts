@@ -2,6 +2,7 @@ import { CodexConversationService } from "./codex-app-server/service.ts";
 import { StdioCodexAppServerTransport } from "./codex-app-server/transport.ts";
 import { RUNNER_CAPABILITY } from "./runner.ts";
 import type { Runner, RunnerResponse } from "./runner.ts";
+import type { Logger } from "../../application/ports/logger.ts";
 
 export function createCodexRunner(defaults?: {
   timeoutMs?: number;
@@ -12,12 +13,12 @@ export function createCodexRunner(defaults?: {
   summary?: "auto" | "brief" | "detailed";
   effort?: "minimal" | "low" | "medium" | "high";
   personality?: "default" | "strict" | "balanced";
-  transportFactory?: (options: { cwd?: string; logger?: import("../logging/logger.ts").HarnessLogger }) => StdioCodexAppServerTransport;
+  transportFactory?: (options: { cwd?: string; logger?: Logger }) => StdioCodexAppServerTransport;
   serviceFactory?: (transport: StdioCodexAppServerTransport) => CodexConversationService;
 }): Runner {
   const sandbox = normalizeSandbox(defaults?.sandbox);
   const transportFactory = defaults?.transportFactory
-    ?? ((options: { cwd?: string; logger?: import("../logging/logger.ts").HarnessLogger }) =>
+    ?? ((options: { cwd?: string; logger?: Logger }) =>
       new StdioCodexAppServerTransport(options));
   const serviceFactory = defaults?.serviceFactory ?? ((transport: StdioCodexAppServerTransport) => new CodexConversationService(transport));
 

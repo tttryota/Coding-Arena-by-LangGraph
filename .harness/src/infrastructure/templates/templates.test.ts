@@ -8,8 +8,8 @@ import { loadTemplate, renderTemplate } from "./templates.ts";
 
 test("loadTemplate prefers config overrides over project conventions", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-template-"));
-  mkdirSync(join(root, ".harness", "templates"), { recursive: true });
-  writeFileSync(join(root, ".harness", "templates", "review.md"), "project", "utf-8");
+  mkdirSync(join(root, ".harness", "resources", "templates"), { recursive: true });
+  writeFileSync(join(root, ".harness", "resources", "templates", "review.md"), "project", "utf-8");
   writeFileSync(join(root, "custom.md"), "override", "utf-8");
 
   assert.equal(loadTemplate("review", root, { review: "custom.md" }), "override");

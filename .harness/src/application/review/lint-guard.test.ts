@@ -7,12 +7,21 @@ import { HarnessLogger } from "../../infrastructure/logging/logger.ts";
 import { LintGuard } from "./lint-guard.ts";
 import type { LintAdapter } from "../../infrastructure/tooling/tool-adapter.ts";
 import { DriftError, HarnessError } from "../../domain/model/types.ts";
+import type { ToolExecutor } from "../ports/tool-executor.ts";
 
 function makeWorkspace(): string {
   const root = mkdtempSync(join(tmpdir(), "harness-lint-"));
   mkdirSync(join(root, "src"), { recursive: true });
   writeFileSync(join(root, "src", "file.ts"), "export const x = 1;\n", "utf-8");
   return root;
+}
+
+function fakeExecutor(result = { stdout: "", stderr: "", exitCode: 1 }): ToolExecutor {
+  return {
+    async run() {
+      return result;
+    },
+  };
 }
 
 test("LintGuard skips files-mode adapters when no matching files exist", async () => {
@@ -31,7 +40,7 @@ test("LintGuard skips files-mode adapters when no matching files exist", async (
     parseOutput: () => ({ kind: "ok" }),
   };
 
-  const guard = new LintGuard(logger, [adapter], { toolRoot: workspace, execOverride: [] });
+  const guard = new LintGuard(logger, [adapter], { toolRoot: workspace, execOverride: [] }, fakeExecutor());
   await guard.check([join(workspace, "src", "file.ts")]);
   assert.equal(called, false);
 });
@@ -55,7 +64,7 @@ test("LintGuard retries with claudeFix and rescans files", async () => {
     },
   };
 
-  const guard = new LintGuard(logger, [adapter], { toolRoot: workspace, execOverride: [] });
+  const guard = new LintGuard(logger, [adapter], { toolRoot: workspace, execOverride: [] }, fakeExecutor());
   let fixed = 0;
   await guard.check([join(workspace, "src", "file.ts")], {
     claudeFix: async () => { fixed++; },
@@ -75,7 +84,7 @@ test("LintGuard throws on tool-error and remaining violations", async () => {
     checkArgs: () => ["-e", "process.exit(1)"],
     parseOutput: () => ({ kind: "tool-error", message: "bad config" }),
   };
-  const guard = new LintGuard(logger, [toolErrorAdapter], { toolRoot: workspace, execOverride: [] });
+  const guard = new LintGuard(logger, [toolErrorAdapter], { toolRoot: workspace, execOverride: [] }, fakeExecutor());
   await assert.rejects(() => guard.check([join(workspace, "src", "file.ts")]), HarnessError);
 
   let attempts = 0;
@@ -90,6 +99,6 @@ test("LintGuard throws on tool-error and remaining violations", async () => {
       return { kind: "violations", violations: [{ tool: "node", file: "src/file.ts", line: 1, message: `bad-${attempts}` }] };
     },
   };
-  const guard2 = new LintGuard(logger, [violationsAdapter], { toolRoot: workspace, execOverride: [] });
+  const guard2 = new LintGuard(logger, [violationsAdapter], { toolRoot: workspace, execOverride: [] }, fakeExecutor());
   await assert.rejects(() => guard2.check([join(workspace, "src", "file.ts")]), DriftError);
 });

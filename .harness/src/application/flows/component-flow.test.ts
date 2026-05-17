@@ -8,6 +8,12 @@ import { Boundary } from "../../domain/services/boundary.ts";
 import { ComponentFlow } from "./component-flow.ts";
 import { FLOW_STEP } from "../../domain/model/steps.ts";
 import { GuardError } from "../../domain/model/types.ts";
+import type { ComponentFlowRuntime, FlowRuntimeFactory } from "../ports/flow-runtime-factory.ts";
+import type { ToolExecutor } from "../ports/tool-executor.ts";
+import type { Logger } from "../ports/logger.ts";
+import { buildValidatedComponentPlan } from "../plan/validated-plan.ts";
+import { filterIssuesToScope, toScopedFiles } from "../policies/review-issue-policy.ts";
+import { resolveBundledDoc } from "../resolvers/criteria-resolver.ts";
 
 function initGitRepo(root: string): void {
   execFileSync("git", ["init"], { cwd: root });
@@ -36,12 +42,51 @@ function frontendProfile(root: string) {
   } as any;
 }
 
-test("ComponentFlow processes a target end-to-end", async () => {
+function fakeLogger(): Logger {
+  return {
+    log() {},
+    logCommand() {},
+    logTranscript() {},
+    saveReviewData() {},
+    saveCheckpoint() {},
+    loadCheckpoint() { return null; },
+    clearCheckpoint() {},
+    summarizeRunnerUsage() {
+      return { total: { runs: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, byStep: {} };
+    },
+  };
+}
+
+function componentRuntimeFactory(runtimeOverrides?: Partial<ComponentFlowRuntime>) {
+  const runtime: ComponentFlowRuntime = {
+    logger: fakeLogger(),
+    lintGuard: { async check() {} } as any,
+    reviewOrchestrator: { async runComponentReview() { return { issues: [] }; } } as any,
+    ...runtimeOverrides,
+  };
+  const factory: FlowRuntimeFactory = {
+    createPageRuntime() { throw new Error("unexpected page runtime"); },
+    createComponentRuntime() { return runtime; },
+    createImplRuntime() { throw new Error("unexpected impl runtime"); },
+  };
+  return { runtime, factory };
+}
+
+function toolExecutor(handler?: ToolExecutor["run"]): ToolExecutor {
+  return {
+    async run(toolName, args, options) {
+      if (handler) return handler(toolName, args, options);
+      return { stdout: "", stderr: "", exitCode: 0 };
+    },
+  };
+}
+
+test("ComponentFlow processes a target end-to-end via injected runtime", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-component-flow-"));
-  mkdirSync(join(root, ".harness"), { recursive: true });
+  mkdirSync(join(root, ".harness", "resources", "criteria"), { recursive: true });
   mkdirSync(join(root, "frontend", "src", "quiz", "result"), { recursive: true });
   mkdirSync(join(root, "docs", "spec", "quiz"), { recursive: true });
-  writeFileSync(join(root, ".harness", "review-criteria-component.md"), "# criteria\n", "utf-8");
+  writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-component.md"), "# criteria\n", "utf-8");
   writeFileSync(join(root, "docs", "spec", "quiz", "result.md"), "---\nstatus: approved\n---\n", "utf-8");
   writeFileSync(join(root, "docs", "spec", "quiz", "components.md"), "---\nstatus: approved\n---\n", "utf-8");
   writeFileSync(join(root, "docs", "spec", "quiz", "figma.json"), "{}", "utf-8");
@@ -49,6 +94,7 @@ test("ComponentFlow processes a target end-to-end", async () => {
 
   const profile = frontendProfile(root);
   const boundary = new Boundary(root, profile.sourceLayout, ["ts", "tsx"], []);
+  const componentReviews: string[][] = [];
   const registry = {
     getConfig() {
       return { templates: {} };
@@ -67,7 +113,15 @@ test("ComponentFlow processes a target end-to-end", async () => {
       };
     },
   } as any;
-  const flow = new ComponentFlow(boundary, registry, profile, {} as never, []);
+  const { factory } = componentRuntimeFactory({
+    reviewOrchestrator: {
+      async runComponentReview(files: string[]) {
+        componentReviews.push(files);
+        return { issues: [] };
+      },
+    } as any,
+  });
+  const flow = new ComponentFlow(boundary, registry, profile, {} as never, [], factory, toolExecutor());
   const plan = {
     type: "component",
     profile: "frontend",
@@ -90,6 +144,7 @@ test("ComponentFlow processes a target end-to-end", async () => {
   await flow.run("plan.md", { plan });
 
   assert.match(readFileSync(join(root, "frontend", "src", "quiz", "result", "ResultCard.tsx"), "utf-8"), /ResultCard/);
+  assert.equal(componentReviews.length, 1);
   assert.deepEqual((flow as any).findStoryFilesForTarget("ResultCard", [
     join(root, "frontend", "src", "quiz", "result", "ResultCard.stories.tsx"),
   ]), [join(root, "frontend", "src", "quiz", "result", "ResultCard.stories.tsx")]);
@@ -97,10 +152,10 @@ test("ComponentFlow processes a target end-to-end", async () => {
 
 test("ComponentFlow validates component plans and scopes review issues to changed files", () => {
   const root = mkdtempSync(join(tmpdir(), "harness-component-validate-"));
-  mkdirSync(join(root, ".harness"), { recursive: true });
+  mkdirSync(join(root, ".harness", "resources", "criteria"), { recursive: true });
   mkdirSync(join(root, "frontend", "src", "quiz", "result"), { recursive: true });
   mkdirSync(join(root, "docs", "spec", "quiz"), { recursive: true });
-  writeFileSync(join(root, ".harness", "review-criteria-component.md"), "# criteria\n", "utf-8");
+  writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-component.md"), "# criteria\n", "utf-8");
   writeFileSync(join(root, "docs", "spec", "quiz", "result.md"), "---\nstatus: approved\n---\n", "utf-8");
   writeFileSync(join(root, "docs", "spec", "quiz", "components.md"), "---\nstatus: approved\n---\n", "utf-8");
   writeFileSync(join(root, "docs", "spec", "quiz", "figma.json"), "{}", "utf-8");
@@ -108,7 +163,7 @@ test("ComponentFlow validates component plans and scopes review issues to change
 
   const profile = frontendProfile(root);
   const boundary = new Boundary(root, profile.sourceLayout, ["ts", "tsx"], []);
-  const flow = new ComponentFlow(boundary, { getConfig() { return { templates: {} }; } } as any, profile, {} as never, []);
+  const flow = new ComponentFlow(boundary, { getConfig() { return { templates: {} }; } } as any, profile, {} as never, [], componentRuntimeFactory().factory, toolExecutor());
 
   const validPlan = {
     type: "component",
@@ -129,19 +184,20 @@ test("ComponentFlow validates component plans and scopes review issues to change
     designDecisions: [],
   } as any;
 
-  assert.equal((flow as any).resolveComponentCriteriaPath(), join(root, ".harness", "review-criteria-component.md"));
-  assert.throws(() => (flow as any).validateComponentPlan({ ...validPlan, dependencies: [] }), GuardError);
-  assert.throws(() => (flow as any).validateComponentPlan({ ...validPlan, figmaSlice: "" }), /Figma Slice/);
+  assert.equal(
+    resolveBundledDoc(root, "review-criteria-component.md", "review-criteria-component.md が見つかりません。"),
+    join(root, ".harness", "resources", "criteria", "review-criteria-component.md"),
+  );
+  assert.throws(() => buildValidatedComponentPlan(boundary, { ...validPlan, dependencies: [] }, profile), GuardError);
+  assert.throws(() => buildValidatedComponentPlan(boundary, { ...validPlan, figmaSlice: "" }, profile), /Figma Slice/);
 
-  const scoped = (flow as any).scopeReviewIssues(
-    {
-      issues: [
-        { file: join(root, "frontend", "src", "quiz", "result", "ResultCard.tsx"), severity: "major", description: "keep" },
-        { file: join(root, "frontend", "src", "other", "Elsewhere.tsx"), severity: "major", description: "drop" },
-        { file: "", severity: "minor", description: "global" },
-      ],
-    },
-    [join(root, "frontend", "src", "quiz", "result", "ResultCard.tsx")],
+  const scoped = filterIssuesToScope(
+    [
+      { file: join(root, "frontend", "src", "quiz", "result", "ResultCard.tsx"), severity: "major", description: "keep" },
+      { file: join(root, "frontend", "src", "other", "Elsewhere.tsx"), severity: "major", description: "drop" },
+      { file: "", severity: "minor", description: "global" },
+    ],
+    toScopedFiles([join(root, "frontend", "src", "quiz", "result", "ResultCard.tsx")]),
   );
   assert.equal(scoped.length, 2);
 
@@ -157,8 +213,69 @@ test("ComponentFlow validates component plans and scopes review issues to change
     { patch: { completionCriteria: [] }, pattern: /完了条件 セクション/ },
   ];
   for (const entry of requiredFieldCases) {
-    assert.throws(() => (flow as any).validateComponentPlan({ ...validPlan, ...entry.patch }), entry.pattern);
+    assert.throws(() => buildValidatedComponentPlan(boundary, { ...validPlan, ...entry.patch }, profile), entry.pattern);
   }
+});
+
+test("ComponentFlow rejects missing referenced files, draft component specs, and missing storybook config", () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-component-branches-"));
+  mkdirSync(join(root, ".harness", "resources", "criteria"), { recursive: true });
+  mkdirSync(join(root, "frontend", "src", "quiz", "result"), { recursive: true });
+  mkdirSync(join(root, "docs", "spec", "quiz"), { recursive: true });
+  writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-component.md"), "# criteria\n", "utf-8");
+  writeFileSync(join(root, "docs", "spec", "quiz", "result.md"), "---\nstatus: approved\n---\n", "utf-8");
+  writeFileSync(join(root, "docs", "spec", "quiz", "components.md"), "---\nstatus: approved\n---\n", "utf-8");
+  writeFileSync(join(root, "docs", "spec", "quiz", "figma.json"), "{}", "utf-8");
+  initGitRepo(root);
+
+  const profile = frontendProfile(root);
+  const boundary = new Boundary(root, profile.sourceLayout, ["ts", "tsx"], []);
+  const flow = new ComponentFlow(boundary, { getConfig() { return { templates: {} }; } } as any, profile, {} as never, [], componentRuntimeFactory().factory, toolExecutor());
+  const validPlan = {
+    type: "component",
+    profile: "frontend",
+    scope: "quiz/result",
+    specPath: "docs/spec/quiz/result.md",
+    testCasesPath: "",
+    componentSpecPath: "docs/spec/quiz/components.md",
+    figmaCachePath: "docs/spec/quiz/figma.json",
+    description: "component",
+    targets: ["ResultCard"],
+    dependencies: [{ name: "dep", importPath: "@/dep" }],
+    figmaSlice: "slice",
+    browserScenarios: [],
+    targetTestCases: [],
+    exclusions: [],
+    completionCriteria: ["works"],
+    designDecisions: [],
+  } as any;
+
+  assert.throws(
+    () => buildValidatedComponentPlan(boundary, { ...validPlan, componentSpecPath: "docs/spec/quiz/missing.md" }, profile),
+    /参照ファイルが存在しません/,
+  );
+
+  writeFileSync(join(root, "docs", "spec", "quiz", "components.md"), "---\nstatus: draft\n---\n", "utf-8");
+  assert.throws(
+    () => buildValidatedComponentPlan(boundary, validPlan, profile),
+    /コンポーネント定義書が ready ではありません/,
+  );
+
+  writeFileSync(join(root, "docs", "spec", "quiz", "components.md"), "---\nstatus: approved\n---\n", "utf-8");
+  const profileWithoutStorybook = { ...profile, storybook: undefined } as any;
+  const flowWithoutStorybook = new ComponentFlow(
+    boundary,
+    { getConfig() { return { templates: {} }; } } as any,
+    profileWithoutStorybook,
+    {} as never,
+    [],
+    componentRuntimeFactory().factory,
+    toolExecutor(),
+  );
+  assert.throws(
+    () => buildValidatedComponentPlan(boundary, validPlan, profileWithoutStorybook),
+    /profile\.storybook\.renderCommand \/ smokeCommand の設定が必要/,
+  );
 });
 
 test("ComponentFlow reports missing stories, expands storybook args, and converts errors to issues", async () => {
@@ -166,7 +283,7 @@ test("ComponentFlow reports missing stories, expands storybook args, and convert
   mkdirSync(join(root, "frontend", "src", "quiz", "result"), { recursive: true });
   const profile = frontendProfile(root);
   const boundary = new Boundary(root, profile.sourceLayout, ["ts", "tsx"], []);
-  const flow = new ComponentFlow(boundary, { getConfig() { return { templates: {} }; } } as any, profile, {} as never, []);
+  const flow = new ComponentFlow(boundary, { getConfig() { return { templates: {} }; } } as any, profile, {} as never, [], componentRuntimeFactory().factory, toolExecutor());
 
   const changedFile = join(root, "frontend", "src", "quiz", "result", "ResultCard.tsx");
   writeFileSync(changedFile, "export const ResultCard = () => null;\n", "utf-8");
@@ -184,17 +301,17 @@ test("ComponentFlow reports missing stories, expands storybook args, and convert
   );
 });
 
-test("ComponentFlow generateTarget, applyFixes, and target checks invoke the expected runners", async () => {
+test("ComponentFlow generateTarget, applyFixes, and target checks build contract-bearing requests", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-component-prompts-"));
-  mkdirSync(join(root, ".harness"), { recursive: true });
+  mkdirSync(join(root, ".harness", "resources", "criteria"), { recursive: true });
   mkdirSync(join(root, "frontend", "src", "quiz", "result"), { recursive: true });
   mkdirSync(join(root, "docs", "spec", "quiz"), { recursive: true });
-  writeFileSync(join(root, ".harness", "review-criteria-component.md"), "# criteria\n", "utf-8");
+  writeFileSync(join(root, ".harness", "resources", "criteria", "review-criteria-component.md"), "# criteria\n", "utf-8");
   writeFileSync(join(root, "docs", "spec", "quiz", "result.md"), "---\nstatus: approved\n---\n# spec\n", "utf-8");
   writeFileSync(join(root, "docs", "spec", "quiz", "components.md"), "---\nstatus: approved\n---\n# components\n", "utf-8");
   writeFileSync(join(root, "docs", "spec", "quiz", "figma.json"), "{}", "utf-8");
 
-  const prompts: string[] = [];
+  const requests = new Map<string, { prompt: string; allowedTools?: string[] }>();
   const profile = frontendProfile(root);
   const boundary = new Boundary(root, profile.sourceLayout, ["ts", "tsx"], []);
   const registry = {
@@ -203,34 +320,52 @@ test("ComponentFlow generateTarget, applyFixes, and target checks invoke the exp
     },
     getRunner(step: string) {
       return {
-        async run(request: { prompt: string }) {
-          prompts.push(`${step}:${request.prompt}`);
+        async run(request: { prompt: string; allowedTools?: string[] }) {
+          requests.set(step, request);
           return { text: "ok" };
         },
       };
     },
   } as any;
-  const flow = new ComponentFlow(boundary, registry, profile, {} as never, []);
+  const flow = new ComponentFlow(boundary, registry, profile, {} as never, [], componentRuntimeFactory().factory, toolExecutor());
   const plan = {
+    type: "component",
+    profile: "frontend",
     specPath: "docs/spec/quiz/result.md",
     componentSpecPath: "docs/spec/quiz/components.md",
+    figmaCachePath: "docs/spec/quiz/figma.json",
+    scope: "quiz/result",
+    description: "component",
+    targets: ["ResultCard"],
     dependencies: [{ name: "QuizCard", importPath: "@/components/QuizCard" }],
     figmaSlice: "slice",
     designDecisions: ["keep props small"],
+    browserScenarios: [],
+    targetTestCases: [],
+    exclusions: [],
+    completionCriteria: ["works"],
   } as any;
+  const validatedPlan = buildValidatedComponentPlan(boundary, plan, profile);
 
-  await (flow as any).generateTarget(plan, "ResultCard", ["Read"]);
+  await (flow as any).generateTarget(validatedPlan, "ResultCard", ["Read"]);
   await (flow as any).applyFixes("ResultCard", [{ file: "a.tsx", severity: "major", description: "fix me" }], ["Write(frontend/src/quiz/result/*)"]);
   const issues = await (flow as any).runTargetChecks(
     "ResultCard",
     [],
     { async check() {} },
     { async runComponentReview() { return { issues: [] }; } },
-    join(root, ".harness", "review-criteria-component.md"),
+    join(root, ".harness", "resources", "criteria", "review-criteria-component.md"),
   );
 
-  assert.equal(prompts.some((entry) => entry.startsWith(`${FLOW_STEP.COMPONENT_GENERATE}:`)), true);
-  assert.equal(prompts.some((entry) => entry.startsWith(`${FLOW_STEP.APPLY_FIXES}:`)), true);
+  assert.match(requests.get(FLOW_STEP.COMPONENT_GENERATE)?.prompt ?? "", /ResultCard/);
+  assert.match(requests.get(FLOW_STEP.COMPONENT_GENERATE)?.prompt ?? "", /# spec/);
+  assert.match(requests.get(FLOW_STEP.COMPONENT_GENERATE)?.prompt ?? "", /# components/);
+  assert.match(requests.get(FLOW_STEP.COMPONENT_GENERATE)?.prompt ?? "", /QuizCard/);
+  assert.match(requests.get(FLOW_STEP.COMPONENT_GENERATE)?.prompt ?? "", /keep props small/);
+  assert.deepEqual(requests.get(FLOW_STEP.COMPONENT_GENERATE)?.allowedTools, ["Read"]);
+  assert.match(requests.get(FLOW_STEP.APPLY_FIXES)?.prompt ?? "", /fix me/);
+  assert.match(requests.get(FLOW_STEP.APPLY_FIXES)?.prompt ?? "", /Story/);
+  assert.deepEqual(requests.get(FLOW_STEP.APPLY_FIXES)?.allowedTools, ["Write(frontend/src/quiz/result/*)"]);
   assert.match(issues[0].description, /変更ファイルが検出されませんでした/);
 });
 
@@ -239,7 +374,7 @@ test("ComponentFlow processTarget retries once and then resolves", async () => {
   mkdirSync(join(root, "frontend", "src", "quiz", "result"), { recursive: true });
   const profile = frontendProfile(root);
   const boundary = new Boundary(root, profile.sourceLayout, ["ts", "tsx"], []);
-  const flow = new ComponentFlow(boundary, { getConfig() { return { templates: {} }; } } as any, profile, {} as never, []);
+  const flow = new ComponentFlow(boundary, { getConfig() { return { templates: {} }; } } as any, profile, {} as never, [], componentRuntimeFactory().factory, toolExecutor());
   const changedFile = join(root, "frontend", "src", "quiz", "result", "ResultCard.tsx");
   writeFileSync(changedFile, "export const ResultCard = () => null;\n", "utf-8");
 
@@ -261,7 +396,7 @@ test("ComponentFlow processTarget retries once and then resolves", async () => {
     new Map<string, string>(),
     {} as any,
     {} as any,
-    join(root, ".harness", "review-criteria-component.md"),
+    join(root, ".harness", "resources", "criteria", "review-criteria-component.md"),
     ["Write(frontend/src/quiz/result/*)"],
   );
 

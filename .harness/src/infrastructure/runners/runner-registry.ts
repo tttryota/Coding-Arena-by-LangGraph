@@ -7,9 +7,9 @@ import { createClaudeRunner } from "./claude-runner.ts";
 import { createCodexRunner } from "./codex-runner.ts";
 import { createGenericRunner } from "./generic-runner.ts";
 import { HarnessError } from "../../domain/model/types.ts";
-import type { HarnessLogger } from "../logging/logger.ts";
 import { EVENT } from "../../domain/model/types.ts";
 import type { RunnerReviewRequest } from "./runner.ts";
+import type { Logger } from "../../application/ports/logger.ts";
 
 export type RunnerRegistry = {
   getRunner(step: FlowStep): Runner;
@@ -65,7 +65,7 @@ export function createRunnerRegistry(
     return {
       name: runner.name,
       capabilities: runner.capabilities,
-      async run(request: RunnerRequest, logger?: HarnessLogger): Promise<RunnerResponse> {
+      async run(request: RunnerRequest, logger?: Logger): Promise<RunnerResponse> {
         const response = await runner.run(prepareRequest(runner, request), logger);
         if (logger && response.metadata && step) {
           logger.log(EVENT.RUNNER_USAGE, {
@@ -80,7 +80,7 @@ export function createRunnerRegistry(
         }
         return response;
       },
-      async review(request: RunnerReviewRequest, logger?: HarnessLogger): Promise<RunnerResponse> {
+      async review(request: RunnerReviewRequest, logger?: Logger): Promise<RunnerResponse> {
         if (!runner.review) {
           throw new HarnessError(`Runner does not support review API: ${runner.name}`);
         }

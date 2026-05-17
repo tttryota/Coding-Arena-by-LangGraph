@@ -1,4 +1,4 @@
-# @tsuryoryo/tdd-harness Roadmap
+# ローカル Harness Roadmap
 
 ## 完了済み
 
@@ -7,7 +7,6 @@
 - [x] 簡易フロー（light）— 外部レビューのみ省略
 - [x] 対話的ランナー割り当て（`--no-interactive` で CI 対応）
 - [x] レビュー観点のテンプレート化（`templates/` + プレースホルダ置換）
-- [x] パッケージ設定（name, bin, files, engines, license）
 - [x] LICENSE (MIT) / README
 - [x] レビュープロンプトのワンショット例（良い例・悪い例の対比）
 - [x] チェックポイント resume 機能（`logDir` 保持）
@@ -39,14 +38,8 @@
 
 - [ ] チェックポイント形式のバージョニング（互換性管理）
 - [ ] ログ出力のカスタマイズ（verbosity、出力先）
-- [ ] CI で自パッケージのテストを回す
+- [ ] CI で `.harness` のテストを回す
 - [ ] `DriftGuard` の Codex 固定参照を汎用化
-
-### 別リポジトリへの切り出し・publish（最後に実施）
-
-- [ ] `.harness/` を独立リポジトリに移動
-- [ ] `npm publish` で `@tsuryoryo/tdd-harness` を公開
-- [ ] 消費側プロジェクト（obsidian）で `devDependencies` に追加し `npx tdd-harness` で実行確認
 
 ## フロー
 

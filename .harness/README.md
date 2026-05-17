@@ -1,26 +1,20 @@
-# @tsuryoryo/tdd-harness
+# Harness
 
 LLM CLI を使った TDD 自動化オーケストレーター。
 Claude Code / Codex App Server / GitHub Copilot CLI など任意の LLM 実行系をプラガブルに差し替え可能。
 
 ## セットアップ
 
-```bash
-npm install @tsuryoryo/tdd-harness
-# or
-pnpm add @tsuryoryo/tdd-harness
-```
-
 前提条件:
 - Node.js 22.18+
 - `claude` CLI が PATH に存在（external review などで使う場合）
 - プロジェクトに応じた lint/test ツール（Python: ruff + mypy + pytest、TypeScript: eslint + tsc + vitest）
 
-この repo ではローカル wrapper `./harness` から起動する。npm パッケージとして導入した場合は `tdd-harness` が同じ CLI を提供する。
+この repo では `./.harness/harness` が実行入口。
 
 セットアップガイドを表示:
 ```bash
-tdd-harness init
+./.harness/harness init
 ```
 
 ## 設定
@@ -137,15 +131,15 @@ runners:
 
 project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込み、存在しない場合のみ `.claude/skills/<name>/SKILL.md` を後方互換で参照します。
 
-`.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`tdd-harness init` でセットアップガイドを表示できる。
+`.harness/harness.yml`（または `.harness.yml`）に `profiles` が定義されていない場合はエラーになる。`./.harness/harness init` でセットアップガイドを表示できる。
 
 ## 使い方
 
 ### Design Flow（仕様書・テストケース生成）
 
 ```bash
-./harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
-./harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能" --profile backend
+./.harness/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
+./.harness/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能" --profile backend
 ```
 
 1. 仕様書を生成（`docs/spec/{category}/{name}.md`）
@@ -156,7 +150,7 @@ project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込
 ### Impl Flow（TDD 実装）
 
 ```bash
-./harness impl plan/current-task.md
+./.harness/harness impl plan/current-task.md
 ```
 
 実行前に対話的にステップごとのランナー割り当てを確認・変更できる:
@@ -188,24 +182,24 @@ project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込
 
 ```bash
 # light フロー
-./harness impl plan/task.md --flow light
+./.harness/harness impl plan/task.md --flow light
 
 # 対話プロンプトをスキップ
-./harness impl plan/task.md --no-interactive
+./.harness/harness impl plan/task.md --no-interactive
 
 # チェックポイントから再開
-./harness impl plan/task.md --resume
+./.harness/harness impl plan/task.md --resume
 ```
 
 ```bash
-./harness component plan/components-task.md
-./harness page plan/page-task.md
+./.harness/harness component plan/components-task.md
+./.harness/harness page plan/page-task.md
 ```
 
 ### Page Flow（Page UI 実装）
 
 ```bash
-./harness page plan/page-task.md
+./.harness/harness page plan/page-task.md
 ```
 
 - page 実装を生成
@@ -217,7 +211,7 @@ project-local skill は `.codex/skills/<name>/SKILL.md` を優先して読み込
 ### Component Flow（Component + Story 実装）
 
 ```bash
-./harness component plan/components-task.md
+./.harness/harness component plan/components-task.md
 ```
 
 - `Targets` を 1 件ずつ順に処理
@@ -355,8 +349,8 @@ impl フロー完了時に `.harness/reviews/{date}_{scope}.md` を自動生成�
 
 ## ベンチマーク診断
 
-- `./harness benchmark-summary <log-dir> [<log-dir>]` — review/token/cost の総量比較
-- `./harness benchmark-diagnose <log-dir> [<log-dir>]` — 壁時計時間、review 収束性、prompt 適切性まで含めた診断
+- `./.harness/harness benchmark-summary <log-dir> [<log-dir>]` — review/token/cost の総量比較
+- `./.harness/harness benchmark-diagnose <log-dir> [<log-dir>]` — 壁時計時間、review 収束性、prompt 適切性まで含めた診断
 
 ## ライセンス
 

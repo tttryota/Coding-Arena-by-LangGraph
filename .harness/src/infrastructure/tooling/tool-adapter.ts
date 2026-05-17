@@ -327,6 +327,7 @@ export const LINT_REGISTRY: Record<string, LintAdapter> = {
   ruff: RUFF_ADAPTER,
   mypy: MYPY_ADAPTER,
   eslint: ESLINT_ADAPTER,
+  biome: BIOME_ADAPTER,
   tsc: TSC_ADAPTER,
 };
 

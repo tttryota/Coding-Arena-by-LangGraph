@@ -153,11 +153,11 @@ export class CodexConversationService {
     }
 
     this.initializePromise = this.transport.request(
-      "initialize",
-      {
-        clientInfo: {
-          name: "tdd-harness",
-          title: "TDD Harness",
+        "initialize",
+        {
+          clientInfo: {
+          name: "obsidian-harness",
+          title: "Obsidian Harness",
           version: "0.1.0",
         },
         capabilities: {

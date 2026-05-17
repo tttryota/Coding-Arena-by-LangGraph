@@ -1,19 +1,13 @@
-# tdd-harness セットアップガイド
+# Harness セットアップガイド
 
 ## インストール
-
-```bash
-npm install @tsuryoryo/tdd-harness
-# or
-pnpm add @tsuryoryo/tdd-harness
-```
 
 前提:
 - Node.js 22.18+
 - `claude` CLI が PATH に存在（external review などで使う場合）
 - プロジェクトに応じた lint/test ツール
 
-この repo では `./harness` から起動する。npm パッケージ版では `tdd-harness` を使う。
+この repo では `./.harness/harness` から起動する。
 
 ## 設定ファイル
 
@@ -187,7 +181,7 @@ runners:
     sandbox: read-only
 ```
 
-`profiles` は必須。未定義の場合はエラーになる。`tdd-harness init` でこのガイドを表示できる。
+`profiles` は必須。未定義の場合はエラーになる。`./.harness/harness init` でこのガイドを表示できる。
 
 `profile` は実行単位です。lint / test / sourceLayout に加え、`flow` / `fallbackRunner` / `steps` / `context` も profile 内に置きます。
 
@@ -277,16 +271,16 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 ### Design Flow（仕様書・テストケース生成）
 
 ```bash
-./harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
+./.harness/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
 ```
 
 ### Impl Flow（TDD 実装）
 
 ```bash
-./harness impl plan/task.md
-./harness impl plan/task.md --flow light    # 外部レビュー省略
-./harness impl plan/task.md --resume        # チェックポイントから再開
-./harness impl plan/task.md --no-interactive # 対話プロンプトスキップ
+./.harness/harness impl plan/task.md
+./.harness/harness impl plan/task.md --flow light    # 外部レビュー省略
+./.harness/harness impl plan/task.md --resume        # チェックポイントから再開
+./.harness/harness impl plan/task.md --no-interactive # 対話プロンプトスキップ
 ```
 
 ## プロファイル設定項目

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import type { HarnessLogger } from "../../logging/logger.ts";
 import { HarnessError } from "../../../domain/model/types.ts";
 import type {
@@ -22,9 +23,21 @@ export type AppServerTransport = {
   close(): Promise<void>;
 };
 
+type SpawnLike = (
+  command: string,
+  args: readonly string[],
+  options: {
+    cwd?: string;
+    stdio: ["pipe", "pipe", "pipe"];
+  },
+) => ChildProcessWithoutNullStreams;
+
 export class StdioCodexAppServerTransport implements AppServerTransport {
   private logger?: HarnessLogger;
   private cwd?: string;
+  private spawnImpl: SpawnLike;
+  private command: string;
+  private commandArgs: string[];
   private child: ReturnType<typeof spawn> | null = null;
   private nextId = 1;
   private stdoutBuffer = "";
@@ -33,9 +46,18 @@ export class StdioCodexAppServerTransport implements AppServerTransport {
   private closed = false;
   private exitHandlersRegistered = false;
 
-  constructor(options?: { cwd?: string; logger?: HarnessLogger }) {
+  constructor(options?: {
+    cwd?: string;
+    logger?: HarnessLogger;
+    spawnImpl?: SpawnLike;
+    command?: string;
+    commandArgs?: string[];
+  }) {
     this.cwd = options?.cwd;
     this.logger = options?.logger;
+    this.spawnImpl = options?.spawnImpl ?? spawn;
+    this.command = options?.command ?? "codex";
+    this.commandArgs = options?.commandArgs ?? ["app-server", "--listen", "stdio://"];
   }
 
   setLogger(logger?: HarnessLogger): void {
@@ -96,7 +118,7 @@ export class StdioCodexAppServerTransport implements AppServerTransport {
   private ensureStarted(): void {
     if (this.child) return;
 
-    this.child = spawn("codex", ["app-server", "--listen", "stdio://"], {
+    this.child = this.spawnImpl(this.command, this.commandArgs, {
       cwd: this.cwd,
       stdio: ["pipe", "pipe", "pipe"],
     });

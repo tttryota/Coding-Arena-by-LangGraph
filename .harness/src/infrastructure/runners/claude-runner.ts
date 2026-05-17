@@ -22,13 +22,31 @@ export type ClaudeOptions = {
   outputSchema?: Record<string, unknown>;
 };
 
+export type ClaudeDeps = {
+  spawnWithStdinImpl?: typeof spawnWithStdin;
+  mkdtempSyncImpl?: typeof mkdtempSync;
+  writeFileSyncImpl?: typeof writeFileSync;
+  rmSyncImpl?: typeof rmSync;
+  tmpdirImpl?: typeof tmpdir;
+};
+
 export async function runClaude(
   options: ClaudeOptions,
   logger?: HarnessLogger,
+  deps: ClaudeDeps = {},
 ): Promise<ClaudeResult> {
-  const { args, tempFile } = buildArgs({ ...options, outputFormat: options.outputFormat ?? "json" });
-  const result = await spawnWithStdin("claude", args, options.prompt, options.cwd, options.timeoutMs);
-  if (tempFile) cleanupTemp(tempFile);
+  const { args, tempFile } = buildArgs(
+    { ...options, outputFormat: options.outputFormat ?? "json" },
+    deps,
+  );
+  const result = await (deps.spawnWithStdinImpl ?? spawnWithStdin)(
+    "claude",
+    args,
+    options.prompt,
+    options.cwd,
+    options.timeoutMs,
+  );
+  if (tempFile) cleanupTemp(tempFile, deps);
 
   if (logger) {
     logger.logCommand("claude", ["-p", "(stdin)", ...args.slice(1)], result);
@@ -69,7 +87,10 @@ export function extractClaudeText(result: ClaudeResult): string {
   return "";
 }
 
-function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string | null } {
+export function buildArgs(
+  options: ClaudeOptions,
+  deps: ClaudeDeps = {},
+): { args: string[]; tempFile: string | null } {
   // prompt は stdin 経由で渡すので "-p" に "-" を指定
   const args = ["-p", "-"];
   let tempFile: string | null = null;
@@ -92,9 +113,9 @@ function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string |
 
   if (options.appendSystemPrompt) {
     // 大きな system prompt は一時ファイル経由で渡す（E2BIG 防止）
-    const dir = mkdtempSync(join(tmpdir(), "harness-"));
+    const dir = (deps.mkdtempSyncImpl ?? mkdtempSync)(join((deps.tmpdirImpl ?? tmpdir)(), "harness-"));
     tempFile = join(dir, "system-prompt.txt");
-    writeFileSync(tempFile, options.appendSystemPrompt, "utf-8");
+    (deps.writeFileSyncImpl ?? writeFileSync)(tempFile, options.appendSystemPrompt, "utf-8");
     args.push("--append-system-prompt-file", tempFile);
   }
 
@@ -113,17 +134,22 @@ function buildArgs(options: ClaudeOptions): { args: string[]; tempFile: string |
   return { args, tempFile };
 }
 
-function cleanupTemp(filePath: string): void {
+export function cleanupTemp(filePath: string, deps: ClaudeDeps = {}): void {
   try {
     // ファイルと親ディレクトリ（mkdtempSync で作成）を両方削除
     const dir = join(filePath, "..");
-    rmSync(dir, { recursive: true, force: true });
+    (deps.rmSyncImpl ?? rmSync)(dir, { recursive: true, force: true });
   } catch {
     // ベストエフォート
   }
 }
 
-export function createClaudeRunner(defaults?: { timeoutMs?: number; model?: string }): Runner {
+export function createClaudeRunner(
+  defaults?: { timeoutMs?: number; model?: string },
+  deps: ClaudeDeps & {
+    runClaudeImpl?: typeof runClaude;
+  } = {},
+): Runner {
   return {
     name: "claude",
     capabilities: new Set([
@@ -134,7 +160,7 @@ export function createClaudeRunner(defaults?: { timeoutMs?: number; model?: stri
       RUNNER_CAPABILITY.MCP_CONFIG,
     ]),
     async run(request, logger) {
-      const result = await runClaude(
+      const result = await (deps.runClaudeImpl ?? runClaude)(
         {
           prompt: request.prompt,
           allowedTools: request.allowedTools,
@@ -149,6 +175,7 @@ export function createClaudeRunner(defaults?: { timeoutMs?: number; model?: stri
           outputSchema: request.outputSchema,
         },
         logger,
+        deps,
       );
       return {
         text: extractClaudeText(result),

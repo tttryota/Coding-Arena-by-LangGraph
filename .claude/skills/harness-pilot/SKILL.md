@@ -9,7 +9,7 @@ name: harness-pilot
 
 ## まず押さえること
 
-- この repo では `./harness` が実行入口。npm パッケージ版の CLI 名は `tdd-harness`
+- この repo では `./.harness/harness` が実行入口
 - `profile` は lint / test / sourceLayout を選ぶ設定であり、LLM サービス選択には使わない
 - どの LLM をどのステップで使うかは `.harness/harness.yml` または `.harness.yml` の `runners` と `steps` で切り替える
 - `type: codex` は現在 `codex app-server` バックエンド
@@ -19,28 +19,26 @@ name: harness-pilot
 
 | コマンド | 用途 | 引数 |
 |---|---|---|
-| `./harness design <category/name> "<要件>"` | 仕様書 / テストケース生成 | scope 形式の名前 + 要件テキスト |
-| `./harness impl <plan-file> [--resume] [--flow full\|light] [--no-interactive]` | TDD 実装（BE + FE Logic） | plan ファイルパス |
-| `./harness component <plan-file> [--flow full\|light] [--no-interactive]` | コンポーネント + Story 生成 | plan ファイルパス |
-| `./harness page <plan-file> [--flow full\|light] [--no-interactive]` | ページ組み立て + 3観点レビュー | plan ファイルパス |
-| `./harness benchmark-summary <log-dir> [<log-dir>]` | ベンチマーク比較サマリ生成 | 1つまたは2つのログディレクトリ |
+| `./.harness/harness design <category/name> "<要件>"` | 仕様書 / テストケース生成 | scope 形式の名前 + 要件テキスト |
+| `./.harness/harness impl <plan-file> [--resume] [--flow full\|light] [--no-interactive]` | TDD 実装（BE + FE Logic） | plan ファイルパス |
+| `./.harness/harness component <plan-file> [--flow full\|light] [--no-interactive]` | コンポーネント + Story 生成 | plan ファイルパス |
+| `./.harness/harness page <plan-file> [--flow full\|light] [--no-interactive]` | ページ組み立て + 3観点レビュー | plan ファイルパス |
+| `./.harness/harness benchmark-summary <log-dir> [<log-dir>]` | ベンチマーク比較サマリ生成 | 1つまたは2つのログディレクトリ |
 | `/harness-plan-fe <spec-path>` | FE plan 群を対話的に生成 | 仕様書パス（Claude Code skill） |
-
-ローカル wrapper を使わない環境では、同じ引数で `tdd-harness ...` を使ってよい。
 
 ## ワークフロー
 
 ### バックエンド
-1. `./harness design <category/name> "<要件>"` → 仕様書 + テストケース生成
+1. `./.harness/harness design <category/name> "<要件>"` → 仕様書 + テストケース生成
 2. 人間が plan.md を作成（frontmatter: type, profile, scope, spec, test_cases）
-3. `./harness impl <plan-file>` → テスト生成 → RED → 実装 → GREEN → レビュー
+3. `./.harness/harness impl <plan-file>` → テスト生成 → RED → 実装 → GREEN → レビュー
 
 ### フロントエンド
 1. ready の仕様書 / コンポーネント定義書 / Figma キャッシュ / 必要ならテストケースを用意する
 2. `/harness-plan-fe <spec-path>` → plan 群を対話的に生成
-3. `./harness component <plan>` → コンポーネント + Story 生成
-4. `./harness impl <plan>` → Logic（hooks/atoms/API）を TDD で実装
-5. `./harness page <plan>` → ページ組み立て + 3観点レビュー + ブラウザ検証
+3. `./.harness/harness component <plan>` → コンポーネント + Story 生成
+4. `./.harness/harness impl <plan>` → Logic（hooks/atoms/API）を TDD で実装
+5. `./.harness/harness page <plan>` → ページ組み立て + 3観点レビュー + ブラウザ検証
 
 ## ステータス管理
 
@@ -129,7 +127,7 @@ impl フロー完了時にレビューレポート（Markdown）が自動生成�
 - 内容: テストケース一覧、TDD サイクル結果、レビュー指摘と修正内容、設計判断記録
 
 ### チェックポイントと再開
-`./harness impl <plan> --resume` で中断箇所から再開可能。
+`./.harness/harness impl <plan> --resume` で中断箇所から再開可能。
 resume は `logs/checkpoint_{taskName}.json` を参照し、ログディレクトリ内にも `checkpoint.json` を保存する。
 
 ## 関連 skill

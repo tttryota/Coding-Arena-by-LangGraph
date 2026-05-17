@@ -12,8 +12,14 @@ export function createCodexRunner(defaults?: {
   summary?: "auto" | "brief" | "detailed";
   effort?: "minimal" | "low" | "medium" | "high";
   personality?: "default" | "strict" | "balanced";
+  transportFactory?: (options: { cwd?: string; logger?: import("../logging/logger.ts").HarnessLogger }) => StdioCodexAppServerTransport;
+  serviceFactory?: (transport: StdioCodexAppServerTransport) => CodexConversationService;
 }): Runner {
   const sandbox = normalizeSandbox(defaults?.sandbox);
+  const transportFactory = defaults?.transportFactory
+    ?? ((options: { cwd?: string; logger?: import("../logging/logger.ts").HarnessLogger }) =>
+      new StdioCodexAppServerTransport(options));
+  const serviceFactory = defaults?.serviceFactory ?? ((transport: StdioCodexAppServerTransport) => new CodexConversationService(transport));
 
   return {
     name: "codex",
@@ -23,11 +29,11 @@ export function createCodexRunner(defaults?: {
       RUNNER_CAPABILITY.REVIEW_API,
     ]),
     async run(request, logger) {
-      const transport = new StdioCodexAppServerTransport({
+      const transport = transportFactory({
         cwd: defaults?.projectRoot,
         logger,
       });
-      const service = new CodexConversationService(transport);
+      const service = serviceFactory(transport);
       try {
         return await service.runTurn(
           {
@@ -53,11 +59,11 @@ export function createCodexRunner(defaults?: {
       }
     },
     async review(request, logger) {
-      const transport = new StdioCodexAppServerTransport({
+      const transport = transportFactory({
         cwd: defaults?.projectRoot,
         logger,
       });
-      const service = new CodexConversationService(transport);
+      const service = serviceFactory(transport);
       try {
         return await service.runReview(
           {
@@ -79,7 +85,7 @@ export function createCodexRunner(defaults?: {
   };
 }
 
-function normalizeSandbox(
+export function normalizeSandbox(
   sandbox: string | undefined,
 ): "read-only" | "workspace-write" | "danger-full-access" | undefined {
   if (!sandbox) return undefined;

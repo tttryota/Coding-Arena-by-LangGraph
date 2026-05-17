@@ -57,9 +57,9 @@
 .harness/templates/test-generate.md — 新規作成（テスト生成プロンプト）
 .harness/templates/impl-generate.md — 新規作成（実装生成プロンプト）
 .harness/templates/impl-retry.md — 新規作成（実装リトライプロンプト）
-.harness/setup-guide.md       — 新規作成（tdd-harness init 用セットアップガイド）
+.harness/setup-guide.md       — 新規作成（`./.harness/harness init` 用セットアップガイド）
 .harness/README.md            — profiles セクション追加、前提条件汎用化、ツール一覧追加
-.harness/package.json         — files に setup-guide.md 追加
+.harness/package.json         — ローカル実行用 scripts を整備
 .harness/src/types.ts         — TaskPlan に profile? 追加
 ```
 

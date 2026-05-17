@@ -470,7 +470,7 @@ function requireProfiles(config: HarnessUserConfig): HarnessUserConfig {
     return config;
   }
   throw new GuardError(
-    `profiles が定義されていません。${configLocationMessage()} に profiles を追加してください。\n\`tdd-harness init\` でセットアップガイドを表示できます。`,
+    `profiles が定義されていません。${configLocationMessage()} に profiles を追加してください。\n\`./.harness/harness init\` でセットアップガイドを表示できます。`,
   );
 }
 

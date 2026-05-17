@@ -853,7 +853,7 @@ ${plan.targetTestCases.map((tc, i) => `${i + 1}. ${tc}`).join("\n")}
     }
 
     // 書き出し
-    const reportsDir = join(root, "docs/reviews");
+    const reportsDir = join(root, ".harness/reviews");
     mkdirSync(reportsDir, { recursive: true });
     const reportPath = join(reportsDir, `${timestamp}_${scopeSlug}.md`);
     writeFileSync(reportPath, md, "utf-8");

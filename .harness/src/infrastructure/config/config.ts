@@ -556,7 +556,7 @@ function resolveOneProfile(
       userLayout?.scopePattern ??
       `${userLayout?.sourceDir ?? "backend/{{category}}"}/*`,
     additionalAllowedPrefixes:
-      userLayout?.additionalAllowedPrefixes ?? ["docs/reviews/"],
+      userLayout?.additionalAllowedPrefixes ?? [".harness/reviews/"],
   };
 
   return {

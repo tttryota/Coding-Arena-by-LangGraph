@@ -34,7 +34,7 @@ export class Boundary {
       sourceDir: "backend/{{category}}",
       testDir: "backend/{{category}}/tests",
       scopePattern: "backend/{{category}}/*",
-      additionalAllowedPrefixes: ["docs/reviews/"],
+      additionalAllowedPrefixes: [".harness/reviews/"],
     };
     this.fileExtensions = fileExtensions ?? ["py"];
     this.excludeDirs = excludeDirs ?? ["__pycache__", ".venv"];

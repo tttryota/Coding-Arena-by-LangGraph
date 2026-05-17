@@ -108,7 +108,7 @@ profiles:
       sourceDir: "frontend/src/{{category}}/{{name}}"
       testDir: "frontend/src/{{category}}/{{name}}/__tests__"
       scopePattern: "frontend/src/{{category}}/{{name}}/*"
-      additionalAllowedPrefixes: ["docs/reviews/", "frontend/src/mocks/handlers/"]
+      additionalAllowedPrefixes: [".harness/reviews/", "frontend/src/mocks/handlers/"]
     storybook:
       renderCommand: ["pnpm", "storybook", "build", "--test", "--docs", "--output-dir", ".storybook-static-{{target}}"]
       smokeCommand: ["pnpm", "storybook", "test", "--stories-json", "{{storyFile}}"]
@@ -335,7 +335,7 @@ harness（CLI エントリポイント）
 
 ## レビューレポート
 
-impl フロー完了時に `docs/reviews/{date}_{scope}.md` を自動生成。
+impl フロー完了時に `.harness/reviews/{date}_{scope}.md` を自動生成。
 
 レポート内容:
 - TDD サイクルの結果

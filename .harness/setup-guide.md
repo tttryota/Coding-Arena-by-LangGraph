@@ -308,6 +308,6 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 | sourceDir | ソースディレクトリ | `backend/{{category}}` |
 | testDir | テストディレクトリ | `backend/{{category}}/tests` |
 | scopePattern | スコープパターン | `backend/{{category}}/*` |
-| additionalAllowedPrefixes | 追加の許可パス | `["docs/reviews/"]` |
+| additionalAllowedPrefixes | 追加の許可パス | `[".harness/reviews/"]` |
 
 `{{category}}` と `{{name}}` がスコープの値で置換される。

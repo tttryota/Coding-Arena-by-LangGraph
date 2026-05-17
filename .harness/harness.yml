@@ -60,7 +60,7 @@ profiles:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
       scopePattern: "backend/{{category}}/*"
-      additionalAllowedPrefixes: ["docs/reviews/"]
+      additionalAllowedPrefixes: [".harness/reviews/"]
   frontend:
     flow: full
     fallbackRunner: codex
@@ -93,7 +93,7 @@ profiles:
       sourceDir: "frontend/src/{{category}}/{{name}}"
       testDir: "frontend/src/{{category}}/{{name}}/__tests__"
       scopePattern: "frontend/src/{{category}}/{{name}}/*"
-      additionalAllowedPrefixes: ["docs/reviews/", "frontend/src/mocks/handlers/"]
+      additionalAllowedPrefixes: [".harness/reviews/", "frontend/src/mocks/handlers/"]
 
 runners:
   claude:

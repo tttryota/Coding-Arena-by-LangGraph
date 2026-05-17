@@ -28,7 +28,7 @@ test("runner registry preserves review API on wrapped runners", () => {
       sourceDir: "backend/{{category}}",
       testDir: "backend/{{category}}/tests",
       scopePattern: "backend/{{category}}/*",
-      additionalAllowedPrefixes: ["docs/reviews/"],
+      additionalAllowedPrefixes: [".harness/reviews/"],
     },
     exec: [],
     toolRoot: "/tmp/project",

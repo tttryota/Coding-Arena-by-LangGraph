@@ -10,6 +10,17 @@
 
 Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` が必須であり、サブスクリプション（Pro/Max）の OAuth 認証では使用できない。2026年2月に Anthropic が「OAuth は Claude Code と claude.ai 専用」と明確化したため、`claude -p` を subprocess 経由で呼び出す方式を採用。
 
+### Codex SDK 不採用
+
+Codex SDK（`@openai/codex-sdk`）は `codex` CLI をラップする高水準 API だが、ハーネスが必要とする制御粒度とは合わなかった。ハーネス側では以下を runner の責務として明示的に扱いたい:
+
+- stdio 上の生 JSON-RPC 通知をそのまま transcript に残すこと
+- detached review thread を通常 turn と分けて制御すること
+- request 単位の timeout / close / pending request cleanup を自前で管理すること
+- app-server からの protocol 変化を SDK 抽象越しではなく transport 層で直接吸収すること
+
+そのため、SDK の `Thread.run()` 抽象には乗らず、`codex app-server --listen stdio://` に対して軽量な transport / service 層を自前実装する方式を採用した。
+
 ### Node.js type stripping
 
 `tsx` パッケージを使わず、Node.js 22.18+ のネイティブ type stripping で `.ts` ファイルを直接実行する。以下の制約がある:
@@ -59,7 +70,7 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 - `scopeAllowedTools(scope)`: Claude の Write/Edit を `backend/{category}/*` に限定するパターン生成（テストディレクトリも含む）
 
 **変更検証**:
-- `verifyChangedFilesWithinScope(scope)`: `git diff` + `git ls-files --others` でスコープ外変更を検出。許可プレフィクスは `backend/{category}/` と `docs/reviews/`。git 失敗は fail-closed
+- `verifyChangedFilesWithinScope(scope)`: `git diff` + `git ls-files --others` でスコープ外変更を検出。許可プレフィクスは `backend/{category}/` と `.harness/reviews/`。git 失敗は fail-closed
 
 **ガード**:
 - `implementationGuard(plan)`: 仕様書・テストケースの存在・承認・scope 妥当性を一括検証
@@ -188,7 +199,7 @@ Claude Agent SDK（`@anthropic-ai/claude-agent-sdk`）は `ANTHROPIC_API_KEY` �
 - GREEN リトライループ（最大3回、毎回最新の失敗ログを渡す）
 - DriftGuard の `expectedScopeLines` をテストケース数 × 30行で動的推定
 - スコープ外変更の事後検証
-- **レビューレポート自動生成**: impl フロー完了時に `docs/reviews/{date}_{scope}.md` を出力
+- **レビューレポート自動生成**: impl フロー完了時に `.harness/reviews/{date}_{scope}.md` を出力
 
 ### レビューレポート生成
 
@@ -207,7 +218,7 @@ impl フロー完了時に、レビューサイクルの全記録から人間が
 - 「対応しなかった指摘」としてレポートに記載
 
 **出力**:
-- `docs/reviews/{date}_{scope}.md` — git 管理対象の MD レポート
+- `.harness/reviews/{date}_{scope}.md` — git 管理対象の MD レポート
 - `logs/*/review-data.json` — レポート生成の元データ（.gitignore 対象）
 
 **型定義**:

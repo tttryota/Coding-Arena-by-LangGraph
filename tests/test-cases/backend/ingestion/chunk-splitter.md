@@ -1,5 +1,5 @@
 ---
-status: draft
+status: ready
 ---
 
 # テストケース一覧
@@ -8,49 +8,51 @@ status: draft
 
 | テストの種類 | 検証焦点 |
 |---|---|
-| Phase 1（最小骨格） | 全フィールド |
-| Phase 2（コアロジック） | テスト対象ルールに関連するフィールド |
-| Phase 3（エッジケース） | 境界条件固有のフィールド |
-| Phase 4（外部連携） | エラー送出・非エラー確認 |
+| Phase 1（最小骨格） | `content` / `heading_path` / `token_count` の基本返却形 |
+| Phase 2（コアロジック） | 一次分割、二次分割、コードブロック保護、テキスト保存 |
+| Phase 3（エッジケース） | 空入力、フロントマター境界、不可分単位超過、未閉鎖ブロック |
+| Phase 4（外部連携） | 依存インターフェース検証、例外送出、可観測性 |
 
 ## Phase 1: 最小骨格
 
 | ID | 観点 | 前提 | 入力 | 期待結果 | 備考 |
 |---|---|---|---|---|---|
-| TC-01 | 空ファイルは空リストを返す | なし | `""` | `[]` を返す | 空ファイル非エラーの最小確認 |
-| TC-02 | 見出しなし本文は 1 チャンクになる | トークナイザは正常利用可能 | `見出しを持たないノート。` | `[{text: "見出しを持たないノート。", headers: ""}]` を返す | `headers` 空文字列の基本確認 |
-| TC-03 | H1 見出し行は `text` に含めず `headers` にのみ入る | トークナイザは正常利用可能 | `# TypeScript入門\n\nTypeScriptの基本を学ぶ。\n` | `[{text: "TypeScriptの基本を学ぶ。", headers: "TypeScript入門"}]` を返す | 先頭末尾空行の trim も同時確認 |
+| TC-01 | H1 配下の最小チャンクを 1 件返す | `token_counter.count("# Docker\n\n概要") = 12` | `markdown_text = "# Docker\n\n概要"` | `[{content: "# Docker\n\n概要", heading_path: ["Docker"], token_count: 12}]` を出現順で返す | 全フィールドの最小正常系 |
+| TC-02 | H1/H2 が存在しない本文は全体を 1 チャンクにする | `token_counter.count("本文のみ\n\n[[リンク先]]") = 18` | `markdown_text = "本文のみ\n\n[[リンク先]]"` | `[{content: "本文のみ\n\n[[リンク先]]", heading_path: [], token_count: 18}]` を返す | `heading_path` 空配列の基本確認 |
+| TC-03 | 空ファイルは空リストを返す | なし | `markdown_text = ""` | `[]` を返す | 最小境界 |
 
 ## Phase 2: コアロジック
 
 | ID | 観点 | 前提 | 入力 | 期待結果 | 備考 |
 |---|---|---|---|---|---|
-| TC-10 | H1/H2 だけが境界になり、出力順序が本文順のまま保持される | トークナイザは正常利用可能 | `# TypeScript入門\n\nTypeScriptの基本を学ぶ。\n\n## 型システム\n\n型の基本を確認する。\n\n## 非同期処理\n\nasync/await を学ぶ。` | 1件目 `{text: "TypeScriptの基本を学ぶ。", headers: "TypeScript入門"}`、2件目 `{text: "型の基本を確認する。", headers: "TypeScript入門 > 型システム"}`、3件目 `{text: "async/await を学ぶ。", headers: "TypeScript入門 > 非同期処理"}` をこの順で返す | H1/H2 の境界分割、見出し除外、順序保持を同時確認 |
-| TC-11 | H3〜H6 は本文に残り、新しいチャンクを開始しない | トークナイザは正常利用可能 | `## 型システム\n\n型の基本を確認する。\n\n### ジェネリクス\n\n型引数を使う。\n\n#### 制約\n\n\`extends\` を使う。` | `[{text: "型の基本を確認する。\n\n### ジェネリクス\n\n型引数を使う。\n\n#### 制約\n\n\`extends\` を使う。", headers: "型システム"}]` を返す | H3/H4 本文包含の確認 |
-| TC-12 | 先頭 YAML フロントマターだけを除外し、本文中 `---` とコードブロック内 `##` はそのまま残す | トークナイザは正常利用可能 | `---\ntitle: Pythonメモ\ntags:\n  - study\n---\n\n## サンプル\n\n[[別ノート]]を参照する。\n\n\`\`\`python\n# これはコメント\n## これもコメント\nprint("hello")\n\`\`\`\n\n---\n\n区切り線の後も本文。` | `[{text: "[[別ノート]]を参照する。\n\n\`\`\`python\n# これはコメント\n## これもコメント\nprint(\"hello\")\n\`\`\`\n\n---\n\n区切り線の後も本文。", headers: "サンプル"}]` を返す | フロントマター除外、コードブロック保護、本文中 `---` 保持を同時確認 |
-| TC-13 | Obsidian 内部リンク記法を解決・正規化せず保持する | トークナイザは正常利用可能 | `## 参照\n\n[[リンク先]] と [[別ノート&#124;表示名]] を見る。` | `[{text: "[[リンク先]] と [[別ノート|表示名]] を見る。", headers: "参照"}]` を返す | 内部リンク保持専用ケース |
-| TC-14 | 512 トークン超過時は段落単位で再分割し、元 `headers` を引き継ぐ | テストダブルで本文全体は 600 トークン、1段落目 `段落A` は 300 トークン、2段落目 `段落B` は 300 トークンとして計測される | `## 長文\n\n段落A\n\n段落B` | `[{text: "段落A", headers: "長文"}, {text: "段落B", headers: "長文"}]` を返す | 段落境界は空行区切り |
-| TC-15 | 単一段落だけで 512 トークン超過した場合はトークナイザ境界で強制分割する | テストダブルで `tok001`〜`tok520` の空白区切り 520 語が 520 トークンとして計測され、512 トークン境界は `tok512` と `tok513` の間になる | `## 長文\n\ntok001 tok002 ... tok520` | 1件目は `tok001`〜`tok512` を含む `text` と `headers: "長文"`、2件目は `tok513`〜`tok520` を含む `text` と `headers: "長文"` を返す | 期待結果の省略記法は語番範囲を意味する |
+| TC-10 | 先頭 YAML フロントマターを除外し、H1/H2 で一次分割し、H3 は親チャンクに保持する | `token_counter.count("# TypeScript\nIntro\n\n### Generics\nT extends U") = 120`、`token_counter.count("## Utility Types\nPick と Omit") = 65` | `markdown_text = "---\ntitle: TS Notes\ntags:\n  - study\n---\n\n# TypeScript\nIntro\n\n### Generics\nT extends U\n\n## Utility Types\nPick と Omit"` | 1件目 `{content: "# TypeScript\nIntro\n\n### Generics\nT extends U", heading_path: ["TypeScript"], token_count: 120}`、2件目 `{content: "## Utility Types\nPick と Omit", heading_path: ["TypeScript", "Utility Types"], token_count: 65}` をこの順で返す | 仕様書 例1 に対応 |
+| TC-11 | 一次チャンクが 512 トークン超過時に段落単位で二次分割し、各サブチャンク先頭へ親見出しを再付与する | `token_counter.count("# Docker\n\n段落A\n\n段落B") = 430`、`token_counter.count("# Docker\n\n段落A\n\n段落B\n\n段落C") = 620`、`token_counter.count("# Docker\n\n段落C") = 210` | `markdown_text = "# Docker\n\n段落A\n\n段落B\n\n段落C"` | 1件目 `{content: "# Docker\n\n段落A\n\n段落B", heading_path: ["Docker"], token_count: 430}`、2件目 `{content: "# Docker\n\n段落C", heading_path: ["Docker"], token_count: 210}` を返す | 仕様書 例2 に対応 |
+| TC-12 | コードブロック内の見出し様テキストを境界にせず、本文中の `---` を保持し、512 超の単一コードブロックは分割しない | `token_counter.count("# Python\n\n```python\n# this is not a heading\nprint(\"a\")\nprint(\"b\")\n```") = 540`、`token_counter.count("# Python\n\n---\n\n本文") = 40` | `markdown_text = "# Python\n\n```python\n# this is not a heading\nprint(\"a\")\nprint(\"b\")\n```\n\n---\n\n本文"` | 1件目 `{content: "# Python\n\n```python\n# this is not a heading\nprint(\"a\")\nprint(\"b\")\n```", heading_path: ["Python"], token_count: 540}`、2件目 `{content: "# Python\n\n---\n\n本文", heading_path: ["Python"], token_count: 40}` を返す | 仕様書 例3 に対応 |
+| TC-13 | 親 H1 を持たない H2 は `heading_path = [H2]` とする | `token_counter.count("## Utility Types\nPick と Omit") = 65` | `markdown_text = "## Utility Types\nPick と Omit"` | `[{content: "## Utility Types\nPick と Omit", heading_path: ["Utility Types"], token_count: 65}]` を返す | 入出力契約の H2 単独ケース |
+| TC-14 | 二次分割時も見出し行を直後のコードブロックから分離しない | `token_counter.count("# Python\n\n```python\nprint(\"a\")\n```\n\n説明段落") = 620`、`token_counter.count("# Python\n\n```python\nprint(\"a\")\n```") = 350`、`token_counter.count("# Python\n\n説明段落") = 120` | `markdown_text = "# Python\n\n```python\nprint(\"a\")\n```\n\n説明段落"` | 1件目 `{content: "# Python\n\n```python\nprint(\"a\")\n```", heading_path: ["Python"], token_count: 350}`、2件目 `{content: "# Python\n\n説明段落", heading_path: ["Python"], token_count: 120}` を返す | 二次分割ルールの「見出し行は直後の本文またはコードブロックと分離しない」を単独確認 |
+| TC-15 | Obsidian 内部リンクは解決・変換せず本文文字列として保持する | `token_counter.count("# References\n\n[[リンク先]] と [[別ノート|表示名]] を見る") = 55` | `markdown_text = "# References\n\n[[リンク先]] と [[別ノート|表示名]] を見る"` | `[{content: "# References\n\n[[リンク先]] と [[別ノート|表示名]] を見る", heading_path: ["References"], token_count: 55}]` を返す | テキスト保存ルール専用 |
 
 ## Phase 3: エッジケース
 
 | ID | 観点 | 前提 | 入力 | 期待結果 | 備考 |
 |---|---|---|---|---|---|
-| TC-20 | 空白のみファイルは空リストを返す | なし | ` \n\t\n` | `[]` を返す | 空文字列とは別境界 |
-| TC-21 | フロントマター除外後に本文が空なら空リストを返す | なし | `---\ntitle: only-meta\n---\n` | `[]` を返す | フロントマターのみファイル |
-| TC-22 | 見出しだけで本文がないセクションは空チャンクを生成しない | トークナイザは正常利用可能 | `# A\n\n## B\n\n本文B\n\n## C\n` | `[{text: "本文B", headers: "A > B"}]` だけを返す | `A` と `C` の空セクションは抑止される |
-| TC-23 | H2 が H1 より先に現れても H2 単独でチャンク開始できる | トークナイザは正常利用可能 | `## 先行H2\n\n本文。` | `[{text: "本文。", headers: "先行H2"}]` を返す | 見出し欠落非エラーの確認も兼ねる |
-| TC-24 | H1 が複数回現れたら直近 H1 に親階層が切り替わる | トークナイザは正常利用可能 | `# A\n\n本文A\n\n## A-1\n\n本文A1\n\n# B\n\n本文B\n\n## B-1\n\n本文B1` | 1件目 `{text: "本文A", headers: "A"}`、2件目 `{text: "本文A1", headers: "A > A-1"}`、3件目 `{text: "本文B", headers: "B"}`、4件目 `{text: "本文B1", headers: "B > B-1"}` を返す | `A-1` 親が `B` に引き継がれないことを確認 |
-| TC-25 | 先頭 `---` に閉じ `---` がない場合はフロントマターとして除外しない | トークナイザは正常利用可能 | `---\ntitle: draft\n本文。` | `[{text: "---\ntitle: draft\n本文。", headers: ""}]` を返す | 先頭 `---` 未閉鎖時は通常本文扱い |
-| TC-26 | 閉じていないコードブロックはファイル末尾までコードブロックとして扱う | トークナイザは正常利用可能 | `# Before\n\n\`\`\`python\n## これは見出しではない\nprint(\"x\")` | `[{text: "\`\`\`python\n## これは見出しではない\nprint(\"x\")", headers: "Before"}]` を返す | 未閉鎖コードブロック非エラー |
-| TC-27 | 512 トークン超の単独コードブロックは分割せず 1 チャンクで保持する | テストダブルでコードブロック全体が 700 トークンとして計測される | `## Code\n\n\`\`\`text\ncode001 code002 ... code700\n\`\`\`` | `[{text: "\`\`\`text\ncode001 code002 ... code700\n\`\`\`", headers: "Code"}]` を返す | コード文脈保護を上限順守より優先 |
+| TC-20 | 空白文字のみのファイルは空リストを返す | なし | `markdown_text = " \n\t\n"` | `[]` を返す | 空ファイルとは別境界 |
+| TC-21 | フロントマター除外後に本文が空なら空リストを返す | なし | `markdown_text = "---\ntitle: only-meta\n---\n"` | `[]` を返す | フロントマターのみファイル |
+| TC-22 | H3/H4/H5/H6 のみで H1/H2 がない本文は全体を 1 チャンクにする | `token_counter.count("### Generics\nT extends U\n\n#### Constraint\nextends を使う") = 90` | `markdown_text = "### Generics\nT extends U\n\n#### Constraint\nextends を使う"` | `[{content: "### Generics\nT extends U\n\n#### Constraint\nextends を使う", heading_path: [], token_count: 90}]` を返す | H3 以下は境界を作らない |
+| TC-23 | 先頭 `---` に閉じ行がない場合はフロントマターとして除外しない | `token_counter.count("---\ntitle: draft\n本文") = 30` | `markdown_text = "---\ntitle: draft\n本文"` | `[{content: "---\ntitle: draft\n本文", heading_path: [], token_count: 30}]` を返す | フロントマター閉じ忘れ |
+| TC-24 | 一次チャンクが 512 トークンを超えても段落境界がなければそのまま 1 件返す | `token_counter.count("# Docker\n\n段落A 段落B 段落C") = 620` | `markdown_text = "# Docker\n\n段落A 段落B 段落C"` | `[{content: "# Docker\n\n段落A 段落B 段落C", heading_path: ["Docker"], token_count: 620}]` を返す | 単一段落由来の best-effort 超過も兼ねる |
+| TC-25 | 開始フェンスのみで閉じフェンスがない場合はファイル末尾までコードブロックとして扱う | `token_counter.count("# Before\n\n```python\n## これは見出しではない\nprint(\"x\")") = 160` | `markdown_text = "# Before\n\n```python\n## これは見出しではない\nprint(\"x\")"` | `[{content: "# Before\n\n```python\n## これは見出しではない\nprint(\"x\")", heading_path: ["Before"], token_count: 160}]` を返す | 未閉鎖コードブロック |
 
 ## Phase 4: 外部連携
 
 | ID | 観点 | 前提 | 入力 | 期待結果 | 備考 |
 |---|---|---|---|---|---|
-| TC-30 | トークナイザ初期化失敗時は呼び出し元が失敗を検知できる | `multilingual-e5-large` トークナイザ取得が例外を送出する | `## 長文\n\n段落A\n\n段落B` | 例外またはエラー結果が返り、成功扱いの `list[Chunk]` は返さない | 失敗の表現は実装契約に従う |
-| TC-31 | トークン計測失敗時は呼び出し元が失敗を検知できる | トークナイザ取得は成功し、対象チャンクの計測時に例外を送出する | `## 長文\n\n段落A\n\n段落B` | 例外またはエラー結果が返り、途中まで生成したチャンク列を成功結果として返さない | 初期化失敗と計測失敗を分離確認 |
+| TC-30 | `markdown_text` が文字列以外なら `ChunkSplitInputError` を送出する | `token_counter` は正常な `count(text: str) -> int` を提供する | `markdown_text = 123` | `ChunkSplitInputError` を送出し、結果リストを返さない | 入力型エラー |
+| TC-31 | `token_counter` が `count(text: str) -> int` 契約を満たさない場合は `ChunkSplitInputError` を送出する | `token_counter` に `count` メソッドが存在しない、または呼び出し不能 | `markdown_text = "# Docker\n\n概要"` | `ChunkSplitInputError` を送出し、結果リストを返さない | 依存インターフェース検証 |
+| TC-32 | `token_counter.count()` が例外を送出した場合は `TokenCountError` を送出する | `token_counter.count()` が最初の候補チャンク計測時に例外を送出する | `markdown_text = "# Docker\n\n概要"` | `TokenCountError` を送出し、部分的な結果リストを返さない | 計測失敗 |
+| TC-33 | `token_counter.count()` が負数を返した場合は `TokenCountError` を送出する | `token_counter.count("# Docker\n\n概要") = -1` | `markdown_text = "# Docker\n\n概要"` | `TokenCountError` を送出し、結果リストを返さない | 契約違反値 |
+| TC-34 | `token_counter.count()` が非整数を返した場合は `TokenCountError` を送出する | `token_counter.count("# Docker\n\n概要") = "12"` | `markdown_text = "# Docker\n\n概要"` | `TokenCountError` を送出し、結果リストを返さない | 契約違反型 |
+| TC-35 | 呼び出し元が総チャンク数と 512 トークン超過チャンク数を観測できる | ログまたはメトリクス収集を有効化し、`token_counter` の計測結果は TC-12 と同じ | `markdown_text = "# Python\n\n```python\n# this is not a heading\nprint(\"a\")\nprint(\"b\")\n```\n\n---\n\n本文"` | 非エラーで 2 チャンクを返し、かつ呼び出し元から `総チャンク数 = 2` と `512 トークン超過チャンク数 = 1` を観測できる | 可観測性の非機能要件 |
 
 # 網羅性チェック
 
@@ -59,18 +61,16 @@ status: draft
 
 | 受け入れ基準 | 対応テストケース |
 |---|---|
-| H1 と H2 のみがチャンク境界として扱われ、H3〜H6 は親チャンク本文に残る | TC-10, TC-11 |
-| H1/H2 の見出し行は `text` に含まれず、`headers` にのみ反映される | TC-03, TC-10 |
-| 見出しなしの本文は 1 チャンク、`headers` は空文字列になる | TC-02 |
-| ファイル先頭の有効な YAML フロントマターのみが除外され、本文中の `---` は保持される | TC-12, TC-21, TC-25 |
-| コードブロック内の見出し記法は無視され、コードブロック途中では分割されない | TC-12, TC-26, TC-27 |
-| 512 トークンを超える通常本文チャンクは段落単位で再分割される | TC-14 |
-| 単一段落だけで 512 トークンを超える通常本文は、512 トークン境界でさらに分割される | TC-15 |
-| 512 トークンを超えるコードブロックは分割されず、単一チャンクとして残る | TC-27 |
-| 空ファイル、空白のみ、フロントマターのみの入力は空リストになる | TC-01, TC-20, TC-21 |
-| 見出しだけのセクションから空チャンクが生成されない | TC-22 |
-| Obsidian 内部リンク記法が入力文字列のまま `text` に残る | TC-13 |
-| 出力チャンク順序が元の本文順と一致する | TC-10, TC-14, TC-24 |
+| ファイル先頭の YAML フロントマターのみが除外され、本文中の `---` は本文として残る | TC-10, TC-12, TC-21, TC-23 |
+| H1 / H2 でチャンクが分割され、H3 / H4 / H5 / H6 では新規チャンクが作られない | TC-10, TC-22 |
+| コードブロック内の見出し様テキストは境界として扱われない | TC-12, TC-25 |
+| 空ファイルと空白のみファイルは空リストになる | TC-03, TC-20 |
+| H1 / H2 が存在しない本文は1チャンクで返る | TC-02, TC-22, TC-23 |
+| 一次チャンクが 512 トークンを超えた場合、段落単位で順序を保って再分割される | TC-11, TC-14 |
+| 再分割後の各サブチャンクは理解に必要な親見出しを先頭に含む | TC-11, TC-14 |
+| 単一コードブロックが 512 トークンを超える場合でも、そのコードブロックは分割されない | TC-12 |
+| `[[リンク先]]` は本文テキストとして変換されずに残る | TC-02, TC-15 |
+| 各返却チャンクの `token_count` は `multilingual-e5-large` トークナイザの計測値と一致する | TC-01, TC-10, TC-11, TC-12, TC-13, TC-14, TC-15, TC-22, TC-23, TC-24, TC-25 |
 
 # 記述ルール
 

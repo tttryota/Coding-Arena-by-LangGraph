@@ -7,9 +7,12 @@ import type { ResolvedProfileConfig } from "../../infrastructure/config/config.t
 import { FLOW_STEP } from "../../domain/model/steps.ts";
 import { GuardError } from "../../domain/model/types.ts";
 import { applyStepContext, joinPromptSections } from "../../infrastructure/runners/step-context.ts";
+import { loadTemplate } from "../../infrastructure/templates/templates.ts";
 import { isReadyLikeStatus } from "../policies/plan-readiness-policy.ts";
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_SPEC_DIR_TEMPLATE = "docs/spec/{{category}}";
+const DEFAULT_TEST_CASE_DIR_TEMPLATE = "tests/test-cases/{{category}}";
 
 export class DesignFlow {
   private boundary: ProjectBoundary;
@@ -26,21 +29,31 @@ export class DesignFlow {
     const root = this.boundary.getProjectRoot();
     const category = this.boundary.extractCategory(featureName);
     const name = this.boundary.extractName(featureName);
+    const specDir = this.resolveDesignDir(
+      this.profile?.designLayout.specDir ?? DEFAULT_SPEC_DIR_TEMPLATE,
+      category,
+      name,
+    );
+    const testCaseDir = this.resolveDesignDir(
+      this.profile?.designLayout.testCaseDir ?? DEFAULT_TEST_CASE_DIR_TEMPLATE,
+      category,
+      name,
+    );
 
     // design-flow の書き込み先を仕様書/テストケースディレクトリに限定
     const specAllowedTools = [
       "Read",
-      `Write(docs/spec/${category}/*)`,
-      `Edit(docs/spec/${category}/*)`,
+      `Write(${specDir}/*)`,
+      `Edit(${specDir}/*)`,
     ];
     const tcAllowedTools = [
       "Read",
-      `Write(tests/test-cases/${category}/*)`,
-      `Edit(tests/test-cases/${category}/*)`,
+      `Write(${testCaseDir}/*)`,
+      `Edit(${testCaseDir}/*)`,
     ];
 
     // 仕様書
-    const specPath = join(root, "docs/spec", category, `${name}.md`);
+    const specPath = join(root, specDir, `${name}.md`);
     if (existsSync(specPath)) {
       console.log(`仕様書は既に存在します: ${specPath}`);
     } else {
@@ -58,7 +71,7 @@ export class DesignFlow {
     }
 
     // テストケース
-    const tcPath = join(root, "tests/test-cases", category, `${name}.md`);
+    const tcPath = join(root, testCaseDir, `${name}.md`);
     if (existsSync(tcPath)) {
       console.log(`テストケースは既に存在します: ${tcPath}`);
     } else {
@@ -83,8 +96,7 @@ export class DesignFlow {
     allowedTools: string[], logger: Logger,
   ): Promise<void> {
     const root = this.boundary.getProjectRoot();
-    const templatePath = join(root, "docs/spec/TEMPLATE.md");
-    const template = existsSync(templatePath) ? readFileSync(templatePath, "utf-8") : "";
+    const template = this.loadDesignTemplate("spec-template");
     const claudeMd = this.readClaudeMd();
 
     const runner = this.registry.getRunner(FLOW_STEP.SPEC_GENERATE);
@@ -129,8 +141,7 @@ ${template}
   ): Promise<void> {
     const root = this.boundary.getProjectRoot();
     const spec = readFileSync(specPath, "utf-8");
-    const templatePath = join(root, "tests/test-cases/TEMPLATE.md");
-    const template = existsSync(templatePath) ? readFileSync(templatePath, "utf-8") : "";
+    const template = this.loadDesignTemplate("test-case-template");
 
     const runner = this.registry.getRunner(FLOW_STEP.TEST_CASE_GENERATE);
     await runner.run(
@@ -172,5 +183,17 @@ ${template}
   private readClaudeMd(): string {
     const claudeMdPath = join(this.boundary.getProjectRoot(), "CLAUDE.md");
     return existsSync(claudeMdPath) ? readFileSync(claudeMdPath, "utf-8") : "";
+  }
+
+  private resolveDesignDir(template: string, category: string, name: string): string {
+    return template.replaceAll("{{category}}", category).replaceAll("{{name}}", name);
+  }
+
+  private loadDesignTemplate(templateName: string): string {
+    return loadTemplate(
+      templateName,
+      this.boundary.getProjectRoot(),
+      this.registry.getConfig().templates,
+    );
   }
 }

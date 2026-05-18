@@ -10,10 +10,16 @@ import { FLOW_STEP } from "../../domain/model/steps.ts";
 import { isReadyLikeStatus } from "../policies/plan-readiness-policy.ts";
 
 function createRegistry(root: string) {
+  const requests: Array<{ step: string; allowedTools?: string[]; prompt: string }> = [];
   return {
+    requests,
+    getConfig() {
+      return { templates: {} };
+    },
     getRunner(step: string) {
       return {
-        async run(request: { prompt: string }) {
+        async run(request: { prompt: string; allowedTools?: string[] }) {
+          requests.push({ step, allowedTools: request.allowedTools, prompt: request.prompt });
           const match = /## 出力先\n(.+?)\n/.exec(request.prompt);
           if (match) {
             const outputPath = match[1]!;
@@ -33,10 +39,6 @@ function createRegistry(root: string) {
 
 test("DesignFlow generates spec and test cases when both are missing", async () => {
   const root = mkdtempSync(join(tmpdir(), "harness-design-flow-"));
-  mkdirSync(join(root, "docs", "spec"), { recursive: true });
-  mkdirSync(join(root, "tests", "test-cases"), { recursive: true });
-  writeFileSync(join(root, "docs", "spec", "TEMPLATE.md"), "# template\n", "utf-8");
-  writeFileSync(join(root, "tests", "test-cases", "TEMPLATE.md"), "# template\n", "utf-8");
   const boundary = new Boundary(root);
   const flow = new DesignFlow(boundary, createRegistry(root));
   const logger = new HarnessLogger("design-test", { baseDir: root });
@@ -45,6 +47,34 @@ test("DesignFlow generates spec and test cases when both are missing", async () 
 
   assert.match(readFileSync(join(root, "docs", "spec", "quiz", "result.md"), "utf-8"), /approved/);
   assert.match(readFileSync(join(root, "tests", "test-cases", "quiz", "result.md"), "utf-8"), /approved/);
+});
+
+test("DesignFlow respects profile designLayout for output paths and allowed tools", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-design-flow-layout-"));
+  const boundary = new Boundary(root);
+  const registry = createRegistry(root);
+  const flow = new DesignFlow(boundary, registry as any, {
+    designLayout: {
+      specDir: "docs/spec/backend/{{category}}",
+      testCaseDir: "backend/{{category}}/docs/test-cases",
+    },
+  } as any);
+  const logger = new HarnessLogger("design-test-layout", { baseDir: root });
+
+  await flow.run("quiz/result", "結果ページを作る", logger);
+
+  assert.match(readFileSync(join(root, "docs", "spec", "backend", "quiz", "result.md"), "utf-8"), /approved/);
+  assert.match(readFileSync(join(root, "backend", "quiz", "docs", "test-cases", "result.md"), "utf-8"), /approved/);
+  assert.deepEqual(registry.requests[0]?.allowedTools, [
+    "Read",
+    "Write(docs/spec/backend/quiz/*)",
+    "Edit(docs/spec/backend/quiz/*)",
+  ]);
+  assert.deepEqual(registry.requests[1]?.allowedTools, [
+    "Read",
+    "Write(backend/quiz/docs/test-cases/*)",
+    "Edit(backend/quiz/docs/test-cases/*)",
+  ]);
 });
 
 test("DesignFlow stops when existing spec is not ready", async () => {
@@ -59,4 +89,33 @@ test("DesignFlow stops when existing spec is not ready", async () => {
 
   assert.equal(isReadyLikeStatus("approved"), true);
   assert.equal(isReadyLikeStatus("draft"), false);
+});
+
+test("DesignFlow falls back to bundled templates when project templates are absent", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-design-flow-builtin-template-"));
+  const boundary = new Boundary(root);
+  const registry = createRegistry(root);
+  const flow = new DesignFlow(boundary, registry as any);
+  const logger = new HarnessLogger("design-test-builtin-template", { baseDir: root });
+
+  await flow.run("quiz/result", "結果ページを作る", logger);
+
+  assert.match(registry.requests[0]?.prompt ?? "", /ルール間の相互作用/);
+  assert.match(registry.requests[1]?.prompt ?? "", /\[要仕様追記\]/);
+});
+
+test("DesignFlow loads project template overrides from .harness/resources/templates", async () => {
+  const root = mkdtempSync(join(tmpdir(), "harness-design-flow-project-template-"));
+  mkdirSync(join(root, ".harness", "resources", "templates"), { recursive: true });
+  writeFileSync(join(root, ".harness", "resources", "templates", "spec-template.md"), "# project spec template\n", "utf-8");
+  writeFileSync(join(root, ".harness", "resources", "templates", "test-case-template.md"), "# project test-case template\n", "utf-8");
+  const boundary = new Boundary(root);
+  const registry = createRegistry(root);
+  const flow = new DesignFlow(boundary, registry as any);
+  const logger = new HarnessLogger("design-test-project-template", { baseDir: root });
+
+  await flow.run("quiz/result", "結果ページを作る", logger);
+
+  assert.match(registry.requests[0]?.prompt ?? "", /project spec template/);
+  assert.match(registry.requests[1]?.prompt ?? "", /project test-case template/);
 });

@@ -6,7 +6,7 @@ import pytest
 
 _Splitter = Callable[[object, Any], object]
 _SplitterContract = tuple[_Splitter, type[Exception], type[Exception]]
-_TARGET_SPLITTER_MODULE = "core.ingestion.chunk_splitter"
+_TARGET_SPLITTER_MODULE = "core.ingestion.domain.chunk_splitter"
 
 
 class _MappingTokenCounter:

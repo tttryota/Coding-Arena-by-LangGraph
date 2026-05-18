@@ -16,8 +16,8 @@ pytestによるテスト方針とディレクトリ配置を定義する。
 コロケーション方式。テストファイルをソースファイルと同じディレクトリに配置する。
 
 ```
-core/ingestion/chunk_splitter.py
-core/ingestion/test_chunk_splitter.py    ← 同じディレクトリ
+core/ingestion/domain/chunk_splitter.py
+core/ingestion/domain/test_chunk_splitter.py    ← 同じディレクトリ
 
 domain/roadmap/roadmap_generation.py
 domain/roadmap/test_roadmap_generation.py

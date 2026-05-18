@@ -14,6 +14,8 @@ Obsidian × RAG × LangGraph 理解度チェックシステム。
 
 # ディレクトリ規約
 - backend/core/            汎用基盤（ingestion, vectordb, llm）
+  - core/{機能}/domain/        純粋ロジック（I/Oなし）
+  - core/{機能}/infrastructure/ 外部システムアダプター
 - backend/domain/          ドメインロジック（roadmap, quiz）
 - backend/application/     ユースケース
 - backend/infrastructure/  外部接続（RDB, config, logging）

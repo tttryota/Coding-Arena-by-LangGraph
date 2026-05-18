@@ -71,13 +71,13 @@ def split(markdown_text: str, token_counter: TokenCounter) -> list[ChunkSplitRes
 
 def _validate_input(markdown_text: object, token_counter: object) -> None:
     if not isinstance(markdown_text, str):
-        raise ChunkSplitInputError("markdown_text must be a string")
+        message = "markdown_text must be a string"
+        raise ChunkSplitInputError(message)
 
     count = getattr(token_counter, "count", None)
     if not callable(count):
-        raise ChunkSplitInputError(
-            "token_counter must provide callable count(text: str) -> int",
-        )
+        message = "token_counter must provide callable count(text: str) -> int"
+        raise ChunkSplitInputError(message)
 
 
 def _strip_frontmatter(markdown_text: str) -> str:
@@ -115,21 +115,17 @@ def _split_primary_chunks(body: str) -> list[_PrimaryChunk]:
     for line in lines:
         heading = None if in_code_block else _parse_heading(line)
         if heading is not None:
-            if current_lines and (found_boundary or "\n".join(current_lines).strip() != ""):
-                chunks.append(
-                    _PrimaryChunk(
-                        content="\n".join(_trim_trailing_blank_lines(current_lines)),
-                        heading_path=current_heading_path,
-                    ),
-                )
-
+            _append_primary_chunk(
+                chunks,
+                current_lines,
+                current_heading_path,
+                found_boundary,
+            )
             found_boundary = True
-            level, text = heading
-            if level == 1:
-                current_h1 = text
-                current_heading_path = [text]
-            else:
-                current_heading_path = [current_h1, text] if current_h1 else [text]
+            current_h1, current_heading_path = _update_heading_context(
+                heading,
+                current_h1,
+            )
             current_lines = [line]
         else:
             current_lines.append(line)
@@ -140,13 +136,7 @@ def _split_primary_chunks(body: str) -> list[_PrimaryChunk]:
     if not found_boundary:
         return [_PrimaryChunk(content=body, heading_path=[])]
 
-    if current_lines:
-        chunks.append(
-            _PrimaryChunk(
-                content="\n".join(_trim_trailing_blank_lines(current_lines)),
-                heading_path=current_heading_path,
-            ),
-        )
+    _append_primary_chunk(chunks, current_lines, current_heading_path, True)
     return chunks
 
 
@@ -166,10 +156,12 @@ def _count_tokens(text: str, token_counter: TokenCounter) -> int:
     try:
         token_count = token_counter.count(text)
     except Exception as exc:
-        raise TokenCountError("token counting failed") from exc
+        message = "token counting failed"
+        raise TokenCountError(message) from exc
 
     if type(token_count) is not int or token_count < 0:
-        raise TokenCountError("token_counter must return a non-negative integer")
+        message = "token_counter must return a non-negative integer"
+        raise TokenCountError(message)
     return token_count
 
 
@@ -179,7 +171,9 @@ def _split_secondary(
     token_counter: TokenCounter,
 ) -> list[ChunkSplitResult]:
     heading_line, body = _extract_heading_context(primary_chunk.content)
-    segments = _split_body_segments(body if heading_line is not None else primary_chunk.content)
+    segments = _split_body_segments(
+        body if heading_line is not None else primary_chunk.content,
+    )
     if len(segments) <= 1:
         return [
             ChunkSplitResult(
@@ -194,18 +188,22 @@ def _split_secondary(
     current_token_count: int | None = None
 
     for segment in segments[1:]:
-        candidate_content = _compose_chunk_content(heading_line, current_segments + [segment])
+        candidate_content = _compose_chunk_content(
+            heading_line,
+            [*current_segments, segment],
+        )
         candidate_token_count = _count_tokens(candidate_content, token_counter)
         if candidate_token_count <= _TOKEN_LIMIT:
             current_segments.append(segment)
             current_token_count = candidate_token_count
             continue
 
-        finalized_content = _compose_chunk_content(heading_line, current_segments)
-        finalized_token_count = current_token_count
-        if finalized_token_count is None:
-            finalized_token_count = _count_tokens(finalized_content, token_counter)
-
+        finalized_content, finalized_token_count = _finalize_secondary_chunk(
+            heading_line,
+            current_segments,
+            current_token_count,
+            token_counter,
+        )
         results.append(
             ChunkSplitResult(
                 content=finalized_content,
@@ -213,15 +211,15 @@ def _split_secondary(
                 token_count=finalized_token_count,
             ),
         )
-
         current_segments = [segment]
         current_token_count = None
 
-    finalized_content = _compose_chunk_content(heading_line, current_segments)
-    finalized_token_count = current_token_count
-    if finalized_token_count is None:
-        finalized_token_count = _count_tokens(finalized_content, token_counter)
-
+    finalized_content, finalized_token_count = _finalize_secondary_chunk(
+        heading_line,
+        current_segments,
+        current_token_count,
+        token_counter,
+    )
     results.append(
         ChunkSplitResult(
             content=finalized_content,
@@ -230,6 +228,54 @@ def _split_secondary(
         ),
     )
     return results
+
+
+def _append_primary_chunk(
+    chunks: list[_PrimaryChunk],
+    current_lines: list[str],
+    current_heading_path: list[str],
+    found_boundary: bool,
+) -> None:
+    if not current_lines:
+        return
+    if not found_boundary and "\n".join(current_lines).strip() == "":
+        return
+    chunks.append(_build_primary_chunk(current_lines, current_heading_path))
+
+
+def _build_primary_chunk(
+    current_lines: list[str],
+    current_heading_path: list[str],
+) -> _PrimaryChunk:
+    return _PrimaryChunk(
+        content="\n".join(_trim_trailing_blank_lines(current_lines)),
+        heading_path=current_heading_path,
+    )
+
+
+def _update_heading_context(
+    heading: tuple[int, str],
+    current_h1: str | None,
+) -> tuple[str | None, list[str]]:
+    level, text = heading
+    if level == 1:
+        return text, [text]
+    if current_h1 is None:
+        return current_h1, [text]
+    return current_h1, [current_h1, text]
+
+
+def _finalize_secondary_chunk(
+    heading_line: str | None,
+    current_segments: list[str],
+    current_token_count: int | None,
+    token_counter: TokenCounter,
+) -> tuple[str, int]:
+    finalized_content = _compose_chunk_content(heading_line, current_segments)
+    finalized_token_count = current_token_count
+    if finalized_token_count is None:
+        finalized_token_count = _count_tokens(finalized_content, token_counter)
+    return finalized_content, finalized_token_count
 
 
 def _extract_heading_context(content: str) -> tuple[str | None, str]:

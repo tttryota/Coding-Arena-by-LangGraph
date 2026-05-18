@@ -70,10 +70,17 @@ profiles:
         impl_self_quality:
           agent: harness-backend-reviewer
           skills: [harness-backend-review-quality]
+        impl_external_review:
+          agent: harness-backend-reviewer
+          model: claude-opus-4-6
+          skills: [harness-backend-review-quality]
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
       scopePattern: "backend/{{category}}/*"
+    designLayout:
+      specDir: "docs/spec/backend/{{category}}"
+      testCaseDir: "tests/test-cases/backend/{{category}}"
 ```
 
 ### 例2: TypeScript プロジェクト
@@ -112,6 +119,9 @@ profiles:
       sourceDir: "src/{{category}}/{{name}}"
       testDir: "src/{{category}}/{{name}}/__tests__"
       scopePattern: "src/{{category}}/{{name}}/*"
+    designLayout:
+      specDir: "docs/spec/app/{{category}}"
+      testCaseDir: "tests/test-cases/app/{{category}}"
 ```
 
 ### 例3: 複数プロファイル
@@ -149,6 +159,9 @@ profiles:
     sourceLayout:
       sourceDir: "backend/{{category}}"
       testDir: "backend/{{category}}/tests"
+    designLayout:
+      specDir: "docs/spec/backend/{{category}}"
+      testCaseDir: "tests/test-cases/backend/{{category}}"
   frontend:
     flow: full
     fallbackRunner: codex
@@ -181,13 +194,16 @@ profiles:
       sourceDir: "frontend/src/{{category}}/{{name}}"
       testDir: "frontend/src/{{category}}/{{name}}/__tests__"
       scopePattern: "frontend/src/{{category}}/{{name}}/*"
+    designLayout:
+      specDir: "docs/spec/frontend/{{category}}"
+      testCaseDir: "tests/test-cases/frontend/{{category}}"
 
 runners:
   claude:
     type: claude
   claude-opus-review:
     type: claude
-    model: opus
+    model: claude-opus-4-6
   codex:
     type: codex
     sandbox: read-only
@@ -195,7 +211,7 @@ runners:
 
 `profiles` は必須。未定義の場合はエラーになる。`./.harness/bin/harness init` でこのガイドを表示できる。
 
-`profile` は実行単位です。lint / test / sourceLayout に加え、`flow` / `fallbackRunner` / `steps` / `context` も profile 内に置きます。
+`profile` は実行単位です。lint / test / sourceLayout / designLayout に加え、`flow` / `fallbackRunner` / `steps` / `context` も profile 内に置きます。`runners.<name>.model` は runner のデフォルト、`profile.context.stepOverrides.<step>.model` はその step 専用の上書きです。
 
 ## 利用可能なツール
 
@@ -249,8 +265,8 @@ non-interactive 実行にはツール側の権限設定が必要な場合があ�
 ---
 profile: backend
 scope: ingestion/chunk-splitter
-spec: docs/spec/ingestion/chunk-splitter.md
-test_cases: tests/test-cases/ingestion/chunk-splitter.md
+spec: docs/spec/backend/ingestion/chunk-splitter.md
+test_cases: tests/test-cases/backend/ingestion/chunk-splitter.md
 ---
 
 ## 今回やること
@@ -284,7 +300,13 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 
 ```bash
 ./.harness/bin/harness design ingestion/chunk-splitter "Markdownをチャンク分割する機能"
+./.harness/bin/harness design --profile backend ingestion/chunk-splitter "Markdownをチャンク分割する機能"
 ```
+
+1. 初回実行で仕様書を生成する。
+2. 人間が仕様書をレビューし、`status: ready` に更新する。
+3. 同じコマンドを再実行するとテストケースを生成する。
+4. 人間がテストケースをレビューし、`status: ready` に更新する。
 
 ### Impl Flow（TDD 実装）
 
@@ -306,6 +328,7 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 | criteriaPreset | "backend" \| "frontend" | レビュー観点のプリセット |
 | reviewCriteria | string[] | カスタムレビュー観点ファイルパス |
 | sourceLayout | object | ソースコードのディレクトリ構成 |
+| designLayout | object | design フローの生成先ディレクトリ構成 |
 
 ### sourceLayout
 
@@ -317,3 +340,14 @@ profile が 1 つだけの場合は frontmatter の `profile:` を省略可能�
 | additionalAllowedPrefixes | 追加の許可パス | `[".harness/reviews/"]` |
 
 `{{category}}` と `{{name}}` がスコープの値で置換される。
+
+### designLayout
+
+| フィールド | 説明 | 例 |
+|---|---|---|
+| specDir | 仕様書の出力先ディレクトリ | `docs/spec/backend/{{category}}` |
+| testCaseDir | テストケースの出力先ディレクトリ | `tests/test-cases/backend/{{category}}` |
+
+`design` フローは `designLayout` を使って spec / test cases の生成先を決める。未指定時は `docs/spec/{{category}}` と `tests/test-cases/{{category}}` が使われる。
+
+`design` フローのテンプレート名は `spec-template` と `test-case-template`。project override は `.harness/resources/templates/<name>.md` または `templates.<name>` で行う。

@@ -59,7 +59,7 @@ class _QueueLlmClient:
             raise AssertionError(msg) from exc
 
 
-def _make_batch_input(  # noqa: PLR0913
+def _make_batch_input(
     *,
     chunks: list[tuple[int, str]],
     existing_tags: list[str],

@@ -652,8 +652,9 @@ class TestFileDiffDetectorDiffClassification:
             "updated_count": 0,
             "deleted_count": 0,
         }
-        assert len(snapshot_store.replace_calls) == 1
-        assert snapshot_store.replace_calls[0][1] == {}
+        assert snapshot_store.replace_calls == [
+            (_snapshot_key(target_path), {}),
+        ]
 
     def test_tc_21_returns_all_previous_files_as_deleted_when_current_scan_has_no_targets(
         self,
@@ -1025,11 +1026,15 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
 
         detect(target_path, snapshot_store)
 
-        assert len(snapshot_store.replace_calls) == 1
-        assert snapshot_store.replace_calls[0][1] == {
-            "python/basics.md": 1716126000000000000,
-            "typescript/generics.md": 1716126001000000000,
-        }
+        assert snapshot_store.replace_calls == [
+            (
+                _snapshot_key(target_path),
+                {
+                    "python/basics.md": 1716126000000000000,
+                    "typescript/generics.md": 1716126001000000000,
+                },
+            ),
+        ]
 
     def test_keeps_count_fields_consistent_with_each_result_list(
         self,

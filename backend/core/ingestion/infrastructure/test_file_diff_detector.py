@@ -332,8 +332,13 @@ class TestFileDiffDetectorInitialScans:
 
         actual = _normalize_result(detect("vault/study", snapshot_store))
 
-        assert actual["target_path"] == str(target_path.resolve())
+        resolved_key = str(target_path.resolve())
+        assert actual["target_path"] == resolved_key
         assert actual["new_files"] == ["notes/intro.md"]
+        assert snapshot_store.load_calls == [resolved_key]
+        assert snapshot_store.replace_calls == [
+            (resolved_key, {"notes/intro.md": 1716120000000000000}),
+        ]
 
     def test_ignores_non_markdown_extensions_and_directories(
         self,

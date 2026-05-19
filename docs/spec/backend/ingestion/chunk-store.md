@@ -292,26 +292,16 @@ design 時に、各モジュールが概ね 200-300 行に収まるかを責務�
 単一ファイルで十分な場合も、その判断を明記する。
 
 - 構成方針:
-  - `複数モジュールに分割する`
+  - `単一ファイルで実装する`
 - 概算メモ:
-  - 例外型、入出力モデル、自然キー生成、入力検証、backend 応答正規化、logging を 1 ファイルに集約すると 300 行を超えやすい
-  - domain 契約と ChromaDB 実装を分ければ、各モジュールは概ね 80-220 行に収まる想定
+  - 例外型 4 つ（12行）、入出力モデル 5 つ（40行）、Protocol 1 つ（10行）、バリデーション（50行）、3 操作の本体（60行）、ログ（30行）、imports（20行）で合計約 220行
+  - 200行を若干超えるが、全て同一永続化層の責務であり分割による複雑化の方がリスクが高い
 - モジュール一覧:
-  - `backend/core/ingestion/domain/chunk_store.py`
-    - 責務:
-      `ChunkStore` の入出力モデル、例外型、自然キー生成ルール、入力検証ヘルパー
-    - 含める要素:
-      `ChunkStoreUpsertInput`、`ChunkStoreUpsertResult`、`ChunkStoreDeleteResult`、`StoredChunk`、各例外型、`build_chunk_id(source_path, chunk_index)`
-  - `backend/core/ingestion/domain/chunk_collection_protocol.py`
-    - 責務:
-      ChromaDB アクセス抽象の Protocol 定義
-    - 含める要素:
-      `ChunkCollection` Protocol、raw result 型定義
   - `backend/core/ingestion/infrastructure/chroma_chunk_store.py`
     - 責務:
-      `ChunkStore` の ChromaDB 向け実装
+      入出力モデル、例外型、`ChunkCollection` Protocol、自然キー生成、入力検証、保存 payload 組み立て、取得結果の正規化、`structlog` 出力、backend 例外ラップ
     - 含める要素:
-      Protocol 呼び出し、保存 payload 組み立て、取得結果の正規化、`structlog` 出力、backend 例外ラップ
+      `ChunkStoreUpsertInput`、`ChunkStoreChunkInput`、`ChunkStoreUpsertResult`、`ChunkStoreDeleteResult`、`StoredChunk`、各例外型、`ChunkCollection` Protocol、`ChromaChunkStore` クラス
 
 # 技術判断
 

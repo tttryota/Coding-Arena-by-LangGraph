@@ -221,7 +221,10 @@ class TestTaggerPhase2:
         llm_client = _QueueLlmClient([["PostgreSQL", "Docker", "Docker", "MySQL"]])
         batch_input = _make_batch_input(
             chunks=[
-                (0, "Docker Compose でアプリケーションと PostgreSQL をまとめて起動する。"),
+                (
+                    0,
+                    "Docker Compose でアプリケーションと PostgreSQL をまとめて起動する。",
+                ),
             ],
             existing_tags=["Docker", "PostgreSQL", "Linux"],
             prompt_strategy=prompt_strategy,
@@ -388,7 +391,10 @@ class TestTaggerPhase3:
         llm_client = _QueueLlmClient([["PostgreSQL", "Docker"]])
         batch_input = _make_batch_input(
             chunks=[
-                (6, "Docker Compose で PostgreSQL を立ち上げ、コンテナ間通信も確認した。"),
+                (
+                    6,
+                    "Docker Compose で PostgreSQL を立ち上げ、コンテナ間通信も確認した。",
+                ),
             ],
             existing_tags=["Docker", "PostgreSQL", "Linux"],
             prompt_strategy=prompt_strategy,

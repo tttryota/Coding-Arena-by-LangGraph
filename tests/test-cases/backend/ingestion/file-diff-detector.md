@@ -1,5 +1,5 @@
 ---
-status: draft
+status: ready
 ---
 
 # テストケース一覧

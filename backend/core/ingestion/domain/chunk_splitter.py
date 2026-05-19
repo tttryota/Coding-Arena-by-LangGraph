@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 _TOKEN_LIMIT = 512
 _HEADING_PATTERN = re.compile(r"^(#{1,2}) (.+)$")
@@ -62,9 +63,9 @@ def split(markdown_text: str, token_counter: TokenCounter) -> list[ChunkSplitRes
 
     over_limit_chunks = sum(1 for chunk in results if chunk.token_count > _TOKEN_LIMIT)
     logger.info(
-        "chunk_splitter completed total_chunks=%s over_limit_chunks=%s",
-        len(results),
-        over_limit_chunks,
+        "chunk_splitter_completed",
+        total_chunks=len(results),
+        over_limit_chunks=over_limit_chunks,
     )
     return results
 

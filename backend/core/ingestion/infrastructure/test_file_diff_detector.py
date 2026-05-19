@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypedDict, cast
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 import pytest
 
@@ -219,19 +221,11 @@ def _patch_mtime_lookup_failure(
     monkeypatch.setattr(os, "scandir", patched_scandir)
 
 
-def _get_observability_record(caplog: pytest.LogCaptureFixture) -> logging.LogRecord:
-    required_fields = (
-        "target_path",
-        "new_count",
-        "updated_count",
-        "deleted_count",
-        "processing_time_ms",
-    )
-    for record in caplog.records:
-        if all(hasattr(record, field_name) for field_name in required_fields):
-            return record
-    msg = "observability log record not found"
-    raise AssertionError(msg)
+def _find_log_events(
+    log_output: list[MutableMapping[str, object]],
+    event_name: str,
+) -> list[MutableMapping[str, object]]:
+    return [entry for entry in log_output if entry.get("event") == event_name]
 
 
 class TestFileDiffDetectorInitialScans:
@@ -1078,8 +1072,9 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
     def test_tc_36_emits_observability_fields_on_success(
         self,
         tmp_path: Path,
-        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        from structlog.testing import capture_logs
+
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(
@@ -1101,7 +1096,7 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
             },
         )
 
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             actual = _normalize_result(detect(target_path, snapshot_store))
 
         assert actual == {
@@ -1114,13 +1109,15 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
             "deleted_count": 0,
         }
 
-        record = _get_observability_record(caplog)
-        assert record.target_path == str(target_path.resolve())  # type: ignore[attr-defined]
-        assert record.new_count == 1  # type: ignore[attr-defined]
-        assert record.updated_count == 1  # type: ignore[attr-defined]
-        assert record.deleted_count == 0  # type: ignore[attr-defined]
-        assert type(record.processing_time_ms) is int  # type: ignore[attr-defined]
-        assert record.processing_time_ms >= 0  # type: ignore[attr-defined]
+        events = _find_log_events(cap_logs, "file_diff_detector_completed")
+        assert len(events) == 1
+        event = events[0]
+        assert event["target_path"] == str(target_path.resolve())
+        assert event["new_count"] == 1
+        assert event["updated_count"] == 1
+        assert event["deleted_count"] == 0
+        assert type(event["processing_time_ms"]) is int
+        assert event["processing_time_ms"] >= 0
 
     def test_tc_22_returns_nested_relative_posix_paths_in_lexicographic_order(
         self,

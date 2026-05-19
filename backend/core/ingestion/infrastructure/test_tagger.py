@@ -1,7 +1,7 @@
-import logging
-from collections.abc import Sequence
+from collections.abc import MutableMapping, Sequence
 
 import pytest
+from structlog.testing import capture_logs
 
 from core.ingestion.infrastructure.tagger import (
     ChunkTaggingInput,
@@ -95,34 +95,11 @@ def _normalize_results(results: list[ChunkTaggingResult]) -> list[dict[str, obje
     return normalized
 
 
-def _find_log_records_with_observability_fields(
-    caplog: pytest.LogCaptureFixture,
-) -> list[logging.LogRecord]:
-    observability_fields = (
-        "source_path",
-        "chunk_index",
-        "existing_tag_count",
-        "generated_tag_count",
-        "empty_result_count",
-        "llm_failure_count",
-    )
-    return [
-        record
-        for record in caplog.records
-        if any(hasattr(record, field_name) for field_name in observability_fields)
-    ]
-
-
-def _collect_int_field_values(
-    records: list[logging.LogRecord],
-    field_name: str,
-) -> set[int]:
-    values: set[int] = set()
-    for record in records:
-        value = getattr(record, field_name, None)
-        if type(value) is int:
-            values.add(value)
-    return values
+def _find_log_events(
+    log_output: list[MutableMapping[str, object]],
+    event_name: str,
+) -> list[MutableMapping[str, object]]:
+    return [entry for entry in log_output if entry.get("event") == event_name]
 
 
 class TestTaggerPhase1:
@@ -541,10 +518,7 @@ class TestTaggerPhase4:
         with pytest.raises(TaggingResponseFormatError):
             tag(batch_input)
 
-    def test_tagger_tc_35_records_observability_fields(
-        self,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
+    def test_tagger_tc_35_records_observability_fields(self) -> None:
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["React"], []])
         batch_input = _make_batch_input(
@@ -558,7 +532,7 @@ class TestTaggerPhase4:
             source_path="notes/react.md",
         )
 
-        with caplog.at_level(logging.INFO):
+        with capture_logs() as cap_logs:
             actual = _normalize_results(tag(batch_input))
 
         assert actual == [
@@ -566,29 +540,15 @@ class TestTaggerPhase4:
             {"chunk_index": 1, "tags": []},
         ]
 
-        observability_records = _find_log_records_with_observability_fields(caplog)
-        assert observability_records
+        events = _find_log_events(cap_logs, "tagger_chunk_processed")
+        assert len(events) == 2
 
-        assert any(
-            getattr(record, "source_path", None) == "notes/react.md"
-            for record in observability_records
-        )
-        assert {0, 1}.issubset(
-            _collect_int_field_values(observability_records, "chunk_index"),
-        )
-        assert 2 in _collect_int_field_values(
-            observability_records,
-            "existing_tag_count",
-        )
-        assert 1 in _collect_int_field_values(
-            observability_records,
-            "generated_tag_count",
-        )
-        assert 1 in _collect_int_field_values(
-            observability_records,
-            "empty_result_count",
-        )
-        assert 0 in _collect_int_field_values(
-            observability_records,
-            "llm_failure_count",
-        )
+        assert events[0]["source_path"] == "notes/react.md"
+        assert events[0]["chunk_index"] == 0
+        assert events[0]["existing_tag_count"] == 2
+        assert events[0]["generated_tag_count"] == 1
+        assert events[0]["empty_result_count"] == 0
+        assert events[0]["llm_failure_count"] == 0
+
+        assert events[1]["chunk_index"] == 1
+        assert events[1]["empty_result_count"] == 1

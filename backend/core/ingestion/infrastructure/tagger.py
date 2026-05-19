@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 _KNOWN_GRANULAR_TAGS = {
     "left join",
@@ -198,26 +199,22 @@ def _log_chunk_processed(
 ) -> None:
     logger.info(
         "tagger_chunk_processed",
-        extra={
-            "source_path": observability_context.source_path,
-            "chunk_index": observability_context.chunk_index,
-            "existing_tag_count": observability_context.existing_tag_count,
-            "generated_tag_count": generated_tag_count,
-            "empty_result_count": empty_result_count,
-            "llm_failure_count": llm_failure_count,
-        },
+        source_path=observability_context.source_path,
+        chunk_index=observability_context.chunk_index,
+        existing_tag_count=observability_context.existing_tag_count,
+        generated_tag_count=generated_tag_count,
+        empty_result_count=empty_result_count,
+        llm_failure_count=llm_failure_count,
     )
 
 
 def _log_llm_call_failed(observability_context: _ObservabilityContext) -> None:
     logger.exception(
         "tagger_llm_call_failed",
-        extra={
-            "source_path": observability_context.source_path,
-            "chunk_index": observability_context.chunk_index,
-            "existing_tag_count": observability_context.existing_tag_count,
-            "generated_tag_count": 0,
-            "empty_result_count": 0,
-            "llm_failure_count": 1,
-        },
+        source_path=observability_context.source_path,
+        chunk_index=observability_context.chunk_index,
+        existing_tag_count=observability_context.existing_tag_count,
+        generated_tag_count=0,
+        empty_result_count=0,
+        llm_failure_count=1,
     )

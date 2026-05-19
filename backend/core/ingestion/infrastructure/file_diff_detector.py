@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter_ns
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 class TargetPathNotFoundError(Exception):
@@ -233,13 +234,11 @@ def _log_success(
     processing_time_ms = (perf_counter_ns() - started_at_ns) // 1_000_000
     logger.info(
         "file_diff_detector_completed",
-        extra={
-            "target_path": target_path,
-            "scanned_entry_count": scan_result.scanned_entry_count,
-            "markdown_file_count": scan_result.markdown_file_count,
-            "new_count": result.new_count,
-            "updated_count": result.updated_count,
-            "deleted_count": result.deleted_count,
-            "processing_time_ms": processing_time_ms,
-        },
+        target_path=target_path,
+        scanned_entry_count=scan_result.scanned_entry_count,
+        markdown_file_count=scan_result.markdown_file_count,
+        new_count=result.new_count,
+        updated_count=result.updated_count,
+        deleted_count=result.deleted_count,
+        processing_time_ms=processing_time_ms,
     )

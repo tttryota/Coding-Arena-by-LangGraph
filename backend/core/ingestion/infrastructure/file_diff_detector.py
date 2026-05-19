@@ -79,10 +79,13 @@ def _validate_target_path(target_path: str | Path) -> Path:
     candidate = Path(target_path)
 
     try:
+        if candidate.is_symlink():
+            message = f"target path must be a non-symlink directory: {candidate}"
+            raise InvalidTargetPathError(message)
         if not candidate.exists():
             message = f"target path does not exist: {candidate}"
             raise TargetPathNotFoundError(message)
-        if candidate.is_symlink() or not candidate.is_dir():
+        if not candidate.is_dir():
             message = f"target path must be a non-symlink directory: {candidate}"
             raise InvalidTargetPathError(message)
         return candidate.resolve()

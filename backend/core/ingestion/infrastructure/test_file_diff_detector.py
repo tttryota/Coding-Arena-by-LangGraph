@@ -652,7 +652,8 @@ class TestFileDiffDetectorDiffClassification:
             "updated_count": 0,
             "deleted_count": 0,
         }
-        assert snapshot_store.snapshot_for_last_replace() == {}
+        assert len(snapshot_store.replace_calls) == 1
+        assert snapshot_store.replace_calls[0][1] == {}
 
     def test_tc_21_returns_all_previous_files_as_deleted_when_current_scan_has_no_targets(
         self,
@@ -1024,7 +1025,8 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
 
         detect(target_path, snapshot_store)
 
-        assert snapshot_store.snapshot_for_last_replace() == {
+        assert len(snapshot_store.replace_calls) == 1
+        assert snapshot_store.replace_calls[0][1] == {
             "python/basics.md": 1716126000000000000,
             "typescript/generics.md": 1716126001000000000,
         }
@@ -1158,3 +1160,27 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
             "deleted_count": 0,
         }
         _assert_paths_are_posix_normalized(actual["new_files"])
+
+    def test_updated_files_are_sorted_in_lexicographic_order(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        target_path = tmp_path / "study"
+        target_path.mkdir()
+        _write_markdown_file(target_path, "zeta.md", mtime_ns=100)
+        _write_markdown_file(target_path, "alpha.md", mtime_ns=200)
+        _write_markdown_file(target_path, "middle.md", mtime_ns=300)
+        snapshot_store = _RecordingSnapshotStore(
+            snapshots={
+                _snapshot_key(target_path): {
+                    "zeta.md": 1,
+                    "alpha.md": 2,
+                    "middle.md": 3,
+                },
+            },
+        )
+
+        actual = _normalize_result(detect(target_path, snapshot_store))
+
+        assert actual["updated_files"] == ["alpha.md", "middle.md", "zeta.md"]
+        assert actual["updated_count"] == 3

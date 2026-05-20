@@ -121,7 +121,6 @@ test("runPageReview accepts clean pages, escalates parse failures, and can accep
     return { reviewer: "code", checklist: [], issues: [], isLgtm: true };
   };
   minorAny.applyFixes = async () => { pageFixes++; };
-  minorAny.generateJudgmentSummary = async () => "fixed";
   minorAny.judgeMinorAcceptance = async () => {
     judgeCalls++;
     return { safe: true, reason: "acceptable" };
@@ -159,7 +158,6 @@ test("reviewStep fixes major issues and can retry unsafe minor issues", async ()
 
   let majorCalls = 0;
   anyOrchestrator.applyFixes = async () => { majorCalls++; };
-  anyOrchestrator.generateJudgmentSummary = async () => "summary";
   const fixed = await anyOrchestrator.reviewStep(
     async () => {
       majorCalls++;
@@ -201,8 +199,6 @@ test("reviewStep passes major and minor issues together into applyFixes", async 
   const fixBatches: ReviewIssue[][] = [];
   let calls = 0;
   anyOrchestrator.applyFixes = async (issues: ReviewIssue[]) => { fixBatches.push(issues); };
-  anyOrchestrator.generateJudgmentSummary = async () => "summary";
-
   const result = await anyOrchestrator.reviewStep(
     async () => {
       calls++;
@@ -306,13 +302,11 @@ test("reviewStep applies fixes for manual major issues", async () => {
   assert.deepEqual(fixedIssues.map((issue) => issue.description), ["[manual] changing validation order is required"]);
 });
 
-test("reviewStep logs review_result summaries with severity and manual counts", async () => {
+test("reviewStep logs review_result summaries with findings detail", async () => {
   const { orchestrator, specPath, logger } = createOrchestrator();
   const anyOrchestrator = orchestrator as any;
   let calls = 0;
   anyOrchestrator.applyFixes = async () => {};
-  anyOrchestrator.generateJudgmentSummary = async () => "summary";
-
   const result = await anyOrchestrator.reviewStep(
     async () => {
       calls++;
@@ -353,8 +347,77 @@ test("reviewStep logs review_result summaries with severity and manual counts", 
     severityCounts: { critical: 0, major: 1, minor: 1 },
     manualCount: 1,
     decision: "fixed",
+    findings: [
+      { severity: "major", description: "must fix" },
+      { severity: "minor", description: "[manual] can wait" },
+    ],
   });
-  assert.equal(reviewEvents[1]?.decision, "lgtm");
+  assert.deepEqual(reviewEvents[1], {
+    ts: reviewEvents[1].ts,
+    event: EVENT.REVIEW_RESULT,
+    step: "self_criteria",
+    cycle: 2,
+    reviewer: "self_criteria",
+    issueCount: 0,
+    severityCounts: { critical: 0, major: 0, minor: 0 },
+    manualCount: 0,
+    decision: "lgtm",
+    findings: [],
+  });
+});
+
+test("runSpecTcReview reuses reviewStep and applyFixes for design drafts", async () => {
+  const { orchestrator, specPath } = createOrchestrator();
+  const tcPath = join((orchestrator as any).projectRoot, "test-cases.md");
+  writeFileSync(tcPath, "# test cases\n", "utf-8");
+  const anyOrchestrator = orchestrator as any;
+  let calls = 0;
+  let fixCalls = 0;
+  anyOrchestrator.selfReviewSpecTcConsistency = async () => {
+    calls++;
+    return calls >= 2
+      ? { reviewer: "spec_tc_review", checklist: [], issues: [], isLgtm: true }
+      : { reviewer: "spec_tc_review", checklist: [], issues: [major("spec と TC が曖昧")], isLgtm: false };
+  };
+  anyOrchestrator.applyFixes = async () => { fixCalls++; };
+
+  const result = await orchestrator.runSpecTcReview({
+    targetFiles: [specPath, tcPath],
+    specPath,
+    testCasesPath: tcPath,
+    criteriaPaths: [],
+    scopeAllowedTools: [],
+    reviewMode: "design",
+  } as any);
+
+  assert.equal(result.isLgtm, true);
+  assert.equal(fixCalls, 1);
+});
+
+test("runSpecReview reuses reviewStep and applyFixes for draft specs", async () => {
+  const { orchestrator, specPath } = createOrchestrator();
+  const anyOrchestrator = orchestrator as any;
+  let calls = 0;
+  let fixCalls = 0;
+  anyOrchestrator.selfReviewSpecConsistency = async () => {
+    calls++;
+    return calls >= 2
+      ? { reviewer: "spec_review", checklist: [], issues: [], isLgtm: true }
+      : { reviewer: "spec_review", checklist: [], issues: [major("公開 API の形が曖昧")], isLgtm: false };
+  };
+  anyOrchestrator.applyFixes = async () => { fixCalls++; };
+
+  const result = await orchestrator.runSpecReview({
+    targetFiles: [specPath],
+    specPath,
+    criteriaPaths: [],
+    scopeAllowedTools: [],
+    reviewMode: "design",
+    designContextText: "- sourceDir: backend/quiz",
+  } as any);
+
+  assert.equal(result.isLgtm, true);
+  assert.equal(fixCalls, 1);
 });
 
 test("parseFixPlan fails closed when repairs omit an issue", () => {

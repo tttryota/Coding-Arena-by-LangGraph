@@ -6,17 +6,19 @@ from typing import Any, cast
 import pytest
 from structlog.testing import capture_logs
 
+from core.ingestion.infrastructure.batch_scheduler_types import (
+    ChunkStoreChunkInput,
+    ChunkStoreDeleteResult,
+    ChunkStoreUpsertInput,
+    ChunkStoreUpsertResult,
+)
 from core.ingestion.infrastructure.chroma_chunk_store import (
     ChromaChunkStore,
     ChunkCollection,
     ChunkStoreBackendError,
-    ChunkStoreChunkInput,
-    ChunkStoreDeleteResult,
     ChunkStoreDuplicateChunkIndexError,
     ChunkStoreInputError,
     ChunkStoreRecordFormatError,
-    ChunkStoreUpsertInput,
-    ChunkStoreUpsertResult,
     StoredChunk,
 )
 
@@ -512,8 +514,7 @@ class TestChromaChunkStore:
             store.upsert_chunks(upsert_input)
 
         assert (
-            str(exc_info.value)
-            == "duplicate chunk_index in upsert batch "
+            str(exc_info.value) == "duplicate chunk_index in upsert batch "
             "(source_path='study/invalid.md', chunk_index=0)"
         )
         assert collection.upsert_calls == []
@@ -926,8 +927,7 @@ class TestChromaChunkStore:
 
         assert exc_info.value.__cause__ is backend_error
         assert (
-            str(exc_info.value)
-            == "chunk store upsert failed for "
+            str(exc_info.value) == "chunk store upsert failed for "
             "source_path='study/backend/infra.md', chunk_count=1"
         )
         log_entry = _assert_single_log_event_includes(
@@ -959,8 +959,7 @@ class TestChromaChunkStore:
 
         assert exc_info.value.__cause__ is backend_error
         assert (
-            str(exc_info.value)
-            == "chunk store get failed for "
+            str(exc_info.value) == "chunk store get failed for "
             "source_path='study/backend/infra.md'"
         )
         log_entry = _assert_single_log_event_includes(
@@ -989,8 +988,7 @@ class TestChromaChunkStore:
 
         assert exc_info.value.__cause__ is backend_error
         assert (
-            str(exc_info.value)
-            == "chunk store delete failed for "
+            str(exc_info.value) == "chunk store delete failed for "
             "source_path='study/backend/infra.md'"
         )
         log_entry = _assert_single_log_event_includes(

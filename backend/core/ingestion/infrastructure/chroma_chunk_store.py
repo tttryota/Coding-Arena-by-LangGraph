@@ -7,6 +7,13 @@ from typing import Final, Literal, Protocol, TypedDict, cast
 
 import structlog
 
+from core.ingestion.infrastructure.batch_scheduler_types import (
+    ChunkStoreChunkInput,
+    ChunkStoreDeleteResult,
+    ChunkStoreUpsertInput,
+    ChunkStoreUpsertResult,
+)
+
 logger = structlog.get_logger(__name__)
 
 SOURCE_PATH_KEY: Final = "source_path"
@@ -61,36 +68,6 @@ class ChunkStoreBackendError(Exception):
 
 class ChunkStoreRecordFormatError(Exception):
     pass
-
-
-@dataclass(frozen=True)
-class ChunkStoreChunkInput:
-    chunk_index: object
-    text: object
-    embedding: object
-    headers: object
-    tags: object
-    created_at: object
-    updated_at: object
-
-
-@dataclass(frozen=True)
-class ChunkStoreUpsertInput:
-    source_path: str
-    chunks: list[ChunkStoreChunkInput]
-
-
-@dataclass(frozen=True)
-class ChunkStoreUpsertResult:
-    source_path: str
-    stored_count: int
-    stored_ids: list[str]
-
-
-@dataclass(frozen=True)
-class ChunkStoreDeleteResult:
-    source_path: str
-    deleted_count: int
 
 
 @dataclass(frozen=True)
@@ -371,10 +348,11 @@ def _extract_deleted_count(
     *,
     source_path: str,
 ) -> int:
-    valid = isinstance(raw_result, dict) and isinstance(
-        raw_result.get("ids"), list,
+    is_valid_result = isinstance(raw_result, dict) and isinstance(
+        raw_result.get(IDS_KEY),
+        list,
     )
-    if not valid:
+    if not is_valid_result:
         logger.error(
             EVENT_CHUNK_STORE_DELETE_FAILED,
             source_path=source_path,
@@ -386,7 +364,7 @@ def _extract_deleted_count(
             source_path=source_path,
         )
         raise ChunkStoreBackendError(message)
-    return len(cast("list[object]", cast("dict[str, object]", raw_result)["ids"]))
+    return len(cast("list[object]", cast("dict[str, object]", raw_result)[IDS_KEY]))
 
 
 def _validate_source_path(source_path: object, *, operation: str) -> str:
@@ -1131,13 +1109,9 @@ __all__ = [
     "ChromaChunkStore",
     "ChunkCollection",
     "ChunkStoreBackendError",
-    "ChunkStoreChunkInput",
-    "ChunkStoreDeleteResult",
     "ChunkStoreDuplicateChunkIndexError",
     "ChunkStoreInputError",
     "ChunkStoreRecordFormatError",
-    "ChunkStoreUpsertInput",
-    "ChunkStoreUpsertResult",
     "StoredChunk",
     "StoredChunkMetadata",
 ]

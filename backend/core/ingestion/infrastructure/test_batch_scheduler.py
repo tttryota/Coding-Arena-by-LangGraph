@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from structlog.testing import capture_logs
@@ -48,7 +48,6 @@ class _FileDiffResultFixture:
     new_count: int
     updated_count: int
     deleted_count: int
-
 
 
 @dataclass
@@ -233,7 +232,8 @@ class _RecordingChunkStore:
         )
 
     def upsert_chunks(
-        self, upsert_input: ChunkStoreUpsertInput,
+        self,
+        upsert_input: ChunkStoreUpsertInput,
     ) -> ChunkStoreUpsertResult:
         source_path = str(upsert_input.source_path)
         self.upsert_calls.append(source_path)
@@ -245,9 +245,7 @@ class _RecordingChunkStore:
         return ChunkStoreUpsertResult(
             source_path=source_path,
             stored_count=chunk_count,
-            stored_ids=[
-                f"{source_path}#{i}" for i in range(chunk_count)
-            ],
+            stored_ids=[f"{source_path}#{i}" for i in range(chunk_count)],
         )
 
 
@@ -912,14 +910,14 @@ class TestBatchSchedulerRunOnce:
         )
         config = _make_config(dependencies)
 
-        original_sorted = sorted
+        original_sorted = cast("Any", sorted)
 
         def _exploding_sorted(*args: object, **kwargs: object) -> list[object]:
             for arg in args:
                 if isinstance(arg, list) and arg and isinstance(arg[0], str):
                     msg = "unexpected orchestration error"
                     raise RuntimeError(msg)
-            return original_sorted(*args, **kwargs)
+            return cast("list[object]", original_sorted(*args, **kwargs))
 
         monkeypatch.setattr("builtins.sorted", _exploding_sorted)
 

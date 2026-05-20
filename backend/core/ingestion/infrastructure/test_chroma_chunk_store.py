@@ -141,13 +141,13 @@ def _make_chunk(
     if tags is None:
         tags = ["TypeScript"]
     return ChunkStoreChunkInput(
-        chunk_index=chunk_index,
-        text=text,
-        embedding=embedding,
-        headers=headers,
-        tags=tags,
-        created_at=created_at,
-        updated_at=updated_at,
+        chunk_index=cast("int", chunk_index),
+        text=cast("str", text),
+        embedding=cast("list[float]", embedding),
+        headers=cast("str", headers),
+        tags=cast("list[str]", tags),
+        created_at=cast("str", created_at),
+        updated_at=cast("str", updated_at),
     )
 
 

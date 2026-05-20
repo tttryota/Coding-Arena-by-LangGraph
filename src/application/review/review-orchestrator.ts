@@ -126,11 +126,13 @@ type ReviewParams = {
   scopeAllowedTools: string[];
   getFileDiff?: (files: string[]) => Promise<string>;
   designDecisions?: string[];
-  reviewMode: "test" | "implementation";
+  reviewMode: "test" | "implementation" | "design";
   reviewStep?: string;
   targetTestCases?: string[];
   skipExternalReview?: boolean;
   testCasesPath?: string;
+  maxReviewCycles?: number;
+  designContextText?: string;
 };
 
 type PageReviewParams = ReviewParams & {
@@ -216,20 +218,27 @@ export class ReviewOrchestrator {
     }
   }
 
-  appendDesignDecisionRecords(designDecisions?: string[]): void {
-    if (!designDecisions) return;
-    for (const decision of designDecisions) {
-      this.records.push({
-        step: "design_decision",
-        cycle: 0,
-        reviewer: "plan",
-        findings: [],
-        decision: "accepted",
-        diffBefore: "",
-        diffAfter: "",
-        judgmentSummary: decision,
-      });
-    }
+  async runSpecTcReview(params: ReviewParams): Promise<ReviewResult> {
+    this.logger.log(EVENT.REVIEW_START, { mode: "design-1-step" });
+    return this.reviewStep(
+      () => this.selfReviewSpecTcConsistency(
+        params.targetFiles,
+        params.specPath,
+        params.testCasesPath ?? "",
+      ),
+      { ...params, reviewStep: "spec_tc_review", maxReviewCycles: 2 },
+    );
+  }
+
+  async runSpecReview(params: ReviewParams): Promise<ReviewResult> {
+    this.logger.log(EVENT.REVIEW_START, { mode: "design-1-step" });
+    return this.reviewStep(
+      () => this.selfReviewSpecConsistency(
+        params.specPath,
+        params.designContextText ?? "",
+      ),
+      { ...params, reviewStep: "spec_review", maxReviewCycles: 2 },
+    );
   }
 
   async runPageReview(params: PageReviewParams): Promise<ReviewResult[]> {
@@ -273,7 +282,6 @@ export class ReviewOrchestrator {
           decision: "lgtm",
           diffBefore,
           diffAfter: "",
-          judgmentSummary: "指摘なし",
         });
         return results;
       }
@@ -287,7 +295,6 @@ export class ReviewOrchestrator {
           decision: "escalated",
           diffBefore,
           diffAfter: "",
-          judgmentSummary: "ページレビュー結果のパースに失敗。人間の確認が必要。",
         });
         throw new DriftError(
           ESCALATION_LEVEL.LEVEL_3,
@@ -313,7 +320,6 @@ export class ReviewOrchestrator {
               decision: "accepted",
               diffBefore,
               diffAfter: "",
-              judgmentSummary: verdict.reason,
             });
             return results;
           }
@@ -324,7 +330,6 @@ export class ReviewOrchestrator {
       const diffAfter = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
         : "";
-      const judgmentSummary = await this.generateJudgmentSummary(combinedIssues, diffBefore, diffAfter);
       this.records.push({
         step: "page_review",
         cycle: cycle + 1,
@@ -333,7 +338,6 @@ export class ReviewOrchestrator {
         decision: "fixed",
         diffBefore,
         diffAfter,
-        judgmentSummary,
       });
     }
 
@@ -430,8 +434,6 @@ export class ReviewOrchestrator {
       results.push(step3Result);
     }
 
-    this.appendDesignDecisionRecords(params.designDecisions);
-
     return results;
   }
 
@@ -477,7 +479,6 @@ export class ReviewOrchestrator {
           decision: "escalated",
           diffBefore,
           diffAfter: "",
-          judgmentSummary: "2体レビューの結果パースに失敗。人間のエスカレーションが必要。",
         });
         throw new DriftError(
           ESCALATION_LEVEL.LEVEL_3,
@@ -497,7 +498,6 @@ export class ReviewOrchestrator {
           decision: "lgtm",
           diffBefore,
           diffAfter: "",
-          judgmentSummary: "指摘なし",
         });
         results.push(reviewA, reviewB);
         return results;
@@ -513,7 +513,6 @@ export class ReviewOrchestrator {
       const diffAfter = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
         : "";
-      const judgmentSummary = await this.generateJudgmentSummary(toFix, diffBefore, diffAfter);
 
       this.records.push({
         step: "dual_fallback",
@@ -523,7 +522,6 @@ export class ReviewOrchestrator {
         decision: "fixed",
         diffBefore,
         diffAfter,
-        judgmentSummary,
       });
     }
 
@@ -556,6 +554,53 @@ export class ReviewOrchestrator {
 
     this.logger.log(EVENT.SELF_REVIEW, { step: "test_quality" });
     return this.executeReview(FLOW_STEP.TEST_SELF_QUALITY, prompt, "test_self_quality", {
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
+  }
+
+  private async selfReviewSpecTcConsistency(
+    targetFiles: string[],
+    specPath: string,
+    testCasesPath: string,
+  ): Promise<ReviewResult> {
+    const fileContents = this.readFiles(targetFiles);
+    const spec = readFileSync(specPath, "utf-8");
+    const testCases = readFileSync(testCasesPath, "utf-8");
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-spec-tc-consistency", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, {
+      fileContents,
+      spec,
+      testCases,
+      specPath,
+      testCasesPath,
+      responseFormat,
+    });
+
+    this.logger.log(EVENT.SELF_REVIEW, { step: "spec_tc_review" });
+    return this.executeReview(FLOW_STEP.SPEC_TC_REVIEW, prompt, "spec_tc_review", {
+      outputSchema: REVIEW_OUTPUT_SCHEMA,
+    });
+  }
+
+  private async selfReviewSpecConsistency(
+    specPath: string,
+    designContextText: string,
+  ): Promise<ReviewResult> {
+    const spec = readFileSync(specPath, "utf-8");
+    const config = this.registry.getConfig();
+    const responseFormat = loadTemplate("review-response-format", this.projectRoot, config.templates);
+    const template = loadTemplate("review-spec-consistency", this.projectRoot, config.templates);
+    const prompt = renderTemplate(template, {
+      spec,
+      specPath,
+      designContextText,
+      responseFormat,
+    });
+
+    this.logger.log(EVENT.SELF_REVIEW, { step: "spec_review" });
+    return this.executeReview(FLOW_STEP.SPEC_REVIEW, prompt, "spec_review", {
       outputSchema: REVIEW_OUTPUT_SCHEMA,
     });
   }
@@ -778,7 +823,6 @@ export class ReviewOrchestrator {
         decision: "accepted",
         diffBefore: "",
         diffAfter: "",
-        judgmentSummary: accepted.judgmentSummary,
       });
     }
     return reconciled.toFix;
@@ -790,7 +834,9 @@ export class ReviewOrchestrator {
   ): Promise<ReviewResult> {
     let minorOnlyCycles = 0;
 
-    for (let cycle = 0; cycle < RETRY_POLICY.review.maxCycles; cycle++) {
+    const maxCycles = params.maxReviewCycles ?? RETRY_POLICY.review.maxCycles;
+
+    for (let cycle = 0; cycle < maxCycles; cycle++) {
       const diffBefore = params.getFileDiff
         ? await params.getFileDiff(params.targetFiles)
         : "";
@@ -806,7 +852,6 @@ export class ReviewOrchestrator {
           decision: "lgtm",
           diffBefore,
           diffAfter: "",
-          judgmentSummary: "指摘なし",
         });
         return result;
       }
@@ -822,7 +867,6 @@ export class ReviewOrchestrator {
           decision: "escalated",
           diffBefore,
           diffAfter: "",
-          judgmentSummary: "レビュー結果のパースに失敗。人間のエスカレーションが必要。",
         });
         throw new DriftError(
           ESCALATION_LEVEL.LEVEL_3,
@@ -849,7 +893,6 @@ export class ReviewOrchestrator {
                 decision: "accepted",
                 diffBefore,
                 diffAfter: "",
-                judgmentSummary: verdict.reason,
               });
             }
             return result;
@@ -871,7 +914,6 @@ export class ReviewOrchestrator {
               decision: "lgtm",
               diffBefore,
               diffAfter: diffAfterRetry,
-              judgmentSummary: `第三者判断により修正: ${verdict.reason}`,
             });
             return retryResult;
           }
@@ -885,7 +927,6 @@ export class ReviewOrchestrator {
             decision: "escalated",
             diffBefore,
             diffAfter: diffAfterRetry,
-            judgmentSummary: `${verdict.reason}（修正後も残存）`,
           });
           return retryResult;
         }
@@ -898,9 +939,6 @@ export class ReviewOrchestrator {
         ? await params.getFileDiff(params.targetFiles)
         : "";
 
-      // 判断理由を生成
-      const judgmentSummary = await this.generateJudgmentSummary(result.issues, diffBefore, diffAfter);
-
       this.records.push({
         step: result.reviewer,
         cycle: cycle + 1,
@@ -909,14 +947,13 @@ export class ReviewOrchestrator {
         decision: "fixed",
         diffBefore,
         diffAfter,
-        judgmentSummary,
       });
     }
 
     throw new DriftError(
       ESCALATION_LEVEL.LEVEL_1,
       "review_cycle",
-      `レビューが ${RETRY_POLICY.review.maxCycles} サイクルで収束しませんでした`,
+      `レビューが ${maxCycles} サイクルで収束しませんでした`,
     );
   }
 
@@ -1164,6 +1201,10 @@ ${globalConstraints}`;
       severityCounts: this.summarizeSeverities(issues),
       manualCount: issues.filter((issue) => issue.description.trimStart().startsWith("[manual]")).length,
       decision,
+      findings: issues.map((issue) => ({
+        severity: issue.severity,
+        description: issue.description,
+      })),
     });
   }
 
@@ -1352,33 +1393,6 @@ ${globalConstraints}`;
         ],
         isLgtm: false,
       };
-    }
-  }
-
-  private async generateJudgmentSummary(
-    issues: ReviewIssue[],
-    diffBefore: string,
-    diffAfter: string,
-  ): Promise<string> {
-    const issueText = issues
-      .map((i) => `[${i.severity}] ${i.file}:${i.line ?? "?"} - ${i.description}`)
-      .join("\n");
-
-    try {
-      const prompt = `以下のレビュー指摘に対してコード修正が行われました。なぜこの修正が必要だったのか、どういう判断で対応したかを3行以内で日本語で説明してください。
-
-## レビュー指摘
-${issueText}
-
-## 修正前のdiff
-${diffBefore.slice(0, 2000)}
-
-## 修正後のdiff
-${diffAfter.slice(0, 2000)}`;
-
-      return this.executeRun(FLOW_STEP.JUDGMENT_SUMMARY, prompt, { allowedTools: ["Read"] });
-    } catch {
-      return "（判断理由の生成に失敗しました）";
     }
   }
 

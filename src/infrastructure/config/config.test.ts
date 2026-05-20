@@ -26,10 +26,11 @@ function baseYaml(): string {
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex
@@ -138,10 +139,11 @@ test("loadConfig rejects legacy profile.claude config", () => {
       impl_external_review: claude
       lint_fix: claude
       apply_fixes: claude
-      judgment_summary: claude
       judge_minor: claude
       spec_generate: claude
+      spec_review: claude
       test_case_generate: claude
+      spec_tc_review: claude
       component_generate: claude
       component_self_review: claude
       page_generate: claude
@@ -333,10 +335,11 @@ test("loadConfig rejects runtime mismatches and invalid path templates", () => {
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex
@@ -378,10 +381,11 @@ runners:
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex
@@ -432,10 +436,11 @@ test("loadConfig infers defaults, profile resolution, and missing profile guidan
       impl_external_review: claude
       lint_fix: claude
       apply_fixes: claude
-      judgment_summary: claude
       judge_minor: claude
       spec_generate: claude
+      spec_review: claude
       test_case_generate: claude
+      spec_tc_review: claude
       component_generate: claude
       component_self_review: claude
       page_generate: claude
@@ -487,10 +492,11 @@ test("inferProfile requires an explicit frontmatter profile when multiple profil
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex
@@ -519,10 +525,11 @@ test("inferProfile requires an explicit frontmatter profile when multiple profil
       impl_external_review: claude
       lint_fix: codex
       apply_fixes: codex
-      judgment_summary: codex
       judge_minor: codex
       spec_generate: codex
+      spec_review: codex
       test_case_generate: codex
+      spec_tc_review: codex
       component_generate: codex
       component_self_review: codex
       page_generate: codex

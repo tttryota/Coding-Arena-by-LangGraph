@@ -1,6 +1,6 @@
 ---
 feature: roadmap/roadmap-persistence
-status: draft
+status: ready
 ---
 
 # 概要
@@ -8,7 +8,7 @@ status: draft
 - この機能が解決する課題:
   LLM が生成したロードマップの階層構造（JSON）を、RDB に保存可能なフラットレコード群に変換して永続化する。これにより、ツリー構造の取得・スコア算出・CRUD 操作を SQL ベースで行える。
 - 利用者・呼び出し元・前提条件:
-  呼び出し元はロードマップ生成フロー（B2）の後段を想定する。入力は LLM が生成した 3 段階層（major → middle → detail）の JSON 構造であり、LLM 応答のパースは完了済みであることを前提とする。本機能は `Protocol` による DI で注入された永続化ポートと ID 生成ポートを利用する。構造化ログ出力には `structlog` を用いる。
+  呼び出し元はロードマップ生成フロー（B2）の後段を想定する。入力は LLM が生成した 3 段固定構造（利用可能な `level` と親子関係は `major -> middle -> detail` に固定）の JSON 構造であり、LLM 応答のパースは完了済みであることを前提とする。`major` / `middle` の `children=[]` は許容する。本機能は `Protocol` による DI で注入された永続化ポートと ID 生成ポートを利用する。構造化ログ出力には `structlog` を用いる。
 
 # 入出力
 
@@ -27,21 +27,21 @@ status: draft
   - `RoadmapSaveInput`
     frozen dataclass。
     - `topic: str`
-      ロードマップのトピック名。空文字不可。
+      ロードマップのトピック名。`strip()` 後に空文字となる値は不可。検証は `strip()` ベースで行うが、保存時の値は入力文字列をそのまま保持し、trim/strip による正規化は行わない。
     - `items: list[RoadmapItemInput]`
       ルートレベルの項目一覧。空リストの場合は項目なしのロードマップとして扱う。
     - `created_at: str`
-      ロードマップ生成日時。ISO 8601 文字列（offset 付き）。全レコードの `created_at` と `updated_at` にこの値を使う。
+      ロードマップ生成日時。ISO 8601 文字列かつ UTC offset 必須。全レコードの `created_at` と `updated_at` にこの値を使う。`2026-05-21T10:00:00` のような parse 可能だが offset を含まない値は不正入力として扱う。
   - `RoadmapItemInput`
     frozen dataclass。再帰構造。
     - `title: str`
-      項目名。空文字不可。
+      項目名。`strip()` 後に空文字となる値は不可。検証は `strip()` ベースで行うが、保存時の値は入力文字列をそのまま保持し、trim/strip による正規化は行わない。
     - `description: str`
       LLM 生成の説明文。空文字許容。
     - `level: Literal["major", "middle", "detail"]`
-      階層レベル。
+      階層レベル。利用可能な値は `major` / `middle` / `detail` のみであり、これ以外の値は未サポートの不正入力として扱う。
     - `children: list[RoadmapItemInput]`
-      子項目一覧。`detail` レベルの場合は空リストでなければならない。
+      子項目一覧。3 段固定構造とは `level` の親子関係制約を指し、`major` は `middle` を 0 件以上、`middle` は `detail` を 0 件以上持てる。`detail` レベルのみ子を持てず、`children=[]` が必須である。途中階層が欠ける入力（major のみ、または major 配下の middle が `children=[]`）も許容する。
 
 - 依存インターフェース:
   - `RoadmapPersistenceWriter`
@@ -79,8 +79,8 @@ status: draft
     - `updated_at: str`
 
 - エラー:
-  - `RoadmapPersistenceInputError`: `topic` が空文字、`created_at` が ISO 8601 として解析できない、階層レベルが不正（後述のルール参照）、`title` が空文字の場合。
-  - `RoadmapPersistenceWriteError`: 永続化ポートの操作が失敗した場合。
+  - `RoadmapPersistenceInputError`: `topic` または `title` が `strip()` 後に空文字、`created_at` が ISO 8601 として解析できない、または UTC offset を含まない、`level` が `major` / `middle` / `detail` 以外である、または 3 段固定構造（`major -> middle -> detail` の `level` 親子関係と `detail.children=[]` 必須）を満たさない場合。
+  - `RoadmapPersistenceWriteError`: 永続化ポートの操作が失敗した場合。元例外を `raise ... from ...` で保持して送出する。
 
 # 具体例
 
@@ -139,21 +139,102 @@ status: draft
     - "88888888-8888-8888-8888-888888888888"  # ジェネリクス
     - "99999999-9999-9999-9999-999999999999"  # 基本構文
   ```
-- writer.save_items に渡される FlatRoadmapItem 一覧:
+- writer.save_items に渡される引数:
   ```yaml
   roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+  topic: "TypeScript"
   items:
-    - id: "11111111-..."  parent_id: null        level: major   title: "基礎"          order: 0  score: 0
-    - id: "22222222-..."  parent_id: "11111111-"  level: middle  title: "変数と型"       order: 0  score: 0
-    - id: "33333333-..."  parent_id: "22222222-"  level: detail  title: "プリミティブ型"   order: 0  score: 0
-    - id: "44444444-..."  parent_id: "22222222-"  level: detail  title: "配列とタプル"     order: 1  score: 0
-    - id: "55555555-..."  parent_id: "11111111-"  level: middle  title: "関数"           order: 1  score: 0
-    - id: "66666666-..."  parent_id: "55555555-"  level: detail  title: "引数の型注釈"    order: 0  score: 0
-    - id: "77777777-..."  parent_id: null        level: major   title: "応用"           order: 1  score: 0
-    - id: "88888888-..."  parent_id: "77777777-"  level: middle  title: "ジェネリクス"    order: 0  score: 0
-    - id: "99999999-..."  parent_id: "88888888-"  level: detail  title: "基本構文"       order: 0  score: 0
+    - id: "11111111-1111-1111-1111-111111111111"
+      roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      parent_id: null
+      level: major
+      title: "基礎"
+      description: "TypeScript の基本概念"
+      order: 0
+      score: 0
+      created_at: "2026-05-21T10:00:00+09:00"
+      updated_at: "2026-05-21T10:00:00+09:00"
+    - id: "22222222-2222-2222-2222-222222222222"
+      roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      parent_id: "11111111-1111-1111-1111-111111111111"
+      level: middle
+      title: "変数と型"
+      description: "型システムの基礎"
+      order: 0
+      score: 0
+      created_at: "2026-05-21T10:00:00+09:00"
+      updated_at: "2026-05-21T10:00:00+09:00"
+    - id: "33333333-3333-3333-3333-333333333333"
+      roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      parent_id: "22222222-2222-2222-2222-222222222222"
+      level: detail
+      title: "プリミティブ型"
+      description: "string, number, boolean 等の基本型"
+      order: 0
+      score: 0
+      created_at: "2026-05-21T10:00:00+09:00"
+      updated_at: "2026-05-21T10:00:00+09:00"
+    - id: "44444444-4444-4444-4444-444444444444"
+      roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      parent_id: "22222222-2222-2222-2222-222222222222"
+      level: detail
+      title: "配列とタプル"
+      description: "配列型とタプル型の使い分け"
+      order: 1
+      score: 0
+      created_at: "2026-05-21T10:00:00+09:00"
+      updated_at: "2026-05-21T10:00:00+09:00"
+    - id: "55555555-5555-5555-5555-555555555555"
+      roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      parent_id: "11111111-1111-1111-1111-111111111111"
+      level: middle
+      title: "関数"
+      description: "関数の型付けと引数"
+      order: 1
+      score: 0
+      created_at: "2026-05-21T10:00:00+09:00"
+      updated_at: "2026-05-21T10:00:00+09:00"
+    - id: "66666666-6666-6666-6666-666666666666"
+      roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      parent_id: "55555555-5555-5555-5555-555555555555"
+      level: detail
+      title: "引数の型注釈"
+      description: "パラメータと戻り値の型指定"
+      order: 0
+      score: 0
+      created_at: "2026-05-21T10:00:00+09:00"
+      updated_at: "2026-05-21T10:00:00+09:00"
+    - id: "77777777-7777-7777-7777-777777777777"
+      roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      parent_id: null
+      level: major
+      title: "応用"
+      description: "TypeScript の応用技術"
+      order: 1
+      score: 0
+      created_at: "2026-05-21T10:00:00+09:00"
+      updated_at: "2026-05-21T10:00:00+09:00"
+    - id: "88888888-8888-8888-8888-888888888888"
+      roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      parent_id: "77777777-7777-7777-7777-777777777777"
+      level: middle
+      title: "ジェネリクス"
+      description: "型パラメータによる汎用化"
+      order: 0
+      score: 0
+      created_at: "2026-05-21T10:00:00+09:00"
+      updated_at: "2026-05-21T10:00:00+09:00"
+    - id: "99999999-9999-9999-9999-999999999999"
+      roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      parent_id: "88888888-8888-8888-8888-888888888888"
+      level: detail
+      title: "基本構文"
+      description: "T extends U の基本"
+      order: 0
+      score: 0
+      created_at: "2026-05-21T10:00:00+09:00"
+      updated_at: "2026-05-21T10:00:00+09:00"
   ```
-  全レコードの `created_at` と `updated_at` は `"2026-05-21T10:00:00+09:00"`。
 - 期待される出力:
   ```yaml
   roadmap_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
@@ -186,36 +267,43 @@ status: draft
 
 1. 階層レベルの検証:
    - 条件: 入力を処理する場合。
-   - 振る舞い: ルート項目は `level=major` でなければならない。major の子は `level=middle` でなければならない。middle の子は `level=detail` でなければならない。detail は `children` が空リストでなければならない。これらに違反する場合は `RoadmapPersistenceInputError` を送出する。
-2. DFS 順のフラット化:
+   - 振る舞い: 各項目の `level` は `major` / `middle` / `detail` のいずれかでなければならず、これ以外の値は `RoadmapPersistenceInputError` を送出する。加えて、3 段固定構造としてルート項目は `level=major`、major の子は `level=middle`、middle の子は `level=detail` でなければならない。detail は `children` が空リストでなければならない。major / middle は `children` が空リストでも許容する。3 段固定構造の強制は入力の `level` 属性の親子関係と `detail.children=[]` 制約に対してのみ行う。
+2. 文字列入力の検証:
+   - 条件: `topic` と各項目 `title` を検証する場合。
+   - 振る舞い: `topic` と `title` は `strip()` 後に 1 文字以上を含まなければならない。検証通過後も保存値は入力文字列をそのまま保持し、trim/strip による正規化は行わない。
+3. created_at の検証:
+   - 条件: `created_at` を検証する場合。
+   - 振る舞い: `created_at` は ISO 8601 として解析可能で、かつ UTC offset を含まなければならない。offset を欠く値は parse 可能でも `RoadmapPersistenceInputError` を送出する。
+4. DFS 順のフラット化:
    - 条件: 階層構造をフラット化する場合。
    - 振る舞い: 深さ優先探索（pre-order）で項目を走査し、`FlatRoadmapItem` のリストを構築する。走査順序は入力の `items` / `children` リストの出現順に従う。
-3. order の決定:
+5. order の決定:
    - 条件: `FlatRoadmapItem.order` を設定する場合。
    - 振る舞い: 同一親の子項目内での 0 始まりの連番。入力リストの出現順に対応する。
-4. parent_id の設定:
+6. parent_id の設定:
    - 条件: `FlatRoadmapItem.parent_id` を設定する場合。
    - 振る舞い: major レベルの項目は `parent_id=None`。middle は親 major の `id`。detail は親 middle の `id`。
-5. ID 生成:
+7. ID 生成:
    - 条件: roadmap_id と各項目 id を生成する場合。
    - 振る舞い: `id_generator.generate()` を呼ぶ。最初の呼び出しで `roadmap_id` を取得し、以降の呼び出しで各項目の `id` を DFS 順に取得する。
-6. score の初期化:
+8. score の初期化:
    - 条件: `FlatRoadmapItem` を生成する場合。
    - 振る舞い: `score` は常に `0` で初期化する。入力から score を受け取らない。
-7. created_at / updated_at の設定:
+9. created_at / updated_at の設定:
    - 条件: `FlatRoadmapItem` を生成する場合。
    - 振る舞い: 全レコードの `created_at` と `updated_at` に入力の `created_at` をそのまま使う。
-8. 空ロードマップの許容:
+10. 空ロードマップの許容:
    - 条件: `items` が空リストの場合。
    - 振る舞い: `roadmap_id` を生成し、`writer.save_items` に空リストを渡す。`saved_count=0` を返す。
-9. Protocol DI による外部依存分離:
+11. Protocol DI による外部依存分離:
    - 条件: 永続化操作と ID 生成を行う場合。
    - 振る舞い: 実装は concrete class に依存せず、`RoadmapPersistenceWriter` と `RoadmapIdGenerator` の Protocol だけを参照する。
-10. structlog による構造化ログ:
-    - 条件: 保存成功、または外部依存エラーが発生した場合。
-    - 振る舞い: `structlog` で構造化ログを出力する。イベント名は保存成功時 `roadmap_persisted`、永続化失敗時 `roadmap_persistence_failed` とする。
+12. structlog による構造化ログ:
+   - 条件: 保存成功、または外部依存エラーが発生した場合。
+   - 振る舞い: `structlog` で構造化ログを出力する。イベント名は保存成功時 `roadmap_persisted`、永続化失敗時 `roadmap_persistence_failed` とする。
       - `roadmap_persisted`: `roadmap_id`、`topic`、`saved_count`
       - `roadmap_persistence_failed`: `topic`、`error_type`
+    - 補足: `writer.save_items` が例外を送出した場合は、その元例外を `raise RoadmapPersistenceWriteError(...) from original_error` でラップする。`roadmap_persistence_failed.error_type` には wrapper 例外名ではなく元例外のクラス名を記録する。
 
 # 境界条件
 
@@ -225,25 +313,41 @@ status: draft
 - ケース: major 項目が 1 つだけ、detail まで 1 項目ずつの最小構成。
   - 振る舞い: 3 レコード（major, middle, detail）を保存する。
   - 理由: 最小有効構成。
+- ケース: major が `children=[]`。
+  - 振る舞い: 正常に保存する。major 1 レコードのみ。
+  - 理由: 3 段固定構造は `level` の親子関係のみを制約し、major の空 children は許容する。
+- ケース: middle が `children=[]`。
+  - 振る舞い: 正常に保存する。major + middle のレコードのみ。
+  - 理由: 3 段固定構造は `level` の親子関係のみを制約し、middle の空 children は許容する。
 - ケース: detail が children を持つ。
   - 振る舞い: `RoadmapPersistenceInputError` を送出する。
   - 理由: 4 段以上の階層は許可しない。
+- ケース: `level` が `major` / `middle` / `detail` 以外。
+  - 振る舞い: `RoadmapPersistenceInputError` を送出する。
+  - 理由: 利用可能な階層レベルは 3 種類に限定する。
 - ケース: ルート項目が `level=middle` または `level=detail`。
   - 振る舞い: `RoadmapPersistenceInputError` を送出する。
   - 理由: ルートは major のみ。
 - ケース: major の直下に detail がある（middle をスキップ）。
   - 振る舞い: `RoadmapPersistenceInputError` を送出する。
-  - 理由: 3 段階層の固定構造に違反。
+  - 理由: 3 段固定構造の `level` 親子関係に違反。
 - ケース: `topic` が空文字。
   - 振る舞い: `RoadmapPersistenceInputError` を送出する。
   - 理由: ロードマップの識別に必要。
+- ケース: `topic` が空白のみ、または `title` が空白のみ。
+  - 振る舞い: `RoadmapPersistenceInputError` を送出する。
+  - 理由: `strip()` 後に空文字となる値は識別に使えない。
 - ケース: `title` が空文字の項目がある。
   - 振る舞い: `RoadmapPersistenceInputError` を送出する。
   - 理由: 項目の識別に必要。
+- ケース: `created_at` が ISO 8601 として parse 可能だが UTC offset を含まない。
+  - 振る舞い: `RoadmapPersistenceInputError` を送出する。
+  - 理由: 全レコードに offset 付きタイムスタンプを保持する入力契約に違反する。
 - ルール間の相互作用:
-  1. 入力バリデーション（階層レベル、空文字チェック）はフラット化より先に行う。不正な入力で `id_generator` や `writer` を呼ばない。
-  2. `id_generator` は `roadmap_id` 用に 1 回、項目数分呼ばれる。空ロードマップでは 1 回のみ。
-  3. `writer.save_items` は常に 1 回だけ呼ばれる（空リストでも呼ぶ）。
+  1. 入力バリデーション（階層レベル、`topic` / `title` の `strip()` ベース検証、`created_at` の offset 必須チェック）はフラット化より先に行う。不正な入力で `id_generator` や `writer` を呼ばない。
+  2. 正常入力でバリデーション通過後、`id_generator` は `roadmap_id` 用に 1 回、項目数分呼ばれる。空ロードマップでは 1 回のみ。
+  3. 正常入力でバリデーション通過後、`writer.save_items` は 1 回だけ呼ばれる（空リストでも呼ぶ）。
+  4. `writer.save_items` が失敗した場合は、元例外を cause として保持した `RoadmapPersistenceWriteError` を送出し、失敗ログの `error_type` には元例外のクラス名を記録する。
 
 # 非機能・制約
 
@@ -296,31 +400,37 @@ status: draft
 
 # 受け入れ基準
 
-- [ ] 3 段階層の JSON 構造が `FlatRoadmapItem` レコード群に正しく変換される
+- [ ] 3 段固定構造（`major -> middle -> detail` の `level` 親子関係）に沿う JSON 構造が `FlatRoadmapItem` レコード群に正しく変換される
 - [ ] 親子関係が `parent_id` で正しく表現される
 - [ ] 同階層内の順序が `order`（0 始まり連番）で保持される
 - [ ] 初期 `score` が `0` で設定される
 - [ ] 全レコードの `created_at` と `updated_at` が入力の `created_at` と一致する
 - [ ] `roadmap_id` で全項目が紐付けられる
 - [ ] 空ロードマップ（`items=[]`）が正常に処理される
+- [ ] major のみ（`children=[]`）や major→middle のみが正常に処理される
 - [ ] 階層レベルの不整合がエラーになる
 - [ ] 保存成功・失敗で構造化ログが出力される
 
 # テスト観点メモ
 
 - 正常系:
-  - 3 段階層の完全な変換（例1 相当）
+  - 3 段固定構造の完全な変換（例1 相当）
   - 空ロードマップの処理
   - 複数 major 項目、各 major に複数 middle
   - order の連番確認
   - parent_id の正しい紐付け
 - 境界系:
   - 最小構成（major 1 → middle 1 → detail 1）
-  - major のみ（middle/detail なし）→ 有効かどうか仕様で要検討
+  - major のみ（children=[]）→ 正常保存
+  - major→middle のみ（middle の children=[]）→ 正常保存
   - description が空文字
+  - `topic` / `title` が前後空白を含むが、`strip()` 後は空でない
 - 異常系:
   - topic が空文字
+  - topic / title が空白のみ
   - title が空文字
+  - created_at が offset なし
+  - `level` が `major` / `middle` / `detail` 以外
   - ルートが middle/detail
   - major 直下に detail
   - detail に children がある

@@ -31,6 +31,7 @@ _STORE_ERROR_ROADMAP_ID = UUID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
 _MIDDLE_EMPTY_ROADMAP_ID = UUID("21212121-2121-2121-2121-212121212121")
 _MAJOR_EMPTY_ROADMAP_ID = UUID("22222222-2222-2222-2222-222222222222")
 _ALL_ZERO_ROADMAP_ID = UUID("23232323-2323-2323-2323-232323232323")
+_ORDER_GAP_ROADMAP_ID = UUID("24242424-2424-2424-2424-242424242424")
 
 
 class _RecordingReader:
@@ -354,6 +355,61 @@ def _typescript_expected_tree() -> RoadmapTree:
     )
 
 
+def _order_gap_items_unsorted() -> list[RoadmapItemRecord]:
+    return [
+        _make_item(
+            item_id="24444444-4444-4444-4444-444444444444",
+            parent_id="24222222-2222-2222-2222-222222222222",
+            level="detail",
+            title="高度な絞り込み",
+            description="条件を組み合わせる",
+            order=0,
+            score=20,
+            last_quiz_at="2026-05-19T10:00:00+09:00",
+        ),
+        _make_item(
+            item_id="24222222-2222-2222-2222-222222222222",
+            parent_id="24111111-1111-1111-1111-111111111111",
+            level="middle",
+            title="応用検索",
+            description="複数条件の検索を扱う",
+            order=2,
+            score=0,
+            last_quiz_at=None,
+        ),
+        _make_item(
+            item_id="24111111-1111-1111-1111-111111111111",
+            parent_id=None,
+            level="major",
+            title="検索",
+            description="検索機能の学習",
+            order=0,
+            score=0,
+            last_quiz_at=None,
+        ),
+        _make_item(
+            item_id="24333333-3333-3333-3333-333333333333",
+            parent_id="24211111-1111-1111-1111-111111111111",
+            level="detail",
+            title="キーワード検索",
+            description="単一条件で検索する",
+            order=0,
+            score=80,
+            last_quiz_at="2026-05-18T10:00:00+09:00",
+        ),
+        _make_item(
+            item_id="24211111-1111-1111-1111-111111111111",
+            parent_id="24111111-1111-1111-1111-111111111111",
+            level="middle",
+            title="基本検索",
+            description="基本的な検索を学ぶ",
+            order=0,
+            score=0,
+            last_quiz_at=None,
+        ),
+    ]
+
+
 def test_tc_01_get_roadmap_builds_minimum_tree_and_logs_success() -> None:
     reader = _RecordingReader(
         roadmap=_make_record(
@@ -442,7 +498,7 @@ def test_tc_01_get_roadmap_builds_minimum_tree_and_logs_success() -> None:
         event_name="roadmap_retrieved",
         log_level="info",
         expected_fields={
-            "roadmap_id": str(_REQUEST_ROADMAP_ID),
+            "roadmap_id": str(_RETURNED_ROADMAP_ID),
             "topic": "  TypeScript 入門  ",
             "overall_score": 88,
             "item_count": 3,
@@ -626,6 +682,104 @@ def test_tc_12_list_roadmaps_preserves_reader_order_and_logs_success() -> None:
         event_name="roadmap_list_retrieved",
         log_level="info",
         expected_fields={"total_count": 2},
+    )
+
+
+def test_tc_13_get_roadmap_builds_tree_when_sibling_order_has_gaps() -> None:
+    reader = _RecordingReader(
+        roadmap=_make_record(
+            roadmap_id=_ORDER_GAP_ROADMAP_ID,
+            topic="Search",
+            items=_order_gap_items_unsorted(),
+        ),
+    )
+
+    result = get_roadmap(_ORDER_GAP_ROADMAP_ID, reader=reader)
+
+    assert result == RoadmapTree(
+        roadmap_id=_ORDER_GAP_ROADMAP_ID,
+        topic="Search",
+        overall_score=50,
+        items=[
+            _make_node(
+                item_id="24111111-1111-1111-1111-111111111111",
+                title="検索",
+                description="検索機能の学習",
+                level="major",
+                score=50,
+                order=0,
+                last_quiz_at=None,
+                children=[
+                    _make_node(
+                        item_id="24211111-1111-1111-1111-111111111111",
+                        title="基本検索",
+                        description="基本的な検索を学ぶ",
+                        level="middle",
+                        score=80,
+                        order=0,
+                        last_quiz_at=None,
+                        children=[
+                            _make_node(
+                                item_id="24333333-3333-3333-3333-333333333333",
+                                title="キーワード検索",
+                                description="単一条件で検索する",
+                                level="detail",
+                                score=80,
+                                order=0,
+                                last_quiz_at="2026-05-18T10:00:00+09:00",
+                                children=[],
+                            ),
+                        ],
+                    ),
+                    _make_node(
+                        item_id="24222222-2222-2222-2222-222222222222",
+                        title="応用検索",
+                        description="複数条件の検索を扱う",
+                        level="middle",
+                        score=20,
+                        order=2,
+                        last_quiz_at=None,
+                        children=[
+                            _make_node(
+                                item_id="24444444-4444-4444-4444-444444444444",
+                                title="高度な絞り込み",
+                                description="条件を組み合わせる",
+                                level="detail",
+                                score=20,
+                                order=0,
+                                last_quiz_at="2026-05-19T10:00:00+09:00",
+                                children=[],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
+
+
+def test_tc_14_list_roadmaps_returns_result_when_sibling_order_has_gaps() -> None:
+    reader = _RecordingReader(
+        roadmaps=[
+            _make_record(
+                roadmap_id=_ORDER_GAP_ROADMAP_ID,
+                topic="Search",
+                items=_order_gap_items_unsorted(),
+            )
+        ]
+    )
+
+    result = list_roadmaps(reader=reader)
+
+    assert result == RoadmapListResult(
+        items=[
+            RoadmapListItem(
+                roadmap_id=_ORDER_GAP_ROADMAP_ID,
+                topic="Search",
+                overall_score=50,
+            )
+        ],
+        total_count=1,
     )
 
 

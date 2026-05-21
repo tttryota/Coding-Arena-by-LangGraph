@@ -803,8 +803,7 @@ class TestSaveRoadmap:
         [
             (
                 "2026-05-21T10:00:00",
-                "created_at must include a UTC offset: "
-                "got '2026-05-21T10:00:00'",
+                "created_at must include a UTC offset: got '2026-05-21T10:00:00'",
             ),
             (
                 "not-a-datetime",

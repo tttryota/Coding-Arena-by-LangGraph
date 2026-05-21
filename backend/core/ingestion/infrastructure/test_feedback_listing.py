@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+import datetime as _datetime_module
+import dis
+from types import CodeType, FunctionType, MethodType, ModuleType
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import UUID
 
 import pytest
@@ -11,13 +14,16 @@ from core.ingestion.infrastructure.feedback_listing import (
     mark_feedback_as_read,
 )
 from core.ingestion.infrastructure.feedback_listing_types import (
-    FeedbackListItem,
     FeedbackListingInputError,
     FeedbackListingNotFoundError,
     FeedbackListingQuery,
     FeedbackListingResult,
     FeedbackListingStoreError,
+    FeedbackListItem,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, MutableMapping
 
 _ROADMAP_ID = UUID("11111111-1111-1111-1111-111111111111")
 _SECOND_ROADMAP_ID = UUID("22222222-2222-2222-2222-222222222222")
@@ -105,36 +111,41 @@ class _RecordingWriter:
 
 
 class _ProtocolOnlyReader:
+    __slots__ = ("find_feedbacks",)
+
     def __init__(
         self,
         *,
         items: list[FeedbackListItem],
         calls: list[dict[str, str | None]],
     ) -> None:
-        self._items = list(items)
-        self._calls = calls
+        stored_items = list(items)
 
-    def find_feedbacks(
-        self,
-        *,
-        date_from: str | None,
-        date_to: str | None,
-        read_status: Literal["all", "unread", "read"],
-    ) -> list[FeedbackListItem]:
-        self._calls.append(
-            {
-                "date_from": date_from,
-                "date_to": date_to,
-                "read_status": read_status,
-            },
-        )
-        return list(self._items)
+        def find_feedbacks(
+            *,
+            date_from: str | None,
+            date_to: str | None,
+            read_status: Literal["all", "unread", "read"],
+        ) -> list[FeedbackListItem]:
+            calls.append(
+                {
+                    "date_from": date_from,
+                    "date_to": date_to,
+                    "read_status": read_status,
+                },
+            )
+            return list(stored_items)
+
+        self.find_feedbacks = find_feedbacks
 
     def __getattr__(self, name: str) -> object:
-        raise AssertionError(f"unexpected reader attribute access: {name}")
+        message = f"unexpected reader attribute access: {name}"
+        raise AssertionError(message)
 
 
 class _ProtocolOnlyWriter:
+    __slots__ = ("get_by_id", "update_read_status")
+
     def __init__(
         self,
         *,
@@ -143,34 +154,75 @@ class _ProtocolOnlyWriter:
         get_calls: list[UUID],
         update_calls: list[dict[str, object]],
     ) -> None:
-        self._current_item = current_item
-        self._updated_item = updated_item
-        self._get_calls = get_calls
-        self._update_calls = update_calls
+        def get_by_id(feedback_id: UUID) -> FeedbackListItem | None:
+            get_calls.append(feedback_id)
+            return current_item
 
-    def get_by_id(self, feedback_id: UUID) -> FeedbackListItem | None:
-        self._get_calls.append(feedback_id)
-        return self._current_item
+        def update_read_status(
+            feedback_id: UUID,
+            *,
+            is_read: bool,
+            read_at: str,
+        ) -> FeedbackListItem:
+            update_calls.append(
+                {
+                    "feedback_id": feedback_id,
+                    "is_read": is_read,
+                    "read_at": read_at,
+                },
+            )
+            assert updated_item is not None
+            return updated_item
 
-    def update_read_status(
-        self,
-        feedback_id: UUID,
-        *,
-        is_read: bool,
-        read_at: str,
-    ) -> FeedbackListItem:
-        self._update_calls.append(
-            {
-                "feedback_id": feedback_id,
-                "is_read": is_read,
-                "read_at": read_at,
-            },
-        )
-        assert self._updated_item is not None
-        return self._updated_item
+        self.get_by_id = get_by_id
+        self.update_read_status = update_read_status
 
     def __getattr__(self, name: str) -> object:
-        raise AssertionError(f"unexpected writer attribute access: {name}")
+        message = f"unexpected writer attribute access: {name}"
+        raise AssertionError(message)
+
+
+class _CurrentTimeClassGuard(_datetime_module.datetime):
+    @classmethod
+    def now(
+        cls,
+        tz: _datetime_module.tzinfo | None = None,
+    ) -> _CurrentTimeClassGuard:
+        message = "mark_feedback_as_read must use the injected now value"
+        raise AssertionError(message)
+
+    @classmethod
+    def today(cls) -> _CurrentTimeClassGuard:
+        message = "mark_feedback_as_read must use the injected now value"
+        raise AssertionError(message)
+
+    @classmethod
+    def utcnow(cls) -> _CurrentTimeClassGuard:
+        message = "mark_feedback_as_read must use the injected now value"
+        raise AssertionError(message)
+
+
+class _CurrentTimeModuleGuard:
+    datetime = _CurrentTimeClassGuard
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(_datetime_module, name)
+
+
+_CURRENT_TIME_LOOKUP_METHODS = frozenset({"now", "today", "utcnow"})
+_CURRENT_TIME_HELPER_NAMES = frozenset(
+    {
+        "now",
+        "utcnow",
+        "today",
+        "_now",
+        "_utcnow",
+        "_today",
+        "current_time",
+        "current_timestamp",
+        "current_datetime",
+    },
+)
 
 
 def _make_item(
@@ -201,17 +253,17 @@ def _make_result(*items: FeedbackListItem) -> FeedbackListingResult:
 
 
 def _find_log_events(
-    log_output: list[dict[str, Any]],
+    log_output: list[MutableMapping[str, Any]],
     event_name: str,
-) -> list[dict[str, Any]]:
+) -> list[MutableMapping[str, Any]]:
     return [entry for entry in log_output if entry.get("event") == event_name]
 
 
 def _assert_single_log_event_includes(
-    log_output: list[dict[str, Any]],
+    log_output: list[MutableMapping[str, Any]],
     event_name: str,
     expected_fields: dict[str, object],
-) -> dict[str, Any]:
+) -> MutableMapping[str, Any]:
     events = _find_log_events(log_output, event_name)
     assert len(events) == 1
     event = events[0]
@@ -219,19 +271,181 @@ def _assert_single_log_event_includes(
     for field_name, expected_value in expected_fields.items():
         assert field_name in event
         actual_value = event[field_name]
+        if field_name == "feedback_id":
+            _assert_feedback_id_log_field(
+                actual_value=actual_value,
+                expected_value=expected_value,
+            )
+            continue
         if isinstance(expected_value, UUID):
             assert actual_value == expected_value
-            continue
-        if field_name == "feedback_id" and actual_value is not None:
-            assert str(actual_value) == expected_value
             continue
         assert actual_value == expected_value
 
     return event
 
 
-def _assert_no_log_event(log_output: list[dict[str, Any]], event_name: str) -> None:
+def _assert_feedback_id_log_field(
+    *,
+    actual_value: object,
+    expected_value: object,
+) -> None:
+    assert isinstance(expected_value, str)
+    assert isinstance(actual_value, str)
+    assert actual_value == expected_value
+
+
+def _assert_no_log_event(
+    log_output: list[MutableMapping[str, Any]],
+    event_name: str,
+) -> None:
     assert _find_log_events(log_output, event_name) == []
+
+
+def _raise_on_current_time_lookup(*args: object, **kwargs: object) -> object:
+    message = "mark_feedback_as_read must use the injected now value"
+    raise AssertionError(message)
+
+
+def _is_datetime_module_alias(value: object) -> bool:
+    return isinstance(value, ModuleType) and value is _datetime_module
+
+
+def _is_datetime_class_alias(value: object) -> bool:
+    return value is _datetime_module.datetime
+
+
+def _get_dis_instructions(value: object) -> tuple[dis.Instruction, ...] | None:
+    disassemblable: (
+        MethodType | FunctionType | CodeType | type[Any] | Callable[..., Any]
+    )
+    if isinstance(value, (MethodType, FunctionType, CodeType, type)):
+        disassemblable = value
+    elif callable(value):
+        disassemblable = cast("Callable[..., Any]", value)
+    else:
+        return None
+
+    try:
+        return tuple(dis.get_instructions(disassemblable))
+    except TypeError:
+        return None
+
+
+def _loads_current_time_method(value: object) -> bool:
+    instructions = _get_dis_instructions(value)
+    if instructions is None:
+        return False
+
+    return any(
+        instruction.argval in _CURRENT_TIME_LOOKUP_METHODS
+        and instruction.opname in {"LOAD_ATTR", "LOAD_METHOD"}
+        for instruction in instructions
+    )
+
+
+def _is_current_time_method_alias(value: object) -> bool:
+    if getattr(value, "__name__", None) not in _CURRENT_TIME_LOOKUP_METHODS:
+        return False
+
+    owner = getattr(value, "__self__", None)
+    return _is_datetime_module_alias(owner) or _is_datetime_class_alias(owner)
+
+
+def _loads_guarded_global_callable(
+    *,
+    instructions: tuple[dis.Instruction, ...],
+    value: object,
+    module_globals: dict[str, object],
+    visited: set[int],
+) -> bool:
+    for instruction in instructions:
+        if instruction.opname not in {"LOAD_GLOBAL", "LOAD_NAME"}:
+            continue
+
+        referenced_name = instruction.argval
+        if not isinstance(referenced_name, str):
+            continue
+
+        referenced_value = module_globals.get(referenced_name)
+        if referenced_value is None or referenced_value is value:
+            continue
+        if _is_current_time_lookup_callable(
+            name=referenced_name,
+            value=referenced_value,
+            module_globals=module_globals,
+            visited=visited,
+        ):
+            return True
+
+    return False
+
+
+def _is_current_time_lookup_callable(
+    *,
+    name: str,
+    value: object,
+    module_globals: dict[str, object],
+    visited: set[int] | None = None,
+) -> bool:
+    if not callable(value):
+        return False
+
+    if visited is None:
+        visited = set()
+    object_id = id(value)
+    if object_id in visited:
+        return False
+    visited.add(object_id)
+
+    if _is_current_time_method_alias(value):
+        return True
+    if _loads_current_time_method(value):
+        return True
+
+    partial_target = getattr(value, "func", None)
+    if callable(partial_target) and _is_current_time_lookup_callable(
+        name=name,
+        value=partial_target,
+        module_globals=module_globals,
+        visited=visited,
+    ):
+        return True
+
+    instructions = _get_dis_instructions(value)
+    if instructions is None:
+        return name.lower() in _CURRENT_TIME_HELPER_NAMES
+
+    if _loads_guarded_global_callable(
+        instructions=instructions,
+        value=value,
+        module_globals=module_globals,
+        visited=visited,
+    ):
+        return True
+
+    return name.lower() in _CURRENT_TIME_HELPER_NAMES
+
+
+def _forbid_internal_current_time_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    module_globals = mark_feedback_as_read.__globals__
+    replacements: dict[str, object] = {}
+    for name, value in tuple(module_globals.items()):
+        if _is_datetime_module_alias(value):
+            replacements[name] = _CurrentTimeModuleGuard()
+            continue
+        if _is_datetime_class_alias(value):
+            replacements[name] = _CurrentTimeClassGuard
+            continue
+        if _is_current_time_lookup_callable(
+            name=name,
+            value=value,
+            module_globals=module_globals,
+        ):
+            replacements[name] = _raise_on_current_time_lookup
+
+    for name, replacement in replacements.items():
+        monkeypatch.setitem(module_globals, name, replacement)
 
 
 def test_tc_01_lists_all_feedbacks_sorted_and_logs_success() -> None:
@@ -315,7 +529,9 @@ def test_tc_02_lists_unread_feedbacks_and_logs_success() -> None:
     )
 
 
-def test_tc_03_marks_unread_feedback_as_read_and_logs_success() -> None:
+def test_tc_03_marks_unread_feedback_as_read_and_logs_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     feedback_id = _FIRST_ID
     now = "2026-05-21T00:00:00Z"
     unread_item = _make_item(
@@ -337,11 +553,13 @@ def test_tc_03_marks_unread_feedback_as_read_and_logs_success() -> None:
         read_at=now,
     )
     writer = _RecordingWriter(current_item=unread_item, updated_item=read_item)
+    _forbid_internal_current_time_lookup(monkeypatch)
 
     with capture_logs() as log_output:
         result = mark_feedback_as_read(feedback_id, writer=writer, now=now)
 
     assert result == read_item
+    assert result.read_at == now
     assert writer.get_calls == [feedback_id]
     assert writer.update_calls == [
         {
@@ -350,6 +568,7 @@ def test_tc_03_marks_unread_feedback_as_read_and_logs_success() -> None:
             "read_at": now,
         },
     ]
+    assert writer.update_calls[0]["read_at"] == result.read_at
     _assert_single_log_event_includes(
         log_output,
         "feedback_listing_marked_read",
@@ -382,26 +601,26 @@ def test_tc_10_delegates_read_status_read_to_reader() -> None:
     ]
 
 
-def test_tc_11_validates_date_range_by_instant_and_preserves_query_strings() -> None:
-    lower_bound_item = _make_item(
+def test_tc_11_validates_date_range_by_instant_and_sorts_descending() -> None:
+    lexicographically_later_item = _make_item(
         feedback_id=_SECOND_ID,
         source_path="study/python/datetime.md",
         roadmap_item_id=_SECOND_ROADMAP_ID,
         body="UTC 境界の確認",
         is_read=False,
-        created_at="2026-05-20T00:00:00+09:00",
+        created_at="2026-05-20T14:30:00+09:00",
         read_at=None,
     )
-    upper_bound_item = _make_item(
+    instant_later_item = _make_item(
         feedback_id=_FIRST_ID,
         source_path="study/typescript/generics.md",
         roadmap_item_id=_ROADMAP_ID,
         body="ジェネリクス制約の追記候補",
         is_read=False,
-        created_at="2026-05-20T21:30:00+09:00",
+        created_at="2026-05-20T10:00:00Z",
         read_at=None,
     )
-    reader = _RecordingReader(items=[upper_bound_item, lower_bound_item])
+    reader = _RecordingReader(items=[lexicographically_later_item, instant_later_item])
     query = FeedbackListingQuery(
         date_from="2026-05-19T15:00:00Z",
         date_to="2026-05-20T14:59:59.500000Z",
@@ -410,7 +629,11 @@ def test_tc_11_validates_date_range_by_instant_and_preserves_query_strings() -> 
 
     result = list_feedbacks(query, reader=reader)
 
-    assert result == _make_result(upper_bound_item, lower_bound_item)
+    assert result == _make_result(instant_later_item, lexicographically_later_item)
+    assert [item.id for item in result.items] == [
+        instant_later_item.id,
+        lexicographically_later_item.id,
+    ]
     assert reader.calls == [
         {
             "date_from": "2026-05-19T15:00:00Z",
@@ -691,14 +914,14 @@ def test_tc_20_returns_empty_result_and_logs_success() -> None:
             FeedbackListingQuery(
                 date_from=None,
                 date_to=None,
-                read_status=cast(Literal["all", "unread", "read"], "archived"),
+                read_status=cast("Literal['all', 'unread', 'read']", "archived"),
             ),
             0,
         ),
         (
             FeedbackListingQuery(
-                date_from="2026-05-20T12:00:00+09:00",
-                date_to="2026-05-20T02:59:59Z",
+                date_from="2026-05-20T00:30:00-01:00",
+                date_to="2026-05-20T01:00:00Z",
                 read_status="all",
             ),
             0,
@@ -711,9 +934,8 @@ def test_tc_21_rejects_invalid_listing_input_before_reader_call(
 ) -> None:
     reader = _RecordingReader(items=[])
 
-    with capture_logs() as log_output:
-        with pytest.raises(FeedbackListingInputError):
-            list_feedbacks(query, reader=reader)
+    with capture_logs() as log_output, pytest.raises(FeedbackListingInputError):
+        list_feedbacks(query, reader=reader)
 
     assert len(reader.calls) == expected_call_count
     _assert_no_log_event(log_output, "feedback_listing_queried")
@@ -740,9 +962,8 @@ def test_tc_22_rejects_invalid_now_before_writer_call(now: str) -> None:
         ),
     )
 
-    with capture_logs() as log_output:
-        with pytest.raises(FeedbackListingInputError):
-            mark_feedback_as_read(_FIRST_ID, writer=writer, now=now)
+    with capture_logs() as log_output, pytest.raises(FeedbackListingInputError):
+        mark_feedback_as_read(_FIRST_ID, writer=writer, now=now)
 
     assert writer.get_calls == []
     assert writer.update_calls == []
@@ -751,7 +972,9 @@ def test_tc_22_rejects_invalid_now_before_writer_call(now: str) -> None:
     _assert_no_log_event(log_output, "feedback_listing_store_failed")
 
 
-def test_tc_23_raises_store_error_for_invalid_reader_created_at_and_logs_failure() -> None:
+def test_tc_23_raises_store_error_for_invalid_reader_created_at_and_logs_failure() -> (
+    None
+):
     invalid_item = _make_item(
         feedback_id=_FIRST_ID,
         source_path="study/typescript/generics.md",
@@ -764,9 +987,8 @@ def test_tc_23_raises_store_error_for_invalid_reader_created_at_and_logs_failure
     reader = _RecordingReader(items=[invalid_item])
     query = FeedbackListingQuery(date_from=None, date_to=None, read_status="all")
 
-    with capture_logs() as log_output:
-        with pytest.raises(FeedbackListingStoreError):
-            list_feedbacks(query, reader=reader)
+    with capture_logs() as log_output, pytest.raises(FeedbackListingStoreError):
+        list_feedbacks(query, reader=reader)
 
     assert reader.calls == [
         {
@@ -801,13 +1023,12 @@ def test_tc_24_raises_store_error_for_invalid_writer_get_by_id_created_at() -> N
         ),
     )
 
-    with capture_logs() as log_output:
-        with pytest.raises(FeedbackListingStoreError):
-            mark_feedback_as_read(
-                _FIRST_ID,
-                writer=writer,
-                now="2026-05-21T00:00:00Z",
-            )
+    with capture_logs() as log_output, pytest.raises(FeedbackListingStoreError):
+        mark_feedback_as_read(
+            _FIRST_ID,
+            writer=writer,
+            now="2026-05-21T00:00:00Z",
+        )
 
     assert writer.get_calls == [_FIRST_ID]
     assert writer.update_calls == []
@@ -845,13 +1066,12 @@ def test_tc_25_raises_store_error_for_invalid_writer_update_created_at() -> None
         updated_item=invalid_updated_item,
     )
 
-    with capture_logs() as log_output:
-        with pytest.raises(FeedbackListingStoreError):
-            mark_feedback_as_read(
-                _FIRST_ID,
-                writer=writer,
-                now="2026-05-21T00:00:00Z",
-            )
+    with capture_logs() as log_output, pytest.raises(FeedbackListingStoreError):
+        mark_feedback_as_read(
+            _FIRST_ID,
+            writer=writer,
+            now="2026-05-21T00:00:00Z",
+        )
 
     assert writer.get_calls == [_FIRST_ID]
     assert writer.update_calls == [
@@ -944,13 +1164,12 @@ def test_tc_30_works_with_protocol_only_stubs() -> None:
 def test_tc_31_raises_not_found_and_logs_failure_when_feedback_is_missing() -> None:
     writer = _RecordingWriter(current_item=None)
 
-    with capture_logs() as log_output:
-        with pytest.raises(FeedbackListingNotFoundError):
-            mark_feedback_as_read(
-                _THIRD_ID,
-                writer=writer,
-                now="2026-05-21T00:00:00Z",
-            )
+    with capture_logs() as log_output, pytest.raises(FeedbackListingNotFoundError):
+        mark_feedback_as_read(
+            _THIRD_ID,
+            writer=writer,
+            now="2026-05-21T00:00:00Z",
+        )
 
     assert writer.get_calls == [_THIRD_ID]
     assert writer.update_calls == []
@@ -959,15 +1178,16 @@ def test_tc_31_raises_not_found_and_logs_failure_when_feedback_is_missing() -> N
         "feedback_listing_not_found",
         {"feedback_id": str(_THIRD_ID)},
     )
+    _assert_no_log_event(log_output, "feedback_listing_marked_read")
+    _assert_no_log_event(log_output, "feedback_listing_store_failed")
 
 
 def test_tc_32_wraps_reader_failures_and_logs_failure() -> None:
     reader = _RecordingReader(error=TimeoutError("reader timeout"))
     query = FeedbackListingQuery(date_from=None, date_to=None, read_status="all")
 
-    with capture_logs() as log_output:
-        with pytest.raises(FeedbackListingStoreError):
-            list_feedbacks(query, reader=reader)
+    with capture_logs() as log_output, pytest.raises(FeedbackListingStoreError):
+        list_feedbacks(query, reader=reader)
 
     event = _assert_single_log_event_includes(
         log_output,
@@ -1020,13 +1240,12 @@ def test_tc_33_wraps_writer_failures_and_logs_failure(
     expected_get_calls: list[UUID],
     expected_update_calls: list[dict[str, object]],
 ) -> None:
-    with capture_logs() as log_output:
-        with pytest.raises(FeedbackListingStoreError):
-            mark_feedback_as_read(
-                _FIRST_ID,
-                writer=writer,
-                now="2026-05-21T09:00:00.123456+09:00",
-            )
+    with capture_logs() as log_output, pytest.raises(FeedbackListingStoreError):
+        mark_feedback_as_read(
+            _FIRST_ID,
+            writer=writer,
+            now="2026-05-21T09:00:00.123456+09:00",
+        )
 
     assert writer.get_calls == expected_get_calls
     assert writer.update_calls == expected_update_calls

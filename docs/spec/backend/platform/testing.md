@@ -1,8 +1,8 @@
 ---
 feature: testing
-status: draft
-reviewed_by:
-approved_at:
+status: approved
+reviewed_by: claude
+approved_at: 2026-05-21
 ---
 
 ## 機能概要

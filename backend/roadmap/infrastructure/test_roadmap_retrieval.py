@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Literal
 from uuid import UUID
 
 import pytest
@@ -17,9 +17,9 @@ from roadmap.infrastructure.roadmap_retrieval_types import (
     RoadmapTree,
     RoadmapTreeNode,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+from shared.log_assertions import (
+    assert_single_log_event as _assert_single_log_event,
+)
 
 
 _REQUEST_ROADMAP_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
@@ -120,39 +120,6 @@ def _make_node(
         children=children,
         last_quiz_at=last_quiz_at,
     )
-
-
-def _assert_log_event_includes(
-    log_output: list[MutableMapping[str, Any]],
-    *,
-    event_name: str,
-    log_level: str,
-    expected_fields: dict[str, object],
-    str_coerce_fields: frozenset[str] = frozenset(),
-) -> None:
-    matching_events = [
-        entry
-        for entry in log_output
-        if entry.get("event") == event_name and entry.get("log_level") == log_level
-    ]
-    assert matching_events
-
-    for event in matching_events:
-        try:
-            for field_name, expected_value in expected_fields.items():
-                assert field_name in event
-                actual = event[field_name]
-                if field_name in str_coerce_fields:
-                    assert actual is not None
-                    assert str(actual) == expected_value
-                else:
-                    assert actual == expected_value
-        except AssertionError:
-            continue
-        return
-
-    message = f"no {log_level} log for {event_name} matched expected fields"
-    raise AssertionError(message)
 
 
 def _typescript_items_unsorted() -> list[RoadmapItemRecord]:
@@ -493,16 +460,16 @@ def test_tc_01_get_roadmap_builds_minimum_tree_and_logs_success() -> None:
         ],
     )
     assert reader.find_roadmap_calls == [_REQUEST_ROADMAP_ID]
-    _assert_log_event_includes(
+    _assert_single_log_event(
         log_output,
-        event_name="roadmap_retrieved",
-        log_level="info",
-        expected_fields={
+        "roadmap_retrieved",
+        {
             "roadmap_id": str(_RETURNED_ROADMAP_ID),
             "topic": "  TypeScript 入門  ",
             "overall_score": 88,
             "item_count": 3,
         },
+        log_level="info",
         str_coerce_fields=frozenset({"roadmap_id"}),
     )
 
@@ -677,11 +644,11 @@ def test_tc_12_list_roadmaps_preserves_reader_order_and_logs_success() -> None:
         total_count=2,
     )
     assert reader.find_all_roadmaps_calls == 1
-    _assert_log_event_includes(
+    _assert_single_log_event(
         log_output,
-        event_name="roadmap_list_retrieved",
+        "roadmap_list_retrieved",
+        {"total_count": 2},
         log_level="info",
-        expected_fields={"total_count": 2},
     )
 
 
@@ -1180,11 +1147,11 @@ def test_tc_24_list_roadmaps_returns_empty_result_and_logs_success() -> None:
 
     assert result == RoadmapListResult(items=[], total_count=0)
     assert reader.find_all_roadmaps_calls == 1
-    _assert_log_event_includes(
+    _assert_single_log_event(
         log_output,
-        event_name="roadmap_list_retrieved",
+        "roadmap_list_retrieved",
+        {"total_count": 0},
         log_level="info",
-        expected_fields={"total_count": 0},
     )
 
 
@@ -1195,11 +1162,11 @@ def test_tc_30_get_roadmap_raises_not_found_and_logs_warning() -> None:
         get_roadmap(_NOT_FOUND_ROADMAP_ID, reader=reader)
 
     assert reader.find_roadmap_calls == [_NOT_FOUND_ROADMAP_ID]
-    _assert_log_event_includes(
+    _assert_single_log_event(
         log_output,
-        event_name="roadmap_not_found",
+        "roadmap_not_found",
+        {"roadmap_id": str(_NOT_FOUND_ROADMAP_ID)},
         log_level="warning",
-        expected_fields={"roadmap_id": str(_NOT_FOUND_ROADMAP_ID)},
         str_coerce_fields=frozenset({"roadmap_id"}),
     )
 
@@ -1211,14 +1178,14 @@ def test_tc_31_get_roadmap_wraps_reader_error_and_logs_error() -> None:
         get_roadmap(_STORE_ERROR_ROADMAP_ID, reader=reader)
 
     assert reader.find_roadmap_calls == [_STORE_ERROR_ROADMAP_ID]
-    _assert_log_event_includes(
+    _assert_single_log_event(
         log_output,
-        event_name="roadmap_retrieval_store_failed",
-        log_level="error",
-        expected_fields={
+        "roadmap_retrieval_store_failed",
+        {
             "roadmap_id": str(_STORE_ERROR_ROADMAP_ID),
             "error_type": "TimeoutError",
         },
+        log_level="error",
         str_coerce_fields=frozenset({"roadmap_id"}),
     )
 
@@ -1232,9 +1199,9 @@ def test_tc_32_list_roadmaps_wraps_reader_error_and_logs_error() -> None:
         list_roadmaps(reader=reader)
 
     assert reader.find_all_roadmaps_calls == 1
-    _assert_log_event_includes(
+    _assert_single_log_event(
         log_output,
-        event_name="roadmap_retrieval_store_failed",
+        "roadmap_retrieval_store_failed",
+        {"error_type": "ConnectionError"},
         log_level="error",
-        expected_fields={"error_type": "ConnectionError"},
     )

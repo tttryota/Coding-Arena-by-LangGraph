@@ -9,8 +9,15 @@ if TYPE_CHECKING:
 def find_log_events(
     log_output: list[MutableMapping[str, Any]],
     event_name: str,
+    *,
+    log_level: str | None = None,
 ) -> list[MutableMapping[str, Any]]:
-    return [entry for entry in log_output if entry.get("event") == event_name]
+    return [
+        entry
+        for entry in log_output
+        if entry.get("event") == event_name
+        and (log_level is None or entry.get("log_level") == log_level)
+    ]
 
 
 def assert_single_log_event(
@@ -18,6 +25,7 @@ def assert_single_log_event(
     event_name: str,
     expected_fields: dict[str, object],
     *,
+    log_level: str | None = None,
     str_coerce_fields: frozenset[str] = frozenset(),
 ) -> MutableMapping[str, Any]:
     """ちょうど 1 件のログイベントが存在し、expected_fields を含むことを検証。
@@ -25,7 +33,7 @@ def assert_single_log_event(
     str_coerce_fields に含まれるフィールドだけ str() で正規化して比較。
     それ以外は厳密一致。
     """
-    events = find_log_events(log_output, event_name)
+    events = find_log_events(log_output, event_name, log_level=log_level)
     assert len(events) == 1
     event = events[0]
     for field_name, expected_value in expected_fields.items():
@@ -43,5 +51,7 @@ def assert_single_log_event(
 def assert_no_log_event(
     log_output: list[MutableMapping[str, Any]],
     event_name: str,
+    *,
+    log_level: str | None = None,
 ) -> None:
-    assert find_log_events(log_output, event_name) == []
+    assert find_log_events(log_output, event_name, log_level=log_level) == []

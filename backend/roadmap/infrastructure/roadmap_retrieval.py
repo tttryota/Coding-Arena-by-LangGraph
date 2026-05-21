@@ -19,8 +19,11 @@ from roadmap.infrastructure.roadmap_retrieval_types import (
 if TYPE_CHECKING:
     from uuid import UUID
 
-_logger = structlog.get_logger()
-ROADMAP_RETRIEVAL_STORE_FAILED_EVENT = "roadmap_retrieval_store_failed"
+logger = structlog.get_logger(__name__)
+EVENT_STORE_FAILED = "roadmap_retrieval_store_failed"
+EVENT_NOT_FOUND = "roadmap_not_found"
+EVENT_RETRIEVED = "roadmap_retrieved"
+EVENT_LIST_RETRIEVED = "roadmap_list_retrieved"
 __all__ = ["get_roadmap", "list_roadmaps"]
 
 
@@ -53,9 +56,6 @@ def _build_node(
     if item.level == "detail":
         score = item.score
         last_quiz_at = item.last_quiz_at
-    elif item.level == "middle":
-        score = _floor_average([child.score for child in children])
-        last_quiz_at = None
     else:
         score = _floor_average([child.score for child in children])
         last_quiz_at = None
@@ -93,10 +93,10 @@ def get_roadmap(
     try:
         record = reader.find_roadmap(roadmap_id)
     except Exception as exception:
-        _logger.error(
-            ROADMAP_RETRIEVAL_STORE_FAILED_EVENT,
+        logger.exception(
+            EVENT_STORE_FAILED,
             roadmap_id=str(roadmap_id),
-            error_type=exception.__class__.__name__,
+            error_type=type(exception).__name__,
         )
         if isinstance(exception, RoadmapRetrievalStoreError):
             raise
@@ -104,13 +104,13 @@ def get_roadmap(
         raise RoadmapRetrievalStoreError(message) from exception
 
     if record is None:
-        _logger.warning("roadmap_not_found", roadmap_id=str(roadmap_id))
+        logger.warning(EVENT_NOT_FOUND, roadmap_id=str(roadmap_id))
         message = f"roadmap not found: {roadmap_id}"
         raise RoadmapRetrievalNotFoundError(message)
 
     result = _build_tree(record)
-    _logger.info(
-        "roadmap_retrieved",
+    logger.info(
+        EVENT_RETRIEVED,
         roadmap_id=str(result.roadmap_id),
         topic=result.topic,
         overall_score=result.overall_score,
@@ -123,9 +123,9 @@ def list_roadmaps(*, reader: RoadmapRetrievalReader) -> RoadmapListResult:
     try:
         records = reader.find_all_roadmaps()
     except Exception as exception:
-        _logger.error(
-            ROADMAP_RETRIEVAL_STORE_FAILED_EVENT,
-            error_type=exception.__class__.__name__,
+        logger.exception(
+            EVENT_STORE_FAILED,
+            error_type=type(exception).__name__,
         )
         if isinstance(exception, RoadmapRetrievalStoreError):
             raise
@@ -141,5 +141,5 @@ def list_roadmaps(*, reader: RoadmapRetrievalReader) -> RoadmapListResult:
         for record in records
     ]
     result = RoadmapListResult(items=items, total_count=len(items))
-    _logger.info("roadmap_list_retrieved", total_count=result.total_count)
+    logger.info(EVENT_LIST_RETRIEVED, total_count=result.total_count)
     return result

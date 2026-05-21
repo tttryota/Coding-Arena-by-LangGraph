@@ -260,7 +260,7 @@ status: draft
 - 概算メモ:
   DTO・Protocol・例外型を `roadmap_persistence_types.py` に分離し、入力バリデーション・フラット化・writer 呼び出しのオーケストレーションを `roadmap_persistence.py` にまとめる。合計約 200 行で、1 ファイルあたり 130 行以内に収まる。
 - 配置先:
-  ハーネスの sourceLayout は `backend/core/{{category}}/infrastructure` だが、roadmap-overview.md では `domain/roadmap/` と定義されている。impl 時に配置先を決定する。
+  `backend/roadmap/infrastructure/` に配置する。
 - モジュール一覧:
   - `roadmap_persistence_types.py`
     - 責務: DTO（`RoadmapSaveInput`、`RoadmapItemInput`、`FlatRoadmapItem`、`RoadmapSaveResult`）、Protocol（`RoadmapPersistenceWriter`、`RoadmapIdGenerator`）、例外型の定義

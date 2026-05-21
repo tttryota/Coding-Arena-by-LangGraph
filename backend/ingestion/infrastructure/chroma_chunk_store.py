@@ -7,7 +7,7 @@ from typing import Final, Literal, Protocol, TypedDict, cast
 
 import structlog
 
-from core.ingestion.infrastructure.batch_scheduler_types import (
+from ingestion.infrastructure.batch_scheduler_types import (
     ChunkStoreChunkInput,
     ChunkStoreDeleteResult,
     ChunkStoreUpsertInput,

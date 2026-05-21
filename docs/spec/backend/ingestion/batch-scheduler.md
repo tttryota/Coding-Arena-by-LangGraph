@@ -266,12 +266,12 @@ design 時に、各モジュールが概ね 200-300 行に収まるかを責務�
   - 例外型、`BatchRunSummary`、`FailedFileSummary`、依存 Protocol 定義だけで 100 行前後を使う。
   - `run_once(...)` の分岐は、差分なし短絡、削除処理、新規処理、更新処理、ファイル失敗集約、構造化ログ出力を含むため 200 行を超えやすい。
 - モジュール一覧:
-  - `backend/core/ingestion/infrastructure/batch_scheduler_types.py`
+  - `backend/ingestion/infrastructure/batch_scheduler_types.py`
     - 責務:
       実行結果データ構造、例外型、依存 Protocol 定義を集約する。
     - 含める要素:
       `BatchRunSummary`、`FailedFileSummary`、`BatchSchedulerConfigError`、依存 Protocol（`DiffDetector`、`MarkdownLoader`、`Splitter`、`Tagger`、`Embedder`、`ChunkStoreWriter`）
-  - `backend/core/ingestion/infrastructure/batch_executor.py`
+  - `backend/ingestion/infrastructure/batch_executor.py`
     - 責務:
       `run_once(...)` の純粋な実行順序と、ファイル単位の成功・失敗集約ルールを実装する。
     - 含める要素:

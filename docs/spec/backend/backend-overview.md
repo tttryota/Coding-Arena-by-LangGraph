@@ -162,8 +162,8 @@ services:
 ## 中枠仕様書へのポインタ
 
 - [ingestion-overview](ingestion/ingestion-overview.md) — 取り込みパイプライン + フィードバック（`core/`、汎用基盤）
-- [roadmap-overview](roadmap/roadmap-overview.md) — ロードマップ管理 + 弱点分析（`domain/roadmap/`）
-- [quiz-overview](quiz/quiz-overview.md) — クイズセッション + まとめテスト結果（`domain/quiz/`）
+- [roadmap-overview](roadmap/roadmap-overview.md) — ロードマップ管理 + 弱点分析（`roadmap/`）
+- [quiz-overview](quiz/quiz-overview.md) — クイズセッション + まとめテスト結果（`quiz/`）
 
 ※ analyticsグループは廃止。各機能をingestion/roadmap/quizに再配置:
 - フィードバック一覧 → ingestion

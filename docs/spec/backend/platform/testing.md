@@ -16,11 +16,11 @@ pytestによるテスト方針とディレクトリ配置を定義する。
 コロケーション方式。テストファイルをソースファイルと同じディレクトリに配置する。
 
 ```
-core/ingestion/domain/chunk_splitter.py
-core/ingestion/domain/test_chunk_splitter.py    ← 同じディレクトリ
+ingestion/domain/chunk_splitter.py
+ingestion/domain/test_chunk_splitter.py    ← 同じディレクトリ
 
-domain/roadmap/roadmap_generation.py
-domain/roadmap/test_roadmap_generation.py
+roadmap/roadmap_generation.py
+roadmap/test_roadmap_generation.py
 ```
 
 ### ファイル命名規則
@@ -33,7 +33,7 @@ domain/roadmap/test_roadmap_generation.py
 pyproject.tomlに設定:
 ```toml
 [tool.pytest.ini_options]
-testpaths = ["core", "domain", "application", "infrastructure", "presentation"]
+testpaths = ["."]
 ```
 
 ### テストの種類
@@ -44,7 +44,7 @@ testpaths = ["core", "domain", "application", "infrastructure", "presentation"]
 ## 技術判断
 
 - コロケーション方式の理由: ソースとテストが同じ場所にあるため、何のテストかすぐわかる。ファイル移動時もテストが一緒に移動する
-- testpathsを明示する理由: `core/` を将来別パッケージに切り出す際、テスト収集の範囲が明確
+- testpathsを明示する理由: テスト収集の範囲が明確
 
 ## スコープ外
 

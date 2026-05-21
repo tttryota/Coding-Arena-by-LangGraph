@@ -297,7 +297,7 @@ design 時に、各モジュールが概ね 200-300 行に収まるかを責務�
   - 例外型 4 つ（12行）、入出力モデル 5 つ（40行）、Protocol 1 つ（10行）、バリデーション（50行）、3 操作の本体（60行）、ログ（30行）、imports（20行）で合計約 220行
   - 200行を若干超えるが、全て同一永続化層の責務であり分割による複雑化の方がリスクが高い
 - モジュール一覧:
-  - `backend/core/ingestion/infrastructure/chroma_chunk_store.py`
+  - `backend/ingestion/infrastructure/chroma_chunk_store.py`
     - 責務:
       入出力モデル、例外型、`ChunkCollection` Protocol、自然キー生成、入力検証、保存 payload 組み立て、取得結果の正規化、`structlog` 出力、backend 例外ラップ
     - 含める要素:

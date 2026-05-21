@@ -5,7 +5,7 @@ from datetime import datetime
 
 import structlog
 
-from core.ingestion.infrastructure.ingestion_feedback_types import (
+from ingestion.infrastructure.ingestion_feedback_types import (
     IngestionFeedbackChunkInput,
     IngestionFeedbackGenerateInput,
     IngestionFeedbackGenerateResult,
@@ -153,8 +153,7 @@ def generate_for_file(
 def _validate_input(feedback_input: IngestionFeedbackGenerateInput) -> None:
     if feedback_input.source_path == "":
         message = (
-            "source_path must be non-empty: "
-            f"source_path={feedback_input.source_path!r}"
+            f"source_path must be non-empty: source_path={feedback_input.source_path!r}"
         )
         raise IngestionFeedbackInputError(message)
     if feedback_input.minimum_chunk_characters < 1:
@@ -297,8 +296,7 @@ def _validate_llm_response(
 
     if not isinstance(accuracy_check, str) or accuracy_check.strip() == "":
         message = (
-            "accuracy_check must be a non-empty string: "
-            f"source_path={source_path!r}"
+            f"accuracy_check must be a non-empty string: source_path={source_path!r}"
         )
         raise IngestionFeedbackResponseFormatError(message)
     if not isinstance(improvement_suggestions, list) or improvement_suggestions == []:

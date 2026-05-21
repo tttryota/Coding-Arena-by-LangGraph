@@ -6,13 +6,13 @@ from typing import Any, cast
 import pytest
 from structlog.testing import capture_logs
 
-from core.ingestion.infrastructure.batch_scheduler_types import (
+from ingestion.infrastructure.batch_scheduler_types import (
     ChunkStoreChunkInput,
     ChunkStoreDeleteResult,
     ChunkStoreUpsertInput,
     ChunkStoreUpsertResult,
 )
-from core.ingestion.infrastructure.chroma_chunk_store import (
+from ingestion.infrastructure.chroma_chunk_store import (
     ChromaChunkStore,
     ChunkCollection,
     ChunkStoreBackendError,

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import structlog
 
-from core.ingestion.infrastructure.embedder_types import (
+from ingestion.infrastructure.embedder_types import (
     ChunkEmbeddingInput,
     ChunkEmbeddingResult,
     EmbeddingBatchInput,
@@ -14,7 +14,7 @@ from core.ingestion.infrastructure.embedder_types import (
     EmbeddingResponseCountMismatchError,
     EmbeddingVectorFormatError,
 )
-from core.ingestion.infrastructure.embedder_validation import (
+from ingestion.infrastructure.embedder_validation import (
     normalize_embeddings,
     validate_chunks,
     validate_embedding_count,

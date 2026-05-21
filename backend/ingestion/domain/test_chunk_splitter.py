@@ -2,7 +2,7 @@ from collections.abc import Callable, Mapping
 
 import pytest
 
-from core.ingestion.domain.chunk_splitter import (
+from ingestion.domain.chunk_splitter import (
     ChunkSplitInputError,
     ChunkSplitResult,
     TokenCountError,

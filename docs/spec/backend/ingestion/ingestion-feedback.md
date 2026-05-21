@@ -393,12 +393,12 @@ design 時に、各モジュールが概ね 200-300 行に収まるかを責務�
 - 概算メモ:
   型定義・Protocol・例外型を `ingestion_feedback_types.py` に分離し、オーケストレーションと純粋ロジック（チャンク選別、本文組み立て、LLM 応答検証）を `ingestion_feedback.py` にまとめる。合計約 490 行で、1 ファイルあたり 350 行以内に収まる。
 - モジュール一覧:
-  - `backend/core/ingestion/infrastructure/ingestion_feedback_types.py`
+  - `backend/ingestion/infrastructure/ingestion_feedback_types.py`
     - 責務:
       DTO、Protocol、例外型の定義
     - 含める要素:
       `IngestionFeedbackGenerateInput`、`IngestionFeedbackGenerateResult`、`RoadmapCandidate`、`IngestionFeedbackLlmResponse`、各例外型
-  - `backend/core/ingestion/infrastructure/ingestion_feedback.py`
+  - `backend/ingestion/infrastructure/ingestion_feedback.py`
     - 責務:
       処理全体のオーケストレーション、入力検証、チャンク選別、本文組み立て、LLM 応答検証
     - 含める要素:

@@ -199,8 +199,8 @@ test("ImplFlow reviews only changed test and implementation files", async () => 
     targetTestCases: ["TC-01"],
   } as any;
 
-  await (flow as any).runTestReview(orchestrator, plan, "backend/core/ingestion/infrastructure");
-  await (flow as any).runImplReview(orchestrator, plan, ["/tmp/criteria.md"], "backend/core/ingestion/infrastructure");
+  await (flow as any).runTestReview(orchestrator, plan, "backend/ingestion/infrastructure");
+  await (flow as any).runImplReview(orchestrator, plan, ["/tmp/criteria.md"], "backend/ingestion/infrastructure");
 
   assert.deepEqual(calls[0].targetFiles, [changedTestFile]);
   assert.deepEqual(await calls[0].rescanFiles(), [changedTestFile]);

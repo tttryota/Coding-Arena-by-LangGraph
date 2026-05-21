@@ -13,15 +13,12 @@ Obsidian × RAG × LangGraph 理解度チェックシステム。
 - LangGraphのステートは SessionState を基本とする
 
 # ディレクトリ規約
-- backend/core/            汎用基盤（ingestion, vectordb, llm）
-  - core/{機能}/domain/        純粋ロジック（I/Oなし）
-  - core/{機能}/infrastructure/ 外部システムアダプター
-- backend/domain/          ドメインロジック（roadmap, quiz）
-- backend/application/     ユースケース
-- backend/infrastructure/  外部接続（RDB, config, logging）
-- backend/presentation/    API層（FastAPIエンドポイント）
-- frontend/src/            Reactコンポーネント
+- backend/{機能}/infrastructure/  機能モジュール（Protocol DI で外部分離）
+- backend/{機能}/domain/          純粋ロジック（I/Oなし、現在は chunk_splitter のみ）
+- backend/infrastructure/         横断基盤（RDB, config, logging）
+- frontend/src/                   Reactコンポーネント
 - テスト: コロケーション方式（ソースと同ディレクトリに test_*.py）
+- ※ application/ presentation/ は必要になった時点で導入
 
 # コーディング規約
 - Python: ruff でフォーマット・リント

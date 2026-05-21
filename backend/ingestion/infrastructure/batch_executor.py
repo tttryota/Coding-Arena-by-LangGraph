@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Final
 
 import structlog
 
-from core.ingestion.infrastructure.batch_scheduler_types import (
+from ingestion.infrastructure.batch_scheduler_types import (
     BatchRunStatus,
     BatchRunSummary,
     BatchSchedulerConfigError,
@@ -27,10 +27,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from types import TracebackType
 
-    from core.ingestion.domain.chunk_splitter import ChunkSplitResult
-    from core.ingestion.infrastructure.embedder_types import ChunkEmbeddingResult
-    from core.ingestion.infrastructure.file_diff_detector import FileDiffResult
-    from core.ingestion.infrastructure.tagger import ChunkTaggingResult
+    from ingestion.domain.chunk_splitter import ChunkSplitResult
+    from ingestion.infrastructure.embedder_types import ChunkEmbeddingResult
+    from ingestion.infrastructure.file_diff_detector import FileDiffResult
+    from ingestion.infrastructure.tagger import ChunkTaggingResult
 
 logger = structlog.get_logger(__name__)
 

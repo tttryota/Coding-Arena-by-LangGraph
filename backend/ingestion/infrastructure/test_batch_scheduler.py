@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 from structlog.testing import capture_logs
 
-from core.ingestion.domain.chunk_splitter import ChunkSplitResult
-from core.ingestion.infrastructure.batch_executor import (
+from ingestion.domain.chunk_splitter import ChunkSplitResult
+from ingestion.infrastructure.batch_executor import (
     BatchExecutionConfig,
     run_once,
 )
-from core.ingestion.infrastructure.batch_scheduler_types import (
+from ingestion.infrastructure.batch_scheduler_types import (
     BatchRunStatus,
     BatchRunSummary,
     BatchSchedulerConfigError,
@@ -20,17 +20,17 @@ from core.ingestion.infrastructure.batch_scheduler_types import (
     ChunkStoreUpsertInput,
     ChunkStoreUpsertResult,
 )
-from core.ingestion.infrastructure.embedder_types import (
+from ingestion.infrastructure.embedder_types import (
     ChunkEmbeddingResult,
     EmbeddingModelCallError,
 )
-from core.ingestion.infrastructure.tagger import ChunkTaggingResult
+from ingestion.infrastructure.tagger import ChunkTaggingResult
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
     from pathlib import Path
 
-    from core.ingestion.infrastructure.file_diff_detector import FileDiffResult
+    from ingestion.infrastructure.file_diff_detector import FileDiffResult
 
 _TARGET_PATH = "/vault/study"
 

@@ -6,8 +6,8 @@ from uuid import UUID
 import pytest
 from structlog.testing import capture_logs
 
-from core.ingestion.infrastructure.ingestion_feedback import generate_for_file
-from core.ingestion.infrastructure.ingestion_feedback_types import (
+from ingestion.infrastructure.ingestion_feedback import generate_for_file
+from ingestion.infrastructure.ingestion_feedback_types import (
     IngestionFeedbackChunkInput,
     IngestionFeedbackGenerateInput,
     IngestionFeedbackGenerateResult,

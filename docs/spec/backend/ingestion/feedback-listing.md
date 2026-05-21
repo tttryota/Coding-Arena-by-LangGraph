@@ -491,10 +491,10 @@ status: ready
 - 概算メモ:
   DTO・Protocol・例外型を `feedback_listing_types.py` に分離し、`list_feedbacks` / `mark_feedback_as_read` のオーケストレーションと入力バリデーションを `feedback_listing.py` にまとめる。既存 `ingestion_feedback.py` / `ingestion_feedback_types.py` は生成系の責務に限定し、一覧・既読化は新規モジュールへ切り出す。合計約 200 行で、1 ファイルあたり 130 行以内に収まる。
 - モジュール一覧:
-  - `backend/core/ingestion/infrastructure/feedback_listing_types.py`
+  - `backend/ingestion/infrastructure/feedback_listing_types.py`
     - 責務: DTO、Protocol、例外型の定義
     - 含める要素: `FeedbackListingQuery`、`FeedbackListingResult`、`FeedbackListItem`、`FeedbackListingReader`、`FeedbackReadWriter`、`FeedbackListingInputError`、`FeedbackListingNotFoundError`、`FeedbackListingStoreError`
-  - `backend/core/ingestion/infrastructure/feedback_listing.py`
+  - `backend/ingestion/infrastructure/feedback_listing.py`
     - 責務: 処理全体のオーケストレーション、入力バリデーション、ソート
     - 含める要素: `list_feedbacks`、`mark_feedback_as_read`、共通日時文字列契約のバリデーション、instant 比較、structlog 出力
 

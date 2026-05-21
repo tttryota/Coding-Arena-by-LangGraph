@@ -38,7 +38,7 @@ ingestion-feedback を TDD で実装する
 
 ## 設計判断
 - 依存モジュールはProtocol DIで注入（IngestionFeedbackLlmClient, RoadmapItemReader, IngestionFeedbackWriter）
-- 全ファイルを backend/core/ingestion/infrastructure/ に配置（harness sourceLayout準拠）
+- 全ファイルを backend/ingestion/infrastructure/ に配置（harness sourceLayout準拠）
 - 3モジュール構成: ingestion_feedback_types.py, ingestion_feedback_domain.py, ingestion_feedback.py
 - titleは固定文字列、bodyは決定的組み立て（LLMの揺らぎをbody内容だけに閉じ込める）
 - 再取り込み時はinsert-only（旧レコード保持で履歴追跡可能）

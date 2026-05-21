@@ -9,11 +9,11 @@ from uuid import UUID
 import pytest
 from structlog.testing import capture_logs
 
-from core.ingestion.infrastructure.feedback_listing import (
+from ingestion.infrastructure.feedback_listing import (
     list_feedbacks,
     mark_feedback_as_read,
 )
-from core.ingestion.infrastructure.feedback_listing_types import (
+from ingestion.infrastructure.feedback_listing_types import (
     FeedbackListingInputError,
     FeedbackListingNotFoundError,
     FeedbackListingQuery,

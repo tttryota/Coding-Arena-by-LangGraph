@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 import pytest
 
-from core.ingestion.infrastructure.file_diff_detector import (
+from ingestion.infrastructure.file_diff_detector import (
     FileDiffResult,
     InvalidTargetPathError,
     ScanStatePersistenceError,

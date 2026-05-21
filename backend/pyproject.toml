@@ -84,5 +84,6 @@ mypy_path = "."
 plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
-testpaths = ["core", "domain", "application", "infrastructure", "presentation"]
+testpaths = ["."]
+norecursedirs = ["shared", ".venv", "__pycache__", ".mypy_cache", ".ruff_cache", ".git", "data", "docs"]
 pythonpath = ["."]

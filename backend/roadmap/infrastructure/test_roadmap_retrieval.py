@@ -21,7 +21,6 @@ from shared.log_assertions import (
     assert_single_log_event as _assert_single_log_event,
 )
 
-
 _REQUEST_ROADMAP_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 _RETURNED_ROADMAP_ID = UUID("abababab-abab-abab-abab-abababababab")
 _EMPTY_ROADMAP_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
@@ -732,8 +731,8 @@ def test_tc_14_list_roadmaps_returns_result_when_sibling_order_has_gaps() -> Non
                 roadmap_id=_ORDER_GAP_ROADMAP_ID,
                 topic="Search",
                 items=_order_gap_items_unsorted(),
-            )
-        ]
+            ),
+        ],
     )
 
     result = list_roadmaps(reader=reader)
@@ -744,7 +743,7 @@ def test_tc_14_list_roadmaps_returns_result_when_sibling_order_has_gaps() -> Non
                 roadmap_id=_ORDER_GAP_ROADMAP_ID,
                 topic="Search",
                 overall_score=50,
-            )
+            ),
         ],
         total_count=1,
     )

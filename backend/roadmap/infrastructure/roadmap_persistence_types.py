@@ -10,11 +10,15 @@ if TYPE_CHECKING:
 RoadmapLevel = Literal["major", "middle", "detail"]
 
 
-class RoadmapPersistenceInputError(Exception):
+class RoadmapPersistenceError(Exception):
     pass
 
 
-class RoadmapPersistenceWriteError(Exception):
+class RoadmapPersistenceInputError(RoadmapPersistenceError):
+    pass
+
+
+class RoadmapPersistenceWriteError(RoadmapPersistenceError):
     pass
 
 
@@ -71,6 +75,7 @@ __all__ = [
     "RoadmapIdGenerator",
     "RoadmapItemInput",
     "RoadmapLevel",
+    "RoadmapPersistenceError",
     "RoadmapPersistenceInputError",
     "RoadmapPersistenceWriteError",
     "RoadmapPersistenceWriter",

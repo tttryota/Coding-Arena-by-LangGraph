@@ -1,6 +1,6 @@
 ---
 feature: roadmap/roadmap-retrieval
-status: draft
+status: ready
 ---
 
 # 概要

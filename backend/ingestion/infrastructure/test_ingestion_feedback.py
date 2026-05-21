@@ -22,6 +22,12 @@ from ingestion.infrastructure.ingestion_feedback_types import (
     RoadmapCandidate,
     StoredIngestionFeedback,
 )
+from shared.log_assertions import (
+    assert_no_log_event as _assert_no_log_event,
+)
+from shared.log_assertions import (
+    assert_single_log_event as _shared_assert_single_log_event,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -324,11 +330,7 @@ def _assert_created_result_matches_persisted_record(
     assert result.created_feedback.read_at == persisted_record.read_at
 
 
-def _find_log_events(
-    log_output: list[MutableMapping[str, Any]],
-    event_name: str,
-) -> list[MutableMapping[str, Any]]:
-    return [entry for entry in log_output if entry.get("event") == event_name]
+_FEEDBACK_ID_COERCE = frozenset({"feedback_id"})
 
 
 def _assert_single_log_event_includes(
@@ -336,26 +338,12 @@ def _assert_single_log_event_includes(
     event_name: str,
     expected_fields: dict[str, object],
 ) -> MutableMapping[str, Any]:
-    events = _find_log_events(log_output, event_name)
-    assert len(events) == 1
-    event = events[0]
-
-    for field_name, expected_value in expected_fields.items():
-        assert field_name in event
-        actual_value = event[field_name]
-        if field_name == "feedback_id" and actual_value is not None:
-            assert str(actual_value) == expected_value
-            continue
-        assert actual_value == expected_value
-
-    return event
-
-
-def _assert_no_log_event(
-    log_output: list[MutableMapping[str, Any]],
-    event_name: str,
-) -> None:
-    assert _find_log_events(log_output, event_name) == []
+    return _shared_assert_single_log_event(
+        log_output,
+        event_name,
+        expected_fields,
+        str_coerce_fields=_FEEDBACK_ID_COERCE,
+    )
 
 
 class TestIngestionFeedbackGeneration:

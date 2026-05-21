@@ -21,9 +21,15 @@ from ingestion.infrastructure.feedback_listing_types import (
     FeedbackListingStoreError,
     FeedbackListItem,
 )
+from shared.log_assertions import (
+    assert_no_log_event as _assert_no_log_event,
+)
+from shared.log_assertions import (
+    assert_single_log_event as _assert_single_log_event_includes,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import Callable
 
 _ROADMAP_ID = UUID("11111111-1111-1111-1111-111111111111")
 _SECOND_ROADMAP_ID = UUID("22222222-2222-2222-2222-222222222222")
@@ -250,56 +256,6 @@ def _make_item(
 
 def _make_result(*items: FeedbackListItem) -> FeedbackListingResult:
     return FeedbackListingResult(items=list(items), total_count=len(items))
-
-
-def _find_log_events(
-    log_output: list[MutableMapping[str, Any]],
-    event_name: str,
-) -> list[MutableMapping[str, Any]]:
-    return [entry for entry in log_output if entry.get("event") == event_name]
-
-
-def _assert_single_log_event_includes(
-    log_output: list[MutableMapping[str, Any]],
-    event_name: str,
-    expected_fields: dict[str, object],
-) -> MutableMapping[str, Any]:
-    events = _find_log_events(log_output, event_name)
-    assert len(events) == 1
-    event = events[0]
-
-    for field_name, expected_value in expected_fields.items():
-        assert field_name in event
-        actual_value = event[field_name]
-        if field_name == "feedback_id":
-            _assert_feedback_id_log_field(
-                actual_value=actual_value,
-                expected_value=expected_value,
-            )
-            continue
-        if isinstance(expected_value, UUID):
-            assert actual_value == expected_value
-            continue
-        assert actual_value == expected_value
-
-    return event
-
-
-def _assert_feedback_id_log_field(
-    *,
-    actual_value: object,
-    expected_value: object,
-) -> None:
-    assert isinstance(expected_value, str)
-    assert isinstance(actual_value, str)
-    assert actual_value == expected_value
-
-
-def _assert_no_log_event(
-    log_output: list[MutableMapping[str, Any]],
-    event_name: str,
-) -> None:
-    assert _find_log_events(log_output, event_name) == []
 
 
 def _raise_on_current_time_lookup(*args: object, **kwargs: object) -> object:

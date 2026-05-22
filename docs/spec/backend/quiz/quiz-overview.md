@@ -155,13 +155,14 @@ progress_update →（conditional: roadmap_item_level）
 - `deepdive`: 理解が浅い部分がある。深掘り確認ポイントを `confirmation_points` の末尾へ追記しつつ、`current_point_index` は回答済みポイントを消化した次位置へ 1 進める。したがって既存の未消化確認ポイントが残っていればそれを先に出題し、末尾まで到達した時点で追記済み deepdive ポイントを出題する
 - `complete`: 全確認ポイント完了、または20問到達で収束。`current_point_index == len(confirmation_points)` を完了境界とする
 
-**20問収束ルール:** `total_questions_asked == 20` に到達した評価完了状態では、`answer_evaluation` は `deepdive` を選択せず `next` または `complete` に収束させる。このとき deepdive 用 `confirmation_points` 追記を有効状態として扱わない。これは `answer_evaluation` と downstream ノードの workflow 契約であり、`SessionState` TypedDict 自体の runtime enforcement はスコープ外とする。
+**20問収束ルール:** `total_questions_asked >= 20` の評価では、20問目の評価時点から `answer_evaluation` は `deepdive` を有効状態として扱わず `next` または `complete` に収束させる。このとき deepdive 用 `confirmation_points` 追記も有効状態として扱わない。これは `answer_evaluation` と downstream ノードの workflow 契約であり、`SessionState` TypedDict 自体の runtime enforcement はスコープ外とする。
 
 ## SessionState（LangGraph ステート定義）
 
 LangGraphワークフローの全ノードが共有するインメモリステート。`backend/quiz/domain/session_state.py` に TypedDict として実装する。
 DBエンティティ（QuizSession, QuizAnswer）への永続化はインフラ層の責務であり、SessionStateはグラフ実行中の状態のみを表す。
 deliverable は single partial TypedDict の `SessionState` と、complete record の `ConfirmationPoint` / `QuizAnswerRecord` のみとし、条件付き状態組み合わせは workflow 契約として別途運用する。
+`SessionState` / `ConfirmationPoint` / `QuizAnswerRecord` の authoritative contract は `session-state.md` と `backend/quiz/domain/session_state.py` とし、本節はノード間の責務分担を読むための要約に留める。
 
 ### フィールド一覧
 
@@ -214,7 +215,7 @@ SessionState内の問答記録。QuizAnswerテーブルへの永続化はイン�
 | C2 問題セット設計 | roadmap_item_*, is_resumed | confirmation_points, current_point_index |
 | C3 出題 | confirmation_points, current_point_index, answers | current_question_text, current_answer_type, total_questions_asked |
 | 入力分類 | user_input | input_type |
-| C4 回答評価 | current_question_text, user_input, input_source, input_type, answers, total_questions_asked | input_type（form 経路では `"answer"` を補完）, next_action, answers（追記）, confirmation_points（深掘り時は末尾追記）, current_point_index |
+| C4 回答評価 | current_question_text, current_answer_type, user_input, input_source, input_type, confirmation_points, current_point_index, answers, total_questions_asked | input_type（form 経路では `"answer"` を補完）, next_action, answers（追記）, confirmation_points（深掘り時は末尾追記）, current_point_index |
 | C6 解説生成 | current_question_text, answers | （ステート変更なし。レスポンスのみ返却） |
 | C7/C8 完了・進捗反映 | answers, roadmap_item_id | （DB書き込み。ステート変更なし） |
 | C9 まとめテスト記録 | answers, roadmap_item_level | （DB書き込み。ステート変更なし） |

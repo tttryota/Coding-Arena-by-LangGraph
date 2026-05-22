@@ -7,6 +7,7 @@ status: ready
 
 - LangGraph 上でクイズ機能を構成する全ノードが、同一のインメモリ共有ステートを安全に読み書きできるようにする。
 - 既存の概要資料ではフィールド名と役割が要約されているため、本仕様では `backend/quiz/domain/session_state.py` に置く TypedDict 契約を、他資料なしで実装できる粒度まで具体化する。
+- `SessionState` / `ConfirmationPoint` / `QuizAnswerRecord` の共有契約は本仕様と `backend/quiz/domain/session_state.py` を authoritative source とし、`quiz-overview.md` や各ノード仕様はこの契約を参照して利用する。
 - 利用者は `backend/quiz/application/` 配下の LangGraph ノード実装、グラフ組み立て処理、型検査を行うテストコードである。
 - 前提条件:
   - 実装はドメイン層に置き、I/O・DB・LLM 呼び出しを含めない。
@@ -306,7 +307,7 @@ state: SessionState = {
      - `next_action="next"` のとき、`current_point_index` は 1 進む。
      - `next_action="deepdive"` のとき、生成した deepdive 確認ポイントを `confirmation_points` の末尾へ追記し、`current_point_index` は 1 進む。したがって既存の未消化確認ポイントが残っていればそれを先に出題し、残っていなければ末尾追記した deepdive ポイントが次問になる。
      - `next_action="complete"` のとき、`current_point_index == len(confirmation_points)` を満たす完了境界へ更新する。
-     - `total_questions_asked == 20` に到達した評価完了状態では、`next_action` は `"next"` または `"complete"` に限る。`"deepdive"` を有効状態として扱わず、その評価で deepdive 用 `confirmation_points` を新規追記しない。
+     - `total_questions_asked >= 20` の評価完了状態では、20問目の評価時点から `next_action` は `"next"` または `"complete"` に限る。`"deepdive"` を有効状態として扱わず、その評価で deepdive 用 `confirmation_points` を新規追記しない。
 
 8. スコープ境界:
    - 条件:
@@ -359,14 +360,14 @@ state: SessionState = {
   - 理由:
     - `form` は入力分類を経由しない一方、評価完了後の共有ステートでは回答として正規化された状態を downstream が前提にできる必要があるため。
 - ケース:
-  - `total_questions_asked` が `20` に到達した直後の評価完了状態を downstream が判断したい。
+  - `total_questions_asked >= 20` の評価完了状態を downstream が判断したい。
   - 振る舞い:
     - 有効状態として扱う `next_action` は `"next"` または `"complete"` のみとする。
     - その評価で deepdive 用 `confirmation_points` を新規追記した状態は有効状態として扱わない。
   - 理由:
-    - `quiz-overview.md` の 20問収束ルールに従い、20問到達後は追加 deepdive ではなく既存ポイント消化または完了へ収束させる必要があるため。
+    - `quiz-overview.md` の 20問収束ルールに従い、20問目の評価時点から追加 deepdive ではなく既存ポイント消化または完了へ収束させる必要があるため。
 - ルール間の相互作用:
-  複数ルールが同時に適用される場合は、`段階的初期化` を最優先とする。つまり、未実行ノードが責務を持つキーは未設定でよい。一方で、いったん `confirmation_points` や `answers` に追加される要素は `サブ型の構造` ルールに従い完全レコードでなければならない。`input_source="form"` の `input_type` は `C4` 完了まで未設定を許容するが、`next_action` や `answers` が更新された評価完了状態では `"answer"` を保持する。完了境界では `current_point_index == len(confirmation_points)` を許容するが、その時点でも既に設定済みの `answers` や `total_questions_asked` は保持される。`total_questions_asked == 20` の評価完了状態では、上記よりも 20問収束ルールを優先し、`deepdive` と deepdive 用追記を有効状態として扱わない。
+  複数ルールが同時に適用される場合は、`段階的初期化` を最優先とする。つまり、未実行ノードが責務を持つキーは未設定でよい。一方で、いったん `confirmation_points` や `answers` に追加される要素は `サブ型の構造` ルールに従い完全レコードでなければならない。`input_source="form"` の `input_type` は `C4` 完了まで未設定を許容するが、`next_action` や `answers` が更新された評価完了状態では `"answer"` を保持する。完了境界では `current_point_index == len(confirmation_points)` を許容するが、その時点でも既に設定済みの `answers` や `total_questions_asked` は保持される。`total_questions_asked >= 20` の評価完了状態では、上記よりも 20問収束ルールを優先し、20問目の評価時点から `deepdive` と deepdive 用追記を有効状態として扱わない。
 
 # 非機能・制約
 

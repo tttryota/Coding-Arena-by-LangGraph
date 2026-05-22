@@ -28,7 +28,7 @@ class EvaluationOutput:
 
 
 class AnswerEvaluationLlmClient(Protocol):
-    def evaluate_answer(
+    def evaluate_answer(  # noqa: PLR0913
         self,
         question_text: str,
         confirmation_point_content: str,

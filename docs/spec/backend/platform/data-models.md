@@ -71,7 +71,7 @@ approved_at: 2026-05-21
 |--------|-----|------|
 | id | UUID | 主キー |
 | roadmap_item_id | UUID | FK: RoadmapItem。出題対象 |
-| status | string | "in_progress" / "completed" / "abandoned" |
+| status | string | "in_progress" / "completed" |
 | started_at | datetime | 開始日時 |
 | completed_at | datetime / null | 終了日時 |
 

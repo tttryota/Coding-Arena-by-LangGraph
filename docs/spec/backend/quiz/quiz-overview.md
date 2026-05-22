@@ -108,7 +108,7 @@ C9: まとめテスト結果記録（中枠・大枠の場合のみ）
 session_init → question_set_design → question_delivery → __interrupt__
 
 __interrupt__（ユーザー入力待ち）→ input_routing（conditional: input_source）
-  ├── "form"  → answer_evaluation（回答フォームからの送信は常に回答扱い）
+  ├── "form"  → answer_evaluation（回答フォームからの送信は input_classification を経由せず回答として評価し、C4 完了時までに input_type="answer" を確定）
   └── "chat"  → input_classification
 
 input_classification →（conditional: input_type）
@@ -118,7 +118,7 @@ input_classification →（conditional: input_type）
 
 answer_evaluation →（conditional: next_action）
   ├── "next"      → question_delivery → __interrupt__
-  ├── "deepdive"  → question_delivery → __interrupt__（confirmation_points追加後）
+  ├── "deepdive"  → question_delivery → __interrupt__（confirmation_points を末尾追記し、current_point_index を次の未消化位置へ更新後）
   └── "complete"  → progress_update
 
 progress_update →（conditional: roadmap_item_level）
@@ -138,19 +138,22 @@ progress_update →（conditional: roadmap_item_level）
 
 分類はLLMが `current_question_text` と `user_input` のコンテキストから判断する。曖昧な場合は answer として扱う（ユーザーが意図的に解説を求めない限り問答を進める）。
 
+`input_classification` は `input_source="chat"` のときだけ実行される。`input_source="form"` は回答専用経路のため入力分類を経由せず `answer_evaluation` に直行し、その時点では `input_type` 未設定を許容する。ただし `answer_evaluation` の完了時には `input_type="answer"` を共有ステートへ保持し、`next_action` や `answers` を読む downstream は評価完了後の状態であれば `input_type` 必須前提で参照できる。この条件付き組み合わせは workflow 契約であり、`SessionState` TypedDict 自体は phase別 TypedDict / Union / runtime validator を提供しない。
+
 ### conditional edge の判断基準
 
 **answer_evaluation → next_action:**
-- `next`: 理解度が十分。current_point_indexをインクリメントして次の確認ポイントへ
-- `deepdive`: 理解が浅い部分がある。confirmation_pointsに深掘りポイントを追加
-- `complete`: 全確認ポイント完了、または20問到達で収束
+- `next`: 理解度が十分。回答済みの確認ポイントを消化し、`current_point_index` を 1 進めて次の未消化確認ポイントへ移る
+- `deepdive`: 理解が浅い部分がある。深掘り確認ポイントを `confirmation_points` の末尾へ追記しつつ、`current_point_index` は回答済みポイントを消化した次位置へ 1 進める。したがって既存の未消化確認ポイントが残っていればそれを先に出題し、末尾まで到達した時点で追記済み deepdive ポイントを出題する
+- `complete`: 全確認ポイント完了、または20問到達で収束。`current_point_index == len(confirmation_points)` を完了境界とする
 
-**20問収束ルール:** total_questions_askedが20に達した場合、answer_evaluationはdeepdiveを選択せずnextまたはcompleteに収束させる。
+**20問収束ルール:** `total_questions_asked == 20` に到達した評価完了状態では、`answer_evaluation` は `deepdive` を選択せず `next` または `complete` に収束させる。このとき deepdive 用 `confirmation_points` 追記を有効状態として扱わない。これは `answer_evaluation` と downstream ノードの workflow 契約であり、`SessionState` TypedDict 自体の runtime enforcement はスコープ外とする。
 
 ## SessionState（LangGraph ステート定義）
 
-LangGraphワークフローの全ノードが共有するインメモリステート。TypedDictとして実装する。
+LangGraphワークフローの全ノードが共有するインメモリステート。`backend/quiz/domain/session_state.py` に TypedDict として実装する。
 DBエンティティ（QuizSession, QuizAnswer）への永続化はインフラ層の責務であり、SessionStateはグラフ実行中の状態のみを表す。
+deliverable は single partial TypedDict の `SessionState` と、complete record の `ConfirmationPoint` / `QuizAnswerRecord` のみとし、条件付き状態組み合わせは workflow 契約として別途運用する。
 
 ### フィールド一覧
 
@@ -163,12 +166,12 @@ DBエンティティ（QuizSession, QuizAnswer）への永続化はインフラ�
 | roadmap_item_description | str | C1 | LLMコンテキスト用 |
 | is_resumed | bool | C1 | 再開セッションか（ADR-005） |
 | confirmation_points | list[ConfirmationPoint] | C2 | 確認ポイントリスト。深掘り時にC4が追加 |
-| current_point_index | int | C2 | 次に出題する確認ポイントのインデックス |
+| current_point_index | int | C2 | 次に出題する未消化確認ポイントのインデックス。C4 は現在問を消化した次位置へ更新する |
 | current_question_text | str | C3 | 出題中の問題文 |
 | current_answer_type | "textarea" / "code" | C3 | 回答形式 |
 | user_input | str | 外部 | ユーザーの最新入力テキスト |
 | input_source | "form" / "chat" | 外部 | 入力元。formは常にanswer扱い、chatは入力分類ノードへ |
-| input_type | "answer" / "question" / "explanation_request" | 入力分類 | ユーザー入力の分類結果 |
+| input_type | "answer" / "question" / "explanation_request" | 入力分類 / C4 | ユーザー入力の分類結果。chat は入力分類ノード、form は C4 完了時に `"answer"` を保持 |
 | next_action | "next" / "deepdive" / "complete" | C4 | 評価後のルーティング判断 |
 | answers | list[QuizAnswerRecord] | C4 | 全問答記録（追記のみ） |
 | total_questions_asked | int | C3 | 出題総数（20問で収束） |
@@ -203,7 +206,7 @@ SessionState内の問答記録。QuizAnswerテーブルへの永続化はイン�
 | C2 問題セット設計 | roadmap_item_*, is_resumed | confirmation_points, current_point_index |
 | C3 出題 | confirmation_points, current_point_index, answers | current_question_text, current_answer_type, total_questions_asked |
 | 入力分類 | user_input | input_type |
-| C4 回答評価 | current_question_text, user_input, answers, total_questions_asked | next_action, answers（追記）, confirmation_points（深掘り時追記）, current_point_index |
+| C4 回答評価 | current_question_text, user_input, input_source, input_type, answers, total_questions_asked | input_type（form 経路では `"answer"` を補完）, next_action, answers（追記）, confirmation_points（深掘り時は末尾追記）, current_point_index |
 | C6 解説生成 | current_question_text, answers | （ステート変更なし。レスポンスのみ返却） |
 | C7/C8 完了・進捗反映 | answers, roadmap_item_id | （DB書き込み。ステート変更なし） |
 | C9 まとめテスト記録 | answers, roadmap_item_level | （DB書き込み。ステート変更なし） |

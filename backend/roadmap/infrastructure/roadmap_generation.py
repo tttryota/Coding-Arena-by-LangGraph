@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import structlog
 
-from roadmap.infrastructure.roadmap_generation_types import (
+from roadmap.domain.roadmap_generation_types import (
     RoadmapGenerationAccepted,
     RoadmapGenerationClock,
     RoadmapGenerationFailureCode,
@@ -26,7 +26,7 @@ from roadmap.infrastructure.roadmap_generation_types import (
     ValidatedRoadmapGeneration,
     ValidatedRoadmapGenerationItem,
 )
-from roadmap.infrastructure.roadmap_persistence_types import (
+from roadmap.domain.roadmap_persistence_types import (
     RoadmapItemInput,
     RoadmapPersistenceInputError,
     RoadmapPersistenceWriteError,

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from roadmap.infrastructure.roadmap_persistence_types import (
+from roadmap.domain.roadmap_persistence_types import (
     FlatRoadmapItem,
     RoadmapIdGenerator,
     RoadmapItemInput,

@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal, Protocol, TypedDict
+from uuid import UUID
 
-from roadmap.infrastructure.roadmap_persistence_types import (
+from roadmap.domain.roadmap_persistence_types import (
     RoadmapItemInput,
     RoadmapSaveInput,
     RoadmapSaveResult,
 )
-
-from uuid import UUID
 
 RoadmapGenerationFailureCode = Literal[
     "schedule_failed",

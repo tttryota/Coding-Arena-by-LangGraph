@@ -6,8 +6,7 @@ from uuid import UUID
 import pytest
 from structlog.testing import capture_logs
 
-from roadmap.infrastructure.roadmap_retrieval import get_roadmap, list_roadmaps
-from roadmap.infrastructure.roadmap_retrieval_types import (
+from roadmap.domain.roadmap_retrieval_types import (
     RoadmapItemRecord,
     RoadmapListItem,
     RoadmapListResult,
@@ -17,6 +16,7 @@ from roadmap.infrastructure.roadmap_retrieval_types import (
     RoadmapTree,
     RoadmapTreeNode,
 )
+from roadmap.infrastructure.roadmap_retrieval import get_roadmap, list_roadmaps
 from shared.log_assertions import (
     assert_single_log_event as _assert_single_log_event,
 )

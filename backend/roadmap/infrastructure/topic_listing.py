@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unicodedata
 
-from roadmap.infrastructure.topic_listing_types import (
+from roadmap.domain.topic_listing_types import (
     NoteTopicReader,
     TopicCandidate,
     TopicListingEmptyTopicNameError,

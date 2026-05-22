@@ -10,7 +10,8 @@ from backend.roadmap.infrastructure.roadmap_item_crud import (  # type: ignore[i
     delete_roadmap_item,
     move_roadmap_item,
 )
-from backend.roadmap.infrastructure.roadmap_item_crud_types import (  # type: ignore[import-not-found]
+
+from roadmap.domain.roadmap_item_crud_types import (
     RoadmapItemAddInput,
     RoadmapItemAddResult,
     RoadmapItemCrudInputError,
@@ -1864,7 +1865,7 @@ def test_tc_24_snapshot_lookup_inconsistency_raises_store_error_across_entrypoin
         )
 
     assert str(exc_info.value) == _snapshot_missing_message(
-        "88888888-8888-8888-8888-888888888888"
+        "88888888-8888-8888-8888-888888888888",
     )
     assert add_store.find_roadmap_calls == [_ROADMAP_ID]
     assert add_store.find_item_calls == [missing_parent_id]
@@ -1920,7 +1921,7 @@ def test_tc_24_snapshot_lookup_inconsistency_raises_store_error_across_entrypoin
         )
 
     assert str(exc_info.value) == _snapshot_missing_message(
-        "77777777-7777-7777-7777-777777777777"
+        "77777777-7777-7777-7777-777777777777",
     )
     assert move_store.find_roadmap_calls == [_ROADMAP_ID]
     assert move_store.find_item_calls == [missing_move_item_id]
@@ -1952,7 +1953,7 @@ def test_tc_24_snapshot_lookup_inconsistency_raises_store_error_across_entrypoin
         )
 
     assert str(exc_info.value) == _snapshot_missing_message(
-        "66666666-6666-6666-6666-666666666666"
+        "66666666-6666-6666-6666-666666666666",
     )
     assert delete_store.find_roadmap_calls == [_ROADMAP_ID]
     assert delete_store.find_item_calls == [missing_delete_item_id]

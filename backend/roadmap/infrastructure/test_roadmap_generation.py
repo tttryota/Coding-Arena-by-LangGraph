@@ -18,19 +18,7 @@ if TYPE_CHECKING:
 import pytest
 from structlog.testing import capture_logs
 
-from roadmap.infrastructure.roadmap_generation import (
-    EVENT_ACCEPTED,
-    EVENT_INPUT_REJECTED,
-    EVENT_JOB_COMPLETED,
-    EVENT_JOB_FAILED,
-    EVENT_JOB_STARTED,
-    EVENT_LLM_RETRY,
-    EVENT_SCHEDULE_FAILED,
-    _run_roadmap_generation_job,
-    get_roadmap_generation_job,
-    request_roadmap_generation,
-)
-from roadmap.infrastructure.roadmap_generation_types import (
+from roadmap.domain.roadmap_generation_types import (
     RoadmapGenerationAccepted,
     RoadmapGenerationCompletedStatus,
     RoadmapGenerationError,
@@ -39,7 +27,6 @@ from roadmap.infrastructure.roadmap_generation_types import (
     RoadmapGenerationInputError,
     RoadmapGenerationJobNotFoundError,
     RoadmapGenerationJobStatus,
-    RoadmapGenerationJobStatusStore,
     RoadmapGenerationJobStoreError,
     RoadmapGenerationJsonParseError,
     RoadmapGenerationLlmError,
@@ -51,12 +38,24 @@ from roadmap.infrastructure.roadmap_generation_types import (
     ValidatedRoadmapGeneration,
     ValidatedRoadmapGenerationItem,
 )
-from roadmap.infrastructure.roadmap_persistence_types import (
+from roadmap.domain.roadmap_persistence_types import (
     RoadmapItemInput,
     RoadmapPersistenceInputError,
     RoadmapPersistenceWriteError,
     RoadmapSaveInput,
     RoadmapSaveResult,
+)
+from roadmap.infrastructure.roadmap_generation import (
+    EVENT_ACCEPTED,
+    EVENT_INPUT_REJECTED,
+    EVENT_JOB_COMPLETED,
+    EVENT_JOB_FAILED,
+    EVENT_JOB_STARTED,
+    EVENT_LLM_RETRY,
+    EVENT_SCHEDULE_FAILED,
+    _run_roadmap_generation_job,
+    get_roadmap_generation_job,
+    request_roadmap_generation,
 )
 from shared.log_assertions import assert_no_log_event as _assert_no_log_event
 from shared.log_assertions import assert_single_log_event as _assert_single_log_event

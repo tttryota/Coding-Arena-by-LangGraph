@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from roadmap.infrastructure.roadmap_retrieval_types import (
+from roadmap.domain.roadmap_retrieval_types import (
     RoadmapItemRecord,
     RoadmapListItem,
     RoadmapListResult,

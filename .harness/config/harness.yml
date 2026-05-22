@@ -62,9 +62,9 @@ profiles:
           model: claude-opus-4-6
           skills: [harness-backend-review-quality]
     sourceLayout:
-      sourceDir: "backend/{{category}}/infrastructure"
-      testDir: "backend/{{category}}/infrastructure"
-      scopePattern: "backend/{{category}}/infrastructure/*"
+      sourceDir: "backend/{{category}}"
+      testDir: "backend/{{category}}"
+      scopePattern: "backend/{{category}}/*"
       additionalAllowedPrefixes: [".harness/reviews/", "backend/shared/"]
     designLayout:
       specDir: "docs/spec/backend/{{category}}"

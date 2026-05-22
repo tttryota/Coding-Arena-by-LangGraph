@@ -26,6 +26,7 @@ status: ready
     - 16 フィールドを定義する。
     - 各フィールドはキー名・値型・値集合を本仕様どおりに持つ。
     - 段階的初期化を許容するため、未設定フェーズのキーは未保持を許容する。
+    - C1 `session_init` は `session_id`、`roadmap_item_*`、`is_resumed` を初回設定し、再開時のみ `answers` を履歴復元で初回設定できる。
   - `ConfirmationPoint` TypedDict
     - 確認ポイント 1 件分の完全レコードを表す。
   - `QuizAnswerRecord` TypedDict
@@ -201,6 +202,8 @@ state: SessionState = {
    - 振る舞い:
      - `SessionState` は初期フェーズで未設定のキーを持たない部分状態を許容する。
      - キーが未設定でよいのは、そのキーを書き込む責務を持つノードがまだ実行されていない間だけとする。
+     - `C1` は `session_id`、`roadmap_item_id`、`roadmap_item_level`、`roadmap_item_title`、`roadmap_item_description`、`is_resumed` を初回設定し、再開時のみ `answers` を `QuizAnswer.question_number` 昇順の履歴から復元できる。
+     - `C1` が責務を持たない `confirmation_points`、`current_point_index`、`current_question_text`、`current_answer_type`、`user_input`、`input_source`、`input_type`、`next_action`、`total_questions_asked` は未設定のまま許容する。
      - `ConfirmationPoint` と `QuizAnswerRecord` はリストへ追加される時点で全必須フィールドを埋めた完全レコードとする。
 
 3. フィールド型の厳密性:
@@ -252,6 +255,9 @@ state: SessionState = {
 | `score` | `int` |
 | `feedback` | `str` |
 
+     - `QuizAnswerRecord.answer_text` は保存済み `QuizAnswer.answer_text` の raw 値をそのまま保持する。
+     - `answer_text` には trim・空白正規化・Unicode 正規化・改行変換・大小文字変換を適用しない。
+
 5. ノードごとの書き込み責務:
    - 条件:
      - 複数ノードが同一ステートを共有する。
@@ -266,6 +272,7 @@ state: SessionState = {
 | `roadmap_item_title` | `C1` セッション開始 |
 | `roadmap_item_description` | `C1` セッション開始 |
 | `is_resumed` | `C1` セッション開始 |
+| `answers` | `C1` セッション開始（再開時の履歴復元） / `C4` 回答評価 |
 | `confirmation_points` | `C2` 問題セット設計 |
 | `current_point_index` | `C2` 問題セット設計 |
 | `current_question_text` | `C3` 出題 |
@@ -274,11 +281,10 @@ state: SessionState = {
 | `input_source` | 外部入力受付 |
 | `input_type` | 入力分類（`chat`） / `C4` 回答評価（`form` で `"answer"` を正規化） |
 | `next_action` | `C4` 回答評価 |
-| `answers` | `C4` 回答評価 |
 | `total_questions_asked` | `C3` 出題 |
 
      - 追記・更新の扱いは以下に固定する。
-       - `answers` は追記のみとし、既存要素の上書き・削除は行わない。
+       - `answers` は再開時のみ `C1` が履歴復元で初期化できる。初期化後は `C4` の追記のみとし、既存要素の上書き・削除は行わない。
        - `confirmation_points` は `C2` の初期設定後、`C4` が深掘り時に末尾追記のみ行える。
        - `total_questions_asked` は `C3` が出題のたびに増やす。
 

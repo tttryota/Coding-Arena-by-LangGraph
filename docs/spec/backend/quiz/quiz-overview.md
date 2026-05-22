@@ -92,7 +92,7 @@ C9: まとめテスト結果記録（中枠・大枠の場合のみ）
 
 | ノード名 | 対応機能 | 責務 |
 |---|---|---|
-| session_init | C1 | QuizSession作成、RoadmapItem情報をステートに設定 |
+| session_init | C1 | 開始要求では `roadmap_item_id`、再開要求では `session_id` を受ける。QuizSession作成または再開判定を行い、`RoadmapItem.id` / `level` / `title` / `description` を取得して `session_id`、`roadmap_item_*`、`is_resumed` をステートへ設定する。再開時のみ `QuizAnswer` 履歴を `answers` に復元し、C1 責務外の state は未設定のまま許容する。開始/再開失敗時は `session-lifecycle.md` の異常系契約に従う |
 | question_set_design | C2 | 確認ポイントリストを設計 |
 | question_delivery | C3 | 確認ポイントから問題文を動的生成 |
 | input_classification | — | ユーザー入力を answer / question / explanation_request に分類 |
@@ -125,6 +125,14 @@ progress_update →（conditional: roadmap_item_level）
   ├── "middle" / "major"  → summary_test_record → END
   └── "detail"            → END
 ```
+
+### C1 `session_init` の状態初期化
+
+- 開始入力は `roadmap_item_id`、再開入力は `session_id` の最小 DTO とする
+- C1 は `RoadmapItem.id`、`RoadmapItem.level`、`RoadmapItem.title`、`RoadmapItem.description` を取得し、`SessionState` の `session_id`、`roadmap_item_id`、`roadmap_item_level`、`roadmap_item_title`、`roadmap_item_description`、`is_resumed` を初回設定する
+- 再開時のみ、`QuizAnswer` 履歴を `QuizAnswer.question_number` 昇順で `SessionState.answers` に復元する
+- 開始時の C1 では `answers` の初期化を必須にせず、C1 が責務を持たない state は未設定のまま許容する
+- C1 のスコープには `confirmation_points` 生成、再開候補列挙、自動再開、複数セッション同時進行制御を含めない
 
 ### 入力分類ノードの振る舞い
 
@@ -173,7 +181,7 @@ deliverable は single partial TypedDict の `SessionState` と、complete recor
 | input_source | "form" / "chat" | 外部 | 入力元。formは常にanswer扱い、chatは入力分類ノードへ |
 | input_type | "answer" / "question" / "explanation_request" | 入力分類 / C4 | ユーザー入力の分類結果。chat は入力分類ノード、form は C4 完了時に `"answer"` を保持 |
 | next_action | "next" / "deepdive" / "complete" | C4 | 評価後のルーティング判断 |
-| answers | list[QuizAnswerRecord] | C4 | 全問答記録（追記のみ） |
+| answers | list[QuizAnswerRecord] | C1（再開時） / C4 | 再開時は保存済み `QuizAnswer` 履歴を復元し、以後は C4 が追記のみ行う |
 | total_questions_asked | int | C3 | 出題総数（20問で収束） |
 
 ### ConfirmationPoint
@@ -194,7 +202,7 @@ SessionState内の問答記録。QuizAnswerテーブルへの永続化はイン�
 | confirmation_point_id | str | 対応する確認ポイントのid |
 | question_text | str | 出題内容 |
 | answer_type | "textarea" / "code" | 回答形式 |
-| answer_text | str | ユーザーの回答 |
+| answer_text | str | ユーザーの回答。保存・復元では raw 値をそのまま使い、trim・空白正規化・Unicode 正規化・改行変換・大小文字変換を行わない |
 | score | int | 0〜100（LLM評価の出力。ADR-004） |
 | feedback | str | LLMからのフィードバック |
 
@@ -202,7 +210,7 @@ SessionState内の問答記録。QuizAnswerテーブルへの永続化はイン�
 
 | ノード | 読み取り | 書き込み |
 |---|---|---|
-| C1 セッション開始 | roadmap_item_id | session_id, roadmap_item_*, is_resumed |
+| C1 セッション開始 | 開始時: `roadmap_item_id` / 再開時: `session_id` | `session_id`, `roadmap_item_*`, `is_resumed`, `answers`（再開時のみ履歴復元） |
 | C2 問題セット設計 | roadmap_item_*, is_resumed | confirmation_points, current_point_index |
 | C3 出題 | confirmation_points, current_point_index, answers | current_question_text, current_answer_type, total_questions_asked |
 | 入力分類 | user_input | input_type |

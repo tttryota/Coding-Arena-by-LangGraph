@@ -1,6 +1,6 @@
 ---
 feature: question-delivery
-status: draft
+status: ready
 reviewed_by:
 approved_at:
 ---

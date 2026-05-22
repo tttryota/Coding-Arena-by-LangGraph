@@ -1,6 +1,6 @@
 ---
 feature: progress-update
-status: draft
+status: ready
 reviewed_by:
 approved_at:
 ---

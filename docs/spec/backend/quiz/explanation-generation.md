@@ -1,6 +1,6 @@
 ---
 feature: explanation-generation
-status: draft
+status: ready
 reviewed_by:
 approved_at:
 ---

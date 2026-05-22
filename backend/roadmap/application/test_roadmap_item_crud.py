@@ -5,12 +5,12 @@ from dataclasses import fields, is_dataclass
 from uuid import UUID
 
 import pytest
-from backend.roadmap.infrastructure.roadmap_item_crud import (  # type: ignore[import-not-found]
+
+from roadmap.application.roadmap_item_crud import (
     add_roadmap_item,
     delete_roadmap_item,
     move_roadmap_item,
 )
-
 from roadmap.domain.roadmap_item_crud_types import (
     RoadmapItemAddInput,
     RoadmapItemAddResult,
@@ -312,15 +312,15 @@ def test_tc_01_public_api_and_types_exist_in_target_modules() -> None:
 
     assert (
         add_roadmap_item.__module__
-        == "backend.roadmap.infrastructure.roadmap_item_crud"
+        == "roadmap.application.roadmap_item_crud"
     )
     assert (
         move_roadmap_item.__module__
-        == "backend.roadmap.infrastructure.roadmap_item_crud"
+        == "roadmap.application.roadmap_item_crud"
     )
     assert (
         delete_roadmap_item.__module__
-        == "backend.roadmap.infrastructure.roadmap_item_crud"
+        == "roadmap.application.roadmap_item_crud"
     )
 
     assert list(add_signature.parameters) == ["add_input", "store", "id_generator"]
@@ -353,28 +353,28 @@ def test_tc_01_public_api_and_types_exist_in_target_modules() -> None:
     _assert_frozen_dataclass(RoadmapItemDeleteInput)
 
     assert RoadmapItemAddInput.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemMoveInput.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemDeleteInput.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemCrudItem.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemCrudRoadmapRecord.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemAddResult.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemMoveResult.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemDeleteResult.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
 
     assert [field.name for field in fields(RoadmapItemAddInput)] == [
@@ -416,19 +416,19 @@ def test_tc_01_public_api_and_types_exist_in_target_modules() -> None:
     ]
 
     assert RoadmapItemCrudStore.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemIdGenerator.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemCrudInputError.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemCrudNotFoundError.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
     assert RoadmapItemCrudStoreError.__module__ == (
-        "backend.roadmap.infrastructure.roadmap_item_crud_types"
+        "roadmap.domain.roadmap_item_crud_types"
     )
 
     assert getattr(RoadmapItemCrudStore, "_is_protocol", False) is True

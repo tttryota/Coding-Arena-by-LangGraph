@@ -6,6 +6,7 @@ from uuid import UUID
 import pytest
 from structlog.testing import capture_logs
 
+from roadmap.application.roadmap_persistence import save_roadmap
 from roadmap.domain.roadmap_persistence_types import (
     FlatRoadmapItem,
     RoadmapItemInput,
@@ -14,7 +15,6 @@ from roadmap.domain.roadmap_persistence_types import (
     RoadmapSaveInput,
     RoadmapSaveResult,
 )
-from roadmap.infrastructure.roadmap_persistence import save_roadmap
 from shared.log_assertions import assert_no_log_event as _assert_no_log_event
 from shared.log_assertions import (
     assert_single_log_event as _shared_assert_single_log_event,

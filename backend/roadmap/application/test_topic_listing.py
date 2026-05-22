@@ -6,6 +6,10 @@ from typing import Literal
 
 import pytest
 
+from roadmap.application.topic_listing import (
+    list_topic_candidates,
+    register_manual_topic,
+)
 from roadmap.domain.topic_listing_types import (
     NoteTopicReader,
     NoteTopicRecord,
@@ -17,10 +21,6 @@ from roadmap.domain.topic_listing_types import (
     TopicNoteCountRecord,
     TopicPresetReader,
     TopicStore,
-)
-from roadmap.infrastructure.topic_listing import (
-    list_topic_candidates,
-    register_manual_topic,
 )
 
 # ---------------------------------------------------------------------------

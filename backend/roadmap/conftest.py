@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 _REPO_ROOT_STR = str(_REPO_ROOT)
 
 if _REPO_ROOT_STR not in sys.path:

@@ -86,6 +86,128 @@ C9: まとめテスト結果記録（中枠・大枠の場合のみ）
 - AI自動の深掘り / ユーザー起点の深掘り
 - 前提知識の遡り確認（最大2段）
 
+## LangGraph グラフ構造
+
+### ノード一覧
+
+| ノード名 | 対応機能 | 責務 |
+|---|---|---|
+| session_init | C1 | QuizSession作成、RoadmapItem情報をステートに設定 |
+| question_set_design | C2 | 確認ポイントリストを設計 |
+| question_delivery | C3 | 確認ポイントから問題文を動的生成 |
+| input_classification | — | ユーザー入力を answer / question / explanation_request に分類 |
+| chat_response | — | 出題内容への質問にLLMが回答（問答進行に影響しない） |
+| answer_evaluation | C4+C5 | 回答評価 + ルーティング判断（next/deepdive/complete） |
+| explanation_generation | C6 | RAGでノート参照 + 解説生成 |
+| progress_update | C7+C8 | 全問答から総合score算出、RoadmapItem更新、セッション完了 |
+| summary_test_record | C9 | まとめテストのLLM定性分析を保存 |
+
+### エッジ定義
+
+```
+session_init → question_set_design → question_delivery → __interrupt__
+
+__interrupt__（ユーザー入力待ち）→ input_routing（conditional: input_source）
+  ├── "form"  → answer_evaluation（回答フォームからの送信は常に回答扱い）
+  └── "chat"  → input_classification
+
+input_classification →（conditional: input_type）
+  ├── "answer"               → answer_evaluation
+  ├── "question"             → chat_response → __interrupt__
+  └── "explanation_request"  → explanation_generation → question_delivery → __interrupt__
+
+answer_evaluation →（conditional: next_action）
+  ├── "next"      → question_delivery → __interrupt__
+  ├── "deepdive"  → question_delivery → __interrupt__（confirmation_points追加後）
+  └── "complete"  → progress_update
+
+progress_update →（conditional: roadmap_item_level）
+  ├── "middle" / "major"  → summary_test_record → END
+  └── "detail"            → END
+```
+
+### 入力分類ノードの振る舞い
+
+ユーザー入力を3種類に分類し、後続ノードを決定する。
+
+| 分類 | 判定基準 | 後続 |
+|---|---|---|
+| answer | 出題に対する回答と判断できる | answer_evaluation |
+| question | 出題内容の意味や前提についての質問 | chat_response（問答進行に影響なし） |
+| explanation_request | 「わからない」「解説して」等、解説を求める意思表示 | explanation_generation |
+
+分類はLLMが `current_question_text` と `user_input` のコンテキストから判断する。曖昧な場合は answer として扱う（ユーザーが意図的に解説を求めない限り問答を進める）。
+
+### conditional edge の判断基準
+
+**answer_evaluation → next_action:**
+- `next`: 理解度が十分。current_point_indexをインクリメントして次の確認ポイントへ
+- `deepdive`: 理解が浅い部分がある。confirmation_pointsに深掘りポイントを追加
+- `complete`: 全確認ポイント完了、または20問到達で収束
+
+**20問収束ルール:** total_questions_askedが20に達した場合、answer_evaluationはdeepdiveを選択せずnextまたはcompleteに収束させる。
+
+## SessionState（LangGraph ステート定義）
+
+LangGraphワークフローの全ノードが共有するインメモリステート。TypedDictとして実装する。
+DBエンティティ（QuizSession, QuizAnswer）への永続化はインフラ層の責務であり、SessionStateはグラフ実行中の状態のみを表す。
+
+### フィールド一覧
+
+| フィールド | 型 | 初期設定 | 説明 |
+|---|---|---|---|
+| session_id | str | C1 | QuizSession.id |
+| roadmap_item_id | str | C1 | 出題対象のRoadmapItem.id |
+| roadmap_item_level | "detail" / "middle" / "major" | C1 | 出題粒度。まとめテスト判定に使用 |
+| roadmap_item_title | str | C1 | LLMコンテキスト用 |
+| roadmap_item_description | str | C1 | LLMコンテキスト用 |
+| is_resumed | bool | C1 | 再開セッションか（ADR-005） |
+| confirmation_points | list[ConfirmationPoint] | C2 | 確認ポイントリスト。深掘り時にC4が追加 |
+| current_point_index | int | C2 | 次に出題する確認ポイントのインデックス |
+| current_question_text | str | C3 | 出題中の問題文 |
+| current_answer_type | "textarea" / "code" | C3 | 回答形式 |
+| user_input | str | 外部 | ユーザーの最新入力テキスト |
+| input_source | "form" / "chat" | 外部 | 入力元。formは常にanswer扱い、chatは入力分類ノードへ |
+| input_type | "answer" / "question" / "explanation_request" | 入力分類 | ユーザー入力の分類結果 |
+| next_action | "next" / "deepdive" / "complete" | C4 | 評価後のルーティング判断 |
+| answers | list[QuizAnswerRecord] | C4 | 全問答記録（追記のみ） |
+| total_questions_asked | int | C3 | 出題総数（20問で収束） |
+
+### ConfirmationPoint
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| id | str | 確認ポイントの識別子 |
+| content | str | 確認すべき内容 |
+| format | "knowledge" / "knowledge_and_practice" | 出題形式（知識のみ / 知識+実践） |
+
+### QuizAnswerRecord
+
+SessionState内の問答記録。QuizAnswerテーブルへの永続化はインフラ層が担う。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| question_number | int | セッション内の問題番号 |
+| confirmation_point_id | str | 対応する確認ポイントのid |
+| question_text | str | 出題内容 |
+| answer_type | "textarea" / "code" | 回答形式 |
+| answer_text | str | ユーザーの回答 |
+| score | int | 0〜100（LLM評価の出力。ADR-004） |
+| feedback | str | LLMからのフィードバック |
+
+### ノードごとのステート操作
+
+| ノード | 読み取り | 書き込み |
+|---|---|---|
+| C1 セッション開始 | roadmap_item_id | session_id, roadmap_item_*, is_resumed |
+| C2 問題セット設計 | roadmap_item_*, is_resumed | confirmation_points, current_point_index |
+| C3 出題 | confirmation_points, current_point_index, answers | current_question_text, current_answer_type, total_questions_asked |
+| 入力分類 | user_input | input_type |
+| C4 回答評価 | current_question_text, user_input, answers, total_questions_asked | next_action, answers（追記）, confirmation_points（深掘り時追記）, current_point_index |
+| C6 解説生成 | current_question_text, answers | （ステート変更なし。レスポンスのみ返却） |
+| C7/C8 完了・進捗反映 | answers, roadmap_item_id | （DB書き込み。ステート変更なし） |
+| C9 まとめテスト記録 | answers, roadmap_item_level | （DB書き込み。ステート変更なし） |
+
 ## 外部依存
 
 ### このグループが利用するもの

@@ -7,74 +7,150 @@ approved_at:
 
 ## 機能概要
 
-ユーザーの回答をLLMが評価し、理解度の判定・次のアクションの決定・scoreの算出・フィードバックの生成を1つのノードで行う。深掘り判断（ルーティング）もこのノードに統合されている。
+ユーザーの回答をLLMが評価し、理解度判断にもとづく `next_action` の決定、`score` の算出、`feedback` の生成を1つのノードで行う。深掘り判断（ルーティング）もこのノードに統合されている。
 
-## 振る舞い
+`SessionState` / `ConfirmationPoint` / `QuizAnswerRecord` の共有契約は `session-state.md` と `backend/quiz/domain/session_state.py` を authoritative source とし、本仕様では `answer_evaluation` ノードがその共有契約をどう読むか、何を公開出力として返すかだけを定義する。
 
-### 基本動作
+## 入力 state 契約
 
-問題文・出題意図（確認ポイント）・ユーザーの回答を受け取り、以下を返す:
+`evaluate_answer(state: SessionState, ...)` は少なくとも以下の共有 state keys を読む。
 
-1. **理解度の判定と根拠**（テキスト）— LLMがまず定性的に判断する
-2. **次のアクション** — next（次の確認ポイント）/ deepdive（深掘り）/ complete（全確認ポイント完了）
-3. **score**（0〜100）— 上記判定の数値表現。判断の出力であって入力ではない（ADR-004参照）
-4. **feedback**（テキスト）— ユーザーに見せるコメント。何が良かったか、何が不足しているか
+| キー | 用途 |
+|---|---|
+| `current_question_text` | LLM 引数 `question_text` と回答記録 `question_text` の元データ |
+| `current_answer_type` | LLM 引数 `answer_type` と回答記録 `answer_type` の元データ |
+| `user_input` | LLM 引数 `answer_text` と回答記録 `answer_text` の元データ |
+| `confirmation_points` | 現在評価中の確認ポイントを引く元データ |
+| `current_point_index` | 現在評価中の確認ポイント位置 |
+| `answers` | LLM 引数 `past_answers` と追記先 |
+| `total_questions_asked` | LLM 引数 `total_questions_asked` と 20問収束シグナル |
+| `input_source` | `form` 経路の `input_type="answer"` 正規化判定 |
 
-`input_source="form"` の回答は `input_classification` を経由せず本ノードへ到達するため、入力時点で `input_type` が未設定でもよい。ただし本ノードの完了時には共有ステート上で `input_type="answer"` を保持し、評価済みの回答として downstream から一意に参照できる状態へ正規化する。
+`input_type` は `input_source="chat"` では入力時点で `"answer"` が設定済みであることを前提とし、`input_source="form"` では未設定を許容する。ただし本ノード完了時には常に `input_type="answer"` を公開出力へ含める。
 
-### 次のアクション判断
+現在評価中の確認ポイントは以下の 1 対 1 マッピングで決定する。
 
-scoreの閾値ではなく、回答の内容に基づいてLLMが判断する:
-
-- **next**: 十分に理解している → 次の確認ポイントに進む
-- **deepdive**: 理解が曖昧または不足 → 追加の確認問題を生成し、深掘りの確認ポイントを `confirmation_points` の末尾へ追記する。同時に `current_point_index` は現在問を消化した次位置へ進め、既存の未消化ポイントがあればそちらを先に出題する
-- **complete**: 全確認ポイントが確認済み → セッション完了に進む。完了時は `current_point_index == len(confirmation_points)` を満たす
-
-### 20問超過時
-
-20問を超えた場合、LLMに「収束に向かうこと」を指示する。重要な未確認ポイントがあればそれは確認するが、不要な深掘りは控える。
-
-### 具体例
-
-入力:
-```
-問題文: 「ジェネリクスとは何か、なぜ必要か説明してください」
-出題意図: 「ジェネリクスの概念と必要性の理解を確認」
-回答: 「型引数をともなう関数定義のことで、柔軟な型定義ができる」
+```python
+confirmation_point = state["confirmation_points"][state["current_point_index"]]
+confirmation_point_content = confirmation_point["content"]
+confirmation_point_id = confirmation_point["id"]
 ```
 
-出力:
+LLM への入力マッピングは以下に固定する。
+
+```python
+llm.evaluate_answer(
+    question_text=state["current_question_text"],
+    confirmation_point_content=confirmation_point_content,
+    answer_text=state["user_input"],
+    answer_type=state["current_answer_type"],
+    past_answers=state["answers"],
+    total_questions_asked=state["total_questions_asked"],
+)
 ```
-判定: 概念の基本は理解しているが、関数以外（クラス、インターフェース）への適用が抜けている
-次のアクション: next（基本的な理解はあるため次に進む）
-score: 75
-feedback: 「ジェネリクスの本質を捉えています。補足すると、関数だけでなくクラスやインターフェースにも適用できます」
-```
+
+## 公開出力契約
+
+本ノードの externally observable contract は、戻り値 dict と更新後 `answers` の内容で表す。
+
+- 戻り値は `{"next_action": str, "answers": list[QuizAnswerRecord], "current_point_index": int, "confirmation_points": list[ConfirmationPoint], "input_type": "answer"}` を返す
+- `next_action` は LLM の判断結果を返す
+- `score` と `feedback` は、戻り値トップレベルではなく追記後 `answers` の最新 `QuizAnswerRecord` から観測する
+- 理解度判断の定性的な根拠テキストを別 DTO や別 state key に保持することは公開契約に含めない。LLM の定性的判断は `next_action` / `score` / `feedback` に反映されるものとして扱い、別保存は本仕様のスコープ外とする
+
+## 回答記録の更新
+
+`answers` には共有契約 `QuizAnswerRecord` に従う新規レコードを 1 件だけ追記する。既存要素の順序変更・上書き・削除は行わない。
+
+各フィールドの責務は以下に固定する。
+
+| フィールド | 値の出所 |
+|---|---|
+| `question_number` | `QuizAnswerRecord` authoritative schema 上の必須 int フィールド。本ノード仕様では具体的な採番規則を責務化しない |
+| `confirmation_point_id` | `confirmation_points[current_point_index]["id"]` |
+| `question_text` | `state["current_question_text"]` |
+| `answer_type` | `state["current_answer_type"]` |
+| `answer_text` | `state["user_input"]` |
+| `score` | LLM 出力 |
+| `feedback` | LLM 出力 |
+
+`question_number` は共有契約上の必須フィールドだが、具体的な採番規則は本仕様の検証対象外とする。したがって node 単体テストは、追記レコードが `QuizAnswerRecord` schema を満たすことまでは検証してよいが、未定義の採番規則までは固定しない。
+
+## 次のアクション判断
+
+score の閾値ではなく、回答内容に基づく LLM 判断を使う。
+
+- `next`: 理解度が十分。回答済みの確認ポイントを消化し、`current_point_index` を 1 進めて次の未消化確認ポイントへ移る
+- `deepdive`: 理解が曖昧または不足。追加の確認ポイントを `confirmation_points` の末尾へ追記しつつ、`current_point_index` は現在問を消化した次位置へ 1 進める。既存の未消化確認ポイントが残っていれば、それを先に出題する
+- `complete`: 全確認ポイント完了。`current_point_index == len(confirmation_points)` を満たす完了境界へ進む
+
+## 20問収束ルール
+
+`total_questions_asked >= 20` を 20問収束シグナルとする。20問目の評価時点から、本ノードは LLM に収束判断のための文脈を渡し、追加 deepdive ではなく既存ポイント消化または完了へ向かう判断を期待する。
+
+- node の観測可能な契約は `total_questions_asked` を LLM にそのまま渡すことと、LLM が返した `next_action` をノード側で上書きしないことに限る
+- `total_questions_asked >= 20` の評価では、LLM は `next` または `complete` を返す前提とする
+- `total_questions_asked >= 20` でも concrete client がこの前提に反して `deepdive` を返した場合、その挙動は本ノードの単体仕様および node 単体テストの対象外、すなわち out-of-contract とする
+- したがってこの前提違反時に node 側で `confirmation_points` 追記・失敗化・`next_action` 強制上書きのいずれかを行うことは、本仕様では要求しない
+- concrete client のプロンプト文面や、内部でどのように「収束に向かうこと」を指示するかは本ノード仕様および node 単体テストのスコープ外とする
 
 ## 技術判断
 
-- 評価とルーティングを1ノードに統合する理由: scoreが判断の入力ではなく出力であるため（ADR-004）、別ノードに分離する意味がない。LLMが回答を読んで「理解度→次のアクション→score→feedback」を一度に判断する方が自然
-- 深掘り判断をスコア閾値ではなくLLM判断にする理由: 回答の文脈（概念はわかるがコードが書けない等）を反映した判断が可能
+- 評価とルーティングを1ノードに統合する理由: score が判断の入力ではなく出力であるため（ADR-004）、別ノードに分離する意味がない。LLM が回答を読み、「理解度判断に基づく次のアクション → score → feedback」を一度に決める方が自然
+- 深掘り判断をスコア閾値ではなく LLM 判断にする理由: 回答の文脈（概念はわかるがコードが書けない等）を反映した判断が可能
+- 理解度判断の別保存先を設けない理由: 本仕様の公開契約は routing と回答記録更新に限定されており、別 DTO や永続化先を追加すると共有契約を増殖させるため
 
 ## 境界条件
 
-- ユーザーが空回答 → score 0、feedbackで回答を促す、deepdiveではなくnextに進む
-- 実践問題で構文エラーのあるコード → コードの意図を汲んで評価する。構文の指摘はfeedbackに含める
-- 回答が出題意図と無関係 → score低め、feedbackで出題意図を説明し直す
+- ユーザーが空回答: `score=0`、feedback で回答を促す、`deepdive` ではなく `next` に進む
+- 実践問題で構文エラーのあるコード: コードの意図を汲んで評価する。構文の指摘は feedback に含める
+- 回答が出題意図と無関係: feedback で出題意図を説明し直す。`score` は常に 0〜100 の範囲に収まるが、厳密な low-score band は公開契約に含めない
 
 ## スコープ外
 
-- コードの実行による正誤判定（LLMの判断のみ）
+- コードの実行による正誤判定（LLM の判断のみ）
 - 複数回答の比較評価
 - 回答の盗用検出
+- 理解度判断の根拠テキストを別 DTO / 別 state key / 別永続化先へ保存すること
+- 20問収束時の concrete client 内部プロンプト文面の固定
+- `total_questions_asked >= 20` で concrete client が契約前提に反して `deepdive` を返した場合の node 挙動の固定。`confirmation_points` 追記・失敗化・`next_action` 強制上書きはいずれも要求しない
 
 ## 受け入れ基準
 
-- [ ] 回答に対して理解度の判定が返る
+- [ ] `evaluate_answer(state, ...)` の required input state keys と LLM 引数への 1 対 1 マッピングが定義されている
 - [ ] 次のアクション（next / deepdive / complete）が判断される
-- [ ] scoreが0〜100で算出される
-- [ ] ユーザー向けのfeedbackが生成される
+- [ ] score が 0〜100 で算出され、追記後 `answers` の最新 `QuizAnswerRecord` から観測できる
+- [ ] ユーザー向けの feedback が生成され、追記後 `answers` の最新 `QuizAnswerRecord` から観測できる
 - [ ] 深掘り時に追加の確認ポイントが含まれる
 - [ ] 深掘り時の出力だけで、次問が既存ポイントか追記済み deepdive ポイントかを `confirmation_points` と `current_point_index` から一意に判断できる
-- [ ] 20問超過時に収束に向かう判断がされる
-- [ ] 結果がQuizAnswerに記録される
+- [ ] `total_questions_asked >= 20` の評価では、20問収束シグナルが LLM に渡され、in-contract な `next` / `complete` 返却に対して LLM の `next_action` を node 側で上書きしない
+- [ ] 結果が shared contract `QuizAnswerRecord` に従って `answers` へ追記される
+- [ ] `input_source="form"` の場合、評価完了時に `input_type="answer"` が設定される
+
+## 異常系
+
+- LLM 呼び出し失敗時は `AnswerEvaluationError` を送出し、`error_code: str` と `message: str` を属性として持ち、`__cause__` に元例外を保持する
+- 自動再試行は行わない
+- 失敗時は `structlog` の構造化ログをちょうど1件出力する
+
+| error_code | 発生条件 | message | ログイベント |
+|---|---|---|---|
+| `llm_request_failed` | LLM 呼び出し自体が失敗 | `answer evaluation llm request failed` | `answer_evaluation_failed` |
+| `llm_response_parse_failed` | LLM 応答から評価結果の抽出に失敗 | `answer evaluation llm response parse failed` | `answer_evaluation_failed` |
+
+## モジュール構成
+
+- 構成方針: 2ファイル構成（types + logic）
+- モジュール一覧:
+  - `backend/quiz/application/answer_evaluation_types.py`
+    - `AnswerEvaluationError(Exception)` — `error_code: str`, `message: str` を属性として持つ
+    - `AnswerEvaluationLlmClient(Protocol)` — `evaluate_answer(question_text: str, confirmation_point_content: str, answer_text: str, answer_type: str, past_answers: list[QuizAnswerRecord], total_questions_asked: int) -> EvaluationOutput`。正常時は `EvaluationOutput` を返し、失敗時は `AnswerEvaluationError` を送出する
+    - `EvaluationOutput` — frozen dataclass (`next_action: Literal["next", "deepdive", "complete"]`, `score: int`, `feedback: str`, `deepdive_points: list[ConfirmationPoint]`)。`next_action="deepdive"` 時のみ `deepdive_points` が1件以上、それ以外は空リスト。理解度判断の別 rationale field は持たない
+  - `backend/quiz/application/answer_evaluation.py`
+    - `evaluate_answer(state: SessionState, *, llm: AnswerEvaluationLlmClient) -> dict[str, object]` — LangGraph ノード関数。ユーザー回答を評価し、`{"next_action": str, "answers": list[QuizAnswerRecord], "current_point_index": int, "confirmation_points": list[ConfirmationPoint], "input_type": "answer"}` を返す
+    - `answers` に新しい `QuizAnswerRecord` を 1 件だけ追記する（既存要素は保持）
+    - `next_action="next"`: `current_point_index` を +1
+    - `next_action="deepdive"`: `confirmation_points` 末尾に `deepdive_points` を追記し、`current_point_index` を +1
+    - `next_action="complete"`: `current_point_index` を `len(confirmation_points)` に設定
+    - 20問収束ルール: `total_questions_asked >= 20` の場合、LLM に収束判断用の文脈を渡す。LLM が返した `next_action` をそのまま使い、node 側で上書きしない
+    - `input_type` を常に `"answer"` に設定する（form 経路の正規化を含む）

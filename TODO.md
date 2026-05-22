@@ -105,6 +105,7 @@ backend/
 | roadmap | roadmap-item-crud | PR #5 |
 | roadmap | roadmap-generation | PR #6 |
 | platform | config, logging, rdb (models + migration), docker-compose | develop |
+| quiz 仕様 | Phase 0 仕様精査完了（SessionState定義、グラフ構造定義、不整合解消、8仕様書ready化） | develop |
 
 ## 不要と判断済み
 

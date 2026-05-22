@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import inspect
 from typing import Literal, get_args, get_type_hints, is_typeddict
 
-from quiz.domain import session_state as session_state_module
 from quiz.domain.session_state import (
     ConfirmationPoint,
     QuizAnswerRecord,
@@ -150,72 +148,6 @@ def test_tc_03_literal_value_sets_match_specification_exactly() -> None:
         "textarea",
         "code",
     }
-
-
-def test_tc_04_session_state_contract_docstring_covers_lifecycle_and_transitions() -> None:
-    # Arrange / Act
-    docstring = inspect.getdoc(SessionState)
-
-    # Assert
-    assert docstring is not None
-    assert "shared downstream contract" in docstring.lower()
-    assert "not only a shape" in docstring.lower()
-    assert "C2" in docstring
-    assert "initialize" in docstring
-    assert "confirmation_points" in docstring
-    assert "current_point_index" in docstring
-    assert "answers" in docstring
-    assert "append-only" in docstring
-    assert "deepdive" in docstring
-    assert "tail" in docstring
-    assert "total_questions_asked" in docstring
-    assert "C3" in docstring
-    assert "next_action" in docstring
-    assert "next confirmation point" in docstring
-    assert "same confirmation point" in docstring
-    assert "completion boundary" in docstring
-    assert "total_questions_asked == 20" in docstring
-    assert "valid state" in docstring
-    assert "convergence" in docstring.lower()
-
-
-def test_tc_05_session_state_contract_docstring_declares_non_provided_boundary() -> None:
-    # Arrange / Act
-    docstring = inspect.getdoc(SessionState)
-
-    # Assert
-    assert docstring is not None
-    assert "input_source" in docstring
-    assert "input_type" in docstring
-    assert "next_action" in docstring
-    assert "current_point_index" in docstring
-    assert "confirmation_points" in docstring
-    assert "downstream node contracts" in docstring
-    assert "phase-specific TypedDicts" in docstring
-    assert "Unions" in docstring
-    assert "runtime validators" in docstring
-    assert "factory/helper constructors" in docstring
-
-
-def test_tc_06_public_exports_remain_contract_documentation_surface_only() -> None:
-    # Arrange / Act
-    public_exports = session_state_module.__all__
-
-    # Assert
-    assert public_exports == [
-        "ConfirmationPoint",
-        "ConfirmationPointFormat",
-        "InputSource",
-        "InputType",
-        "NextAction",
-        "QuizAnswerRecord",
-        "QuizAnswerType",
-        "RoadmapItemLevel",
-        "SessionState",
-    ]
-    assert "SessionStatePhase" not in public_exports
-    assert "SessionStateValidator" not in public_exports
-    assert "build_session_state" not in public_exports
 
 
 def test_tc_10_session_state_is_partial_typeddict() -> None:

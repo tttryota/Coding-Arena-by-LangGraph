@@ -7,18 +7,18 @@ Obsidian × RAG × LangGraph 理解度チェックシステム。
 - frontend/: TypeScript (React + Vite + shadcn/ui + Jotai)
 
 # 技術制約
-- LLM: Qwen2.5-32B（Ollama経由ローカル）
+- LLM: Codex（app-server経由）
 - Embedding: multilingual-e5-large（ローカル）
 - VectorDB: ChromaDB（ローカル永続化）
 - LangGraphのステートは SessionState を基本とする
 
 # ディレクトリ規約
-- backend/{機能}/infrastructure/  機能モジュール（Protocol DI で外部分離）
-- backend/{機能}/domain/          純粋ロジック（I/Oなし、現在は chunk_splitter のみ）
-- backend/infrastructure/         横断基盤（RDB, config, logging）
-- frontend/src/                   Reactコンポーネント
+- backend/{機能}/domain/             ドメイン層（Protocol定義、DTO、純粋ロジック。I/Oなし）
+- backend/{機能}/application/        アプリケーション層（オーケストレーション。Protocol経由でI/O）
+- backend/{機能}/infrastructure/     インフラ層（concrete実装。直接I/O）
+- backend/infrastructure/            横断基盤（RDB, config, logging）
+- frontend/src/                      Reactコンポーネント
 - テスト: コロケーション方式（ソースと同ディレクトリに test_*.py）
-- ※ application/ presentation/ は必要になった時点で導入
 
 # コーディング規約
 - Python: ruff でフォーマット・リント

@@ -24,6 +24,8 @@ from shared.log_assertions import assert_single_log_event as _assert_single_log_
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from quiz.domain.session_state import RoadmapItemLevel
+
     from quiz.application.session_lifecycle_types import QuizAnswerRecordLike
     from quiz.domain.session_state import SessionState
 
@@ -57,7 +59,7 @@ class _AnswerHistoryRecord:
 @dataclass(frozen=True)
 class _RoadmapItemRecord:
     id: str
-    level: str
+    level: RoadmapItemLevel
     title: str
     description: str
 
@@ -326,7 +328,7 @@ def _session(
 def _item(
     *,
     item_id: str = "item-001",
-    level: str = "detail",
+    level: RoadmapItemLevel = "detail",
     title: str = "ジェネリクスの基本構文",
     description: str = "型パラメータと制約を扱う",
 ) -> _RoadmapItemRecord:

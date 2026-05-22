@@ -33,13 +33,13 @@ class _RecordingQuestionSetDesignLlm:
     ) -> None:
         self._confirmation_points = confirmation_points
         self._error = error
-        self.calls: list[tuple[str, str, str]] = []
+        self.calls: list[tuple[str, str, RoadmapItemLevel]] = []
 
     def generate_confirmation_points(
         self,
         title: str,
         description: str,
-        level: str,
+        level: RoadmapItemLevel,
     ) -> list[ConfirmationPoint]:
         self.calls.append((title, description, level))
         if self._error is not None:
@@ -90,7 +90,7 @@ def _assert_single_failure_log(
     *,
     error_code: str,
     roadmap_item_title: str = "TypeScript ジェネリクス",
-    roadmap_item_level: str = "detail",
+    roadmap_item_level: RoadmapItemLevel = "detail",
     roadmap_item_description: str = "型パラメータと型推論の理解を確認する",
 ) -> None:
     assert len(log_output) == 1

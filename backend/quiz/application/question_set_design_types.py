@@ -21,7 +21,7 @@ class QuestionSetDesignLlmClient(Protocol):
         self,
         title: str,
         description: str,
-        level: str,
+        level: session_state_domain.RoadmapItemLevel,
     ) -> list[session_state_domain.ConfirmationPoint]: ...
 
 

@@ -5,7 +5,11 @@ from typing import TYPE_CHECKING
 from quiz.application.question_set_design import design_question_set
 
 if TYPE_CHECKING:
-    from quiz.domain.session_state import ConfirmationPoint, SessionState
+    from quiz.domain.session_state import (
+        ConfirmationPoint,
+        RoadmapItemLevel,
+        SessionState,
+    )
 
 
 class _StubQuestionSetDesignLlm:
@@ -16,7 +20,7 @@ class _StubQuestionSetDesignLlm:
         self,
         title: str,
         description: str,
-        level: str,
+        level: RoadmapItemLevel,
     ) -> list[ConfirmationPoint]:
         return list(self._confirmation_points)
 

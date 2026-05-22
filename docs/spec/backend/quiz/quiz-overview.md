@@ -20,7 +20,7 @@ approved_at:
 | C3 | 出題 | 問題をユーザーに提示 |
 | C4 | 回答評価 | ユーザーの回答（文章/コード）をLLMが評価し理解度を判定 |
 | C5 | 深掘り判断 | 回答に応じて深掘り/次の問題/前提知識遡りをLLMが判断 |
-| C6 | 解説生成 | ユーザーの依頼に応じてLLMが解説を生成（RAGでノート参照） |
+| C6 | 解説生成 | ユーザーの依頼に応じて、現在の問題文と確認ポイントを使ってRAG検索し、`{"explanation_text": str}` を返す。別角度再出題は downstream が担う |
 | C7 | セッション終了・サマリー | セッション終了時にサマリー生成 |
 | C8 | 進捗反映 | クイズ結果をロードマップの具体項目の進捗に反映 |
 | C9 | まとめテスト結果記録 | 中枠・大枠テストの正答率等をDBに保存 |
@@ -98,7 +98,7 @@ C9: まとめテスト結果記録（中枠・大枠の場合のみ）
 | input_classification | — | ユーザー入力を answer / question / explanation_request に分類 |
 | chat_response | — | 出題内容への質問にLLMが回答（問答進行に影響しない） |
 | answer_evaluation | C4+C5 | 回答評価 + ルーティング判断（next/deepdive/complete） |
-| explanation_generation | C6 | RAGでノート参照 + 解説生成 |
+| explanation_generation | C6 | `current_question_text` と現在の確認ポイントを使って RAGでノート参照 + 解説生成。`{"explanation_text": str}` を返し、同一確認ポイントを保持したまま `question_delivery` へ戻す |
 | progress_update | C7+C8 | 全問答から総合score算出、RoadmapItem更新、セッション完了 |
 | summary_test_record | C9 | まとめテストのLLM定性分析を保存 |
 
@@ -114,7 +114,7 @@ __interrupt__（ユーザー入力待ち）→ input_routing（conditional: inpu
 input_classification →（conditional: input_type）
   ├── "answer"               → answer_evaluation
   ├── "question"             → chat_response → __interrupt__
-  └── "explanation_request"  → explanation_generation → question_delivery → __interrupt__
+  └── "explanation_request"  → explanation_generation → question_delivery → __interrupt__（`explanation_generation` は `current_point_index` と `confirmation_points` を変更しないため、同一確認ポイントのまま別角度再出題へ戻る）
 
 answer_evaluation →（conditional: next_action）
   ├── "next"      → question_delivery → __interrupt__
@@ -216,7 +216,7 @@ SessionState内の問答記録。QuizAnswerテーブルへの永続化はイン�
 | C3 出題 | confirmation_points, current_point_index, answers | current_question_text, current_answer_type, total_questions_asked |
 | 入力分類 | user_input | input_type |
 | C4 回答評価 | current_question_text, current_answer_type, user_input, input_source, input_type, confirmation_points, current_point_index, answers, total_questions_asked | input_type（form 経路では `"answer"` を補完）, next_action, answers（追記）, confirmation_points（深掘り時は末尾追記）, current_point_index |
-| C6 解説生成 | current_question_text, answers | （ステート変更なし。レスポンスのみ返却） |
+| C6 解説生成 | current_question_text, confirmation_points, current_point_index | （ステート変更なし。レスポンス `{"explanation_text": str}` のみ返却） |
 | C7/C8 完了・進捗反映 | answers, roadmap_item_id | （DB書き込み。ステート変更なし） |
 | C9 まとめテスト記録 | answers, roadmap_item_level | （DB書き込み。ステート変更なし） |
 

@@ -9,6 +9,10 @@ from uuid import UUID
 import pytest
 from structlog.testing import capture_logs
 
+from ingestion.application.feedback_listing import (
+    list_feedbacks,
+    mark_feedback_as_read,
+)
 from ingestion.domain.feedback_listing_types import (
     FeedbackListingInputError,
     FeedbackListingNotFoundError,
@@ -16,10 +20,6 @@ from ingestion.domain.feedback_listing_types import (
     FeedbackListingResult,
     FeedbackListingStoreError,
     FeedbackListItem,
-)
-from ingestion.infrastructure.feedback_listing import (
-    list_feedbacks,
-    mark_feedback_as_read,
 )
 from shared.log_assertions import (
     assert_no_log_event as _assert_no_log_event,

@@ -6,6 +6,11 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 from structlog.testing import capture_logs
 
+from ingestion.application.batch_executor import (
+    BatchExecutionConfig,
+    run_once,
+)
+from ingestion.application.tagger import ChunkTaggingResult
 from ingestion.domain.batch_scheduler_types import (
     BatchRunStatus,
     BatchRunSummary,
@@ -20,11 +25,6 @@ from ingestion.domain.embedder_types import (
     ChunkEmbeddingResult,
     EmbeddingModelCallError,
 )
-from ingestion.infrastructure.batch_executor import (
-    BatchExecutionConfig,
-    run_once,
-)
-from ingestion.infrastructure.tagger import ChunkTaggingResult
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping

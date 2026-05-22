@@ -3,7 +3,7 @@ from collections.abc import MutableMapping, Sequence
 import pytest
 from structlog.testing import capture_logs
 
-from ingestion.infrastructure.tagger import (
+from ingestion.application.tagger import (
     ChunkTaggingInput,
     ChunkTaggingResult,
     TaggingBatchInput,

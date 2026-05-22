@@ -5,7 +5,7 @@ from typing import Protocol, cast
 import pytest
 from structlog.testing import capture_logs
 
-from ingestion.infrastructure.embedder import (
+from ingestion.application.embedder import (
     ChunkEmbeddingInput,
     ChunkEmbeddingResult,
     EmbeddingBatchInput,

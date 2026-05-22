@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, Literal, Protocol
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from ingestion.application.tagger import ChunkTaggingResult
     from ingestion.domain.chunk_splitter import ChunkSplitResult
     from ingestion.domain.embedder_types import ChunkEmbeddingResult
     from ingestion.infrastructure.file_diff_detector import FileDiffResult
-    from ingestion.infrastructure.tagger import ChunkTaggingResult
 
 BatchTrigger = Literal["startup", "interval"]
 BatchRunStatus = Literal[

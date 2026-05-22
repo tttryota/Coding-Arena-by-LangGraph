@@ -6,12 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 from structlog.testing import capture_logs
 
-from ingestion.domain.chunk_splitter import ChunkSplitResult
-from ingestion.infrastructure.batch_executor import (
-    BatchExecutionConfig,
-    run_once,
-)
-from ingestion.infrastructure.batch_scheduler_types import (
+from ingestion.domain.batch_scheduler_types import (
     BatchRunStatus,
     BatchRunSummary,
     BatchSchedulerConfigError,
@@ -20,9 +15,14 @@ from ingestion.infrastructure.batch_scheduler_types import (
     ChunkStoreUpsertInput,
     ChunkStoreUpsertResult,
 )
-from ingestion.infrastructure.embedder_types import (
+from ingestion.domain.chunk_splitter import ChunkSplitResult
+from ingestion.domain.embedder_types import (
     ChunkEmbeddingResult,
     EmbeddingModelCallError,
+)
+from ingestion.infrastructure.batch_executor import (
+    BatchExecutionConfig,
+    run_once,
 )
 from ingestion.infrastructure.tagger import ChunkTaggingResult
 

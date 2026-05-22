@@ -6,8 +6,7 @@ from uuid import UUID
 import pytest
 from structlog.testing import capture_logs
 
-from ingestion.infrastructure.ingestion_feedback import generate_for_file
-from ingestion.infrastructure.ingestion_feedback_types import (
+from ingestion.domain.ingestion_feedback_types import (
     IngestionFeedbackChunkInput,
     IngestionFeedbackGenerateInput,
     IngestionFeedbackGenerateResult,
@@ -22,6 +21,7 @@ from ingestion.infrastructure.ingestion_feedback_types import (
     RoadmapCandidate,
     StoredIngestionFeedback,
 )
+from ingestion.infrastructure.ingestion_feedback import generate_for_file
 from shared.log_assertions import (
     assert_no_log_event as _assert_no_log_event,
 )

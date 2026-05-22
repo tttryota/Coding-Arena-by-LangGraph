@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from ingestion.domain.chunk_splitter import ChunkSplitResult
-    from ingestion.infrastructure.embedder_types import ChunkEmbeddingResult
+    from ingestion.domain.embedder_types import ChunkEmbeddingResult
     from ingestion.infrastructure.file_diff_detector import FileDiffResult
     from ingestion.infrastructure.tagger import ChunkTaggingResult
 

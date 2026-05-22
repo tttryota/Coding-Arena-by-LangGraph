@@ -5,7 +5,7 @@ from datetime import datetime
 
 import structlog
 
-from ingestion.infrastructure.ingestion_feedback_types import (
+from ingestion.domain.ingestion_feedback_types import (
     IngestionFeedbackChunkInput,
     IngestionFeedbackGenerateInput,
     IngestionFeedbackGenerateResult,

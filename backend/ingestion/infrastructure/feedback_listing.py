@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from ingestion.infrastructure.feedback_listing_types import (
+from ingestion.domain.feedback_listing_types import (
     FeedbackListingInputError,
     FeedbackListingNotFoundError,
     FeedbackListingQuery,
@@ -17,7 +17,7 @@ from ingestion.infrastructure.feedback_listing_types import (
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from ingestion.infrastructure.feedback_listing_types import (
+    from ingestion.domain.feedback_listing_types import (
         FeedbackListingReader,
         FeedbackListItem,
         FeedbackReadWriter,

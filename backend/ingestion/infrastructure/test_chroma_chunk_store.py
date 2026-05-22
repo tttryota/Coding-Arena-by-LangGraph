@@ -6,7 +6,7 @@ from typing import Any, cast
 import pytest
 from structlog.testing import capture_logs
 
-from ingestion.infrastructure.batch_scheduler_types import (
+from ingestion.domain.batch_scheduler_types import (
     ChunkStoreChunkInput,
     ChunkStoreDeleteResult,
     ChunkStoreUpsertInput,

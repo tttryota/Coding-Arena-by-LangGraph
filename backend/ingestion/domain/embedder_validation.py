@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from numbers import Integral
 
-from ingestion.infrastructure.embedder_types import (
+from ingestion.domain.embedder_types import (
     ChunkEmbeddingInput,
     EmbeddingBatchInputError,
     EmbeddingResponseCountMismatchError,

@@ -81,12 +81,12 @@ def test_protocol_surfaces_stay_minimal() -> None:
 
     # Assert
     assert session_store_methods == {
+        "complete_session",
         "create_session",
+        "discard_session",
         "find_in_progress_by_item",
         "find_session",
-        "mark_completed",
-        "delete_session",
     }
     assert answer_store_methods == {"save_answer", "find_by_session"}
-    assert item_reader_methods == {"find_item", "update_score"}
+    assert item_reader_methods == {"find_item"}
     assert graph_runner_methods == {"start_graph", "resume_graph"}

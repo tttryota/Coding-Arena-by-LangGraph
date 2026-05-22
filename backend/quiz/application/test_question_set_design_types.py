@@ -1,53 +1,64 @@
 from __future__ import annotations
 
-import inspect
-from typing import Literal, get_type_hints
+from typing import TYPE_CHECKING
 
 from quiz.application.question_set_design import design_question_set
-from quiz.application.question_set_design_types import (
-    QuestionSetDesignError,
-    QuestionSetDesignLlmClient,
-)
-from quiz.domain.session_state import ConfirmationPoint, SessionState
+
+if TYPE_CHECKING:
+    from quiz.domain.session_state import ConfirmationPoint, SessionState
 
 
-def test_tc_02_question_set_design_public_contract_uses_confirmation_point_dto() -> None:
-    # Arrange / Act
-    exception = QuestionSetDesignError(
-        error_code="llm_request_failed",
-        message="question set design llm request failed",
+class _StubQuestionSetDesignLlm:
+    def __init__(self, confirmation_points: list[ConfirmationPoint]) -> None:
+        self._confirmation_points = confirmation_points
+
+    def generate_confirmation_points(
+        self,
+        title: str,
+        description: str,
+        level: str,
+    ) -> list[ConfirmationPoint]:
+        return list(self._confirmation_points)
+
+
+def test_tc_02_question_set_design_public_contract_uses_confirmation_point_dto() -> (
+    None
+):
+    # Arrange
+    confirmation_points: list[ConfirmationPoint] = [
+        {
+            "id": "cp_001",
+            "content": "型推論が効く条件を説明できる",
+            "format": "knowledge",
+        },
+        {
+            "id": "cp_002",
+            "content": "ジェネリクスを使った関数の利用例を示せる",
+            "format": "knowledge_and_practice",
+        },
+    ]
+    state: SessionState = {
+        "roadmap_item_title": "TypeScript ジェネリクス",
+        "roadmap_item_description": "型パラメータと型推論の理解を確認する",
+        "roadmap_item_level": "detail",
+    }
+
+    # Act
+    result = design_question_set(
+        state,
+        llm_client=_StubQuestionSetDesignLlm(confirmation_points),
     )
-    llm_signature = inspect.signature(
-        QuestionSetDesignLlmClient.generate_confirmation_points,
-    )
-    llm_hints = get_type_hints(
-        QuestionSetDesignLlmClient.generate_confirmation_points,
-    )
-    design_signature = inspect.signature(design_question_set)
-    design_hints = get_type_hints(design_question_set)
 
     # Assert
-    assert exception.error_code == "llm_request_failed"
-    assert exception.message == "question set design llm request failed"
-    assert exception.args == ("question set design llm request failed",)
-    assert tuple(llm_signature.parameters) == ("self", "title", "description", "level")
-    assert llm_hints == {
-        "title": str,
-        "description": str,
-        "level": str,
-        "return": list[ConfirmationPoint],
-    }
-    assert tuple(design_signature.parameters) == ("state", "llm")
-    llm_parameter = design_signature.parameters["llm"]
-    assert llm_parameter.kind is inspect.Parameter.KEYWORD_ONLY
-    assert design_hints == {
-        "state": SessionState,
-        "llm": QuestionSetDesignLlmClient,
-        "return": dict[str, object],
-    }
-    confirmation_point_hints = get_type_hints(ConfirmationPoint)
-    assert confirmation_point_hints == {
-        "id": str,
-        "content": str,
-        "format": Literal["knowledge", "knowledge_and_practice"],
-    }
+    returned_points = result["confirmation_points"]
+    assert returned_points == confirmation_points
+    assert result["current_point_index"] == 0
+    assert isinstance(returned_points, list)
+    ids = [point["id"] for point in returned_points]
+    assert all(point_id != "" for point_id in ids)
+    assert len(ids) == len(set(ids))
+    for point in returned_points:
+        assert point.keys() == {"id", "content", "format"}
+        assert isinstance(point["id"], str)
+        assert isinstance(point["content"], str)
+        assert point["format"] in {"knowledge", "knowledge_and_practice"}

@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from quiz.domain.session_state import QuizAnswerRecord, RoadmapItemLevel, SessionState
+from quiz.domain.session_state import (
+    QuizAnswerRecord,
+    QuizAnswerType,
+    RoadmapItemLevel,
+    SessionState,
+)
 
 
 class QuizSessionLifecycleError(Exception):
@@ -30,6 +35,16 @@ class StartSessionResult:
     resume_session_id: str | None
 
 
+class QuizAnswerRecordLike(Protocol):
+    question_number: int
+    question_text: str
+    answer_text: str
+    answer_type: str
+    score: int
+    feedback: str
+    confirmation_point_id: str
+
+
 class QuizSessionStore(Protocol):
     def create_session(self, roadmap_item_id: str) -> Any: ...
 
@@ -40,33 +55,43 @@ class QuizSessionStore(Protocol):
 
     def find_session(self, session_id: str) -> Any: ...
 
-    def mark_completed(self, session_id: str, completed_at: str) -> None: ...
+    def complete_session(
+        self,
+        session_id: str,
+        roadmap_item_id: str,
+        score: int,
+        completed_at: str,
+    ) -> None: ...
 
-    def delete_session(self, session_id: str) -> None: ...
+    def discard_session(self, session_id: str) -> None: ...
 
 
 class QuizAnswerStore(Protocol):
-    def save_answer(self, quiz_session_id: str, answer: Any) -> None: ...
+    def save_answer(
+        self,
+        quiz_session_id: str,
+        answer: QuizAnswerRecordLike,
+    ) -> None: ...
 
-    def find_by_session(self, session_id: str) -> list[Any]: ...
+    def find_by_session(self, session_id: str) -> list[QuizAnswerRecordLike]: ...
 
 
 class RoadmapItemReader(Protocol):
     def find_item(self, item_id: str) -> Any: ...
 
-    def update_score(self, item_id: str, score: int) -> None: ...
-
 
 class GraphRunner(Protocol):
-    def start_graph(self, state: dict[str, object]) -> None: ...
+    def start_graph(self, state: SessionState) -> None: ...
 
-    def resume_graph(self, state: dict[str, object]) -> None: ...
+    def resume_graph(self, state: SessionState) -> None: ...
 
 
 __all__ = [
     "GraphRunner",
     "QuizAnswerRecord",
+    "QuizAnswerRecordLike",
     "QuizAnswerStore",
+    "QuizAnswerType",
     "QuizSessionLifecycleError",
     "QuizSessionStore",
     "ResumeSessionInput",

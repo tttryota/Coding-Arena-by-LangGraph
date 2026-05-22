@@ -24,6 +24,9 @@ from shared.log_assertions import assert_single_log_event as _assert_single_log_
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from quiz.application.session_lifecycle_types import QuizAnswerRecordLike
+    from quiz.domain.session_state import SessionState
+
 
 _START_FAILED_EVENT = "quiz_session_start_failed"
 _START_CLEANUP_FAILED_EVENT = "quiz_session_start_cleanup_failed"
@@ -40,7 +43,7 @@ class _SessionRecord:
     started_at: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class _AnswerHistoryRecord:
     question_number: int
     question_text: str
@@ -207,11 +210,11 @@ class _RecordingAnswerStore:
         find_error: Exception | None = None,
         operation_log: list[str] | None = None,
     ) -> None:
-        self.histories = {
+        self.histories: dict[str, list[QuizAnswerRecordLike]] = {
             session_id: list(records)
             for session_id, records in (histories or {}).items()
         }
-        self._readable_histories = {
+        self._readable_histories: dict[str, list[QuizAnswerRecordLike]] = {
             session_id: list(records)
             for session_id, records in (
                 readable_histories if readable_histories is not None else self.histories
@@ -221,10 +224,14 @@ class _RecordingAnswerStore:
         self._save_error = save_error
         self._find_error = find_error
         self._operation_log = operation_log
-        self.save_answer_calls: list[tuple[str, _AnswerHistoryRecord]] = []
+        self.save_answer_calls: list[tuple[str, QuizAnswerRecordLike]] = []
         self.find_by_session_calls: list[str] = []
 
-    def save_answer(self, quiz_session_id: str, answer: _AnswerHistoryRecord) -> None:
+    def save_answer(
+        self,
+        quiz_session_id: str,
+        answer: QuizAnswerRecordLike,
+    ) -> None:
         self.save_answer_calls.append((quiz_session_id, answer))
         if self._operation_log is not None:
             self._operation_log.append("save_answer")
@@ -234,7 +241,7 @@ class _RecordingAnswerStore:
         if self._publish_on_save:
             self._readable_histories.setdefault(quiz_session_id, []).append(answer)
 
-    def find_by_session(self, session_id: str) -> list[_AnswerHistoryRecord]:
+    def find_by_session(self, session_id: str) -> list[QuizAnswerRecordLike]:
         self.find_by_session_calls.append(session_id)
         if self._operation_log is not None:
             self._operation_log.append("find_by_session")
@@ -280,8 +287,8 @@ class _RecordingGraphRunner:
         self.start_graph_calls: list[dict[str, object]] = []
         self.resume_graph_calls: list[dict[str, object]] = []
 
-    def start_graph(self, state: dict[str, object]) -> None:
-        snapshot = dict(state)
+    def start_graph(self, state: SessionState) -> None:
+        snapshot: dict[str, object] = dict(state)
         self.graph_call_sequence.append("start_graph")
         self.start_graph_calls.append(snapshot)
         if self._operation_log is not None:
@@ -289,8 +296,8 @@ class _RecordingGraphRunner:
         if self._start_error is not None:
             raise self._start_error
 
-    def resume_graph(self, state: dict[str, object]) -> None:
-        snapshot = dict(state)
+    def resume_graph(self, state: SessionState) -> None:
+        snapshot: dict[str, object] = dict(state)
         self.graph_call_sequence.append("resume_graph")
         self.resume_graph_calls.append(snapshot)
         if self._operation_log is not None:
@@ -1147,8 +1154,7 @@ def test_tc_31_start_session_item_load_failure_rolls_back_and_does_not_leave_res
 
     assert exc_info.value.error_code == "session_start_graph_failed"
     assert (
-        exc_info.value.message
-        == "quiz session start graph failed: "
+        exc_info.value.message == "quiz session start graph failed: "
         "session_id=session-item-load-failed, roadmap_item_id=item-001"
     )
     assert exc_info.value.__cause__ is original_error
@@ -1157,7 +1163,9 @@ def test_tc_31_start_session_item_load_failure_rolls_back_and_does_not_leave_res
     assert graph_runner.start_graph_calls == []
     assert session_store.discard_session_calls == [created_session.id]
     assert session_store.persisted_session(created_session.id) is None
-    assert session_store.find_in_progress_by_item(created_session.roadmap_item_id) is None
+    assert (
+        session_store.find_in_progress_by_item(created_session.roadmap_item_id) is None
+    )
     _assert_single_failure_log(
         log_output,
         event_name=_START_FAILED_EVENT,
@@ -1200,7 +1208,9 @@ def test_tc_31_start_session_graph_failure_keeps_orphan_non_resumable_when_disca
     persisted_session = session_store.persisted_session(created_session.id)
     assert persisted_session is not None
     assert persisted_session.status == "start_failed"
-    assert session_store.find_in_progress_by_item(created_session.roadmap_item_id) is None
+    assert (
+        session_store.find_in_progress_by_item(created_session.roadmap_item_id) is None
+    )
     assert session_store.discard_session_calls == [created_session.id]
     _assert_single_failure_log(
         log_output,
@@ -1241,8 +1251,7 @@ def test_tc_31_start_session_cleanup_failure_raises_dedicated_error_contract() -
 
     assert exc_info.value.error_code == "session_start_cleanup_failed"
     assert (
-        exc_info.value.message
-        == "quiz session start cleanup failed: "
+        exc_info.value.message == "quiz session start cleanup failed: "
         "session_id=session-cleanup-failed, roadmap_item_id=item-001"
     )
     assert exc_info.value.__cause__ is cleanup_error
@@ -1303,8 +1312,7 @@ def test_tc_32_resume_session_history_load_failure_keeps_state_unchanged_and_log
 
     assert exc_info.value.error_code == "session_resume_history_load_failed"
     assert (
-        exc_info.value.message
-        == "quiz session resume history load failed: "
+        exc_info.value.message == "quiz session resume history load failed: "
         "session_id=session-001, roadmap_item_id=item-001"
     )
     assert exc_info.value.__cause__ is original_error
@@ -1367,8 +1375,7 @@ def test_tc_32_resume_session_invalid_answer_type_uses_history_failure_contract_
 
     assert exc_info.value.error_code == "session_resume_history_load_failed"
     assert (
-        exc_info.value.message
-        == "quiz session resume history load failed: "
+        exc_info.value.message == "quiz session resume history load failed: "
         "session_id=session-invalid-answer-type, roadmap_item_id=item-001"
     )
     assert isinstance(exc_info.value.__cause__, ValueError)
@@ -1433,8 +1440,7 @@ def test_tc_32_resume_session_graph_failure_keeps_state_unchanged_and_logs_once(
 
     assert exc_info.value.error_code == "session_resume_llm_start_failed"
     assert (
-        exc_info.value.message
-        == "quiz session resume llm start failed: "
+        exc_info.value.message == "quiz session resume llm start failed: "
         "session_id=session-resume-fail, roadmap_item_id=item-001"
     )
     assert exc_info.value.__cause__ is original_error

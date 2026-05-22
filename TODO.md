@@ -106,6 +106,8 @@ backend/
 | roadmap | roadmap-generation | PR #6 |
 | platform | config, logging, rdb (models + migration), docker-compose | develop |
 | quiz 仕様 | Phase 0 仕様精査完了（SessionState定義、グラフ構造定義、不整合解消、8仕様書ready化） | develop |
+| quiz リファクタ | Phase 0.5 ディレクトリ構成リファクタ（DDD 3層分離） | develop |
+| quiz | Phase 1 全10モジュール実装（session-state, session-lifecycle, question-set-design, question-delivery, answer-evaluation, input-classification, explanation-generation, progress-update, summary-test-record, summary-test-results） | develop |
 
 ## 不要と判断済み
 

@@ -44,6 +44,7 @@ def deliver_question(
         logger.exception(
             _FAILED_EVENT,
             error_code=exception.error_code,
+            message=exception.message,
         )
         raise
 

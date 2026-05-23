@@ -40,6 +40,7 @@ def design_question_set(
         logger.exception(
             _FAILED_EVENT,
             error_code=exception.error_code,
+            message=exception.message,
             roadmap_item_title=title,
             roadmap_item_level=level,
             roadmap_item_description=description,

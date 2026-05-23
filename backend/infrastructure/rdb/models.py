@@ -7,11 +7,28 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from infrastructure.rdb.base import Base
 
 
+class Roadmap(Base):
+    __tablename__ = "roadmaps"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    topic: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    items: Mapped[list["RoadmapItem"]] = relationship(
+        "RoadmapItem",
+        back_populates="roadmap",
+    )
+
+
 class RoadmapItem(Base):
     __tablename__ = "roadmap_items"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    roadmap_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    roadmap_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("roadmaps.id"),
+        nullable=False,
+    )
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
         ForeignKey("roadmap_items.id"),
@@ -26,6 +43,10 @@ class RoadmapItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
+    roadmap: Mapped["Roadmap"] = relationship(
+        "Roadmap",
+        back_populates="items",
+    )
     children: Mapped[list["RoadmapItem"]] = relationship(
         "RoadmapItem",
         back_populates="parent",
@@ -91,6 +112,7 @@ class QuizAnswer(Base):
         ForeignKey("roadmap_items.id"),
         nullable=False,
     )
+    confirmation_point_id: Mapped[str] = mapped_column(String, nullable=False)
     question_number: Mapped[int] = mapped_column(Integer, nullable=False)
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
     answer_type: Mapped[str] = mapped_column(String, nullable=False)
@@ -148,3 +170,21 @@ class SummaryTestResult(Base):
         "QuizSession",
         back_populates="summary_test_result",
     )
+
+
+class Topic(Base):
+    __tablename__ = "topics"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    canonical_name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class DiffSnapshot(Base):
+    __tablename__ = "diff_snapshots"
+
+    snapshot_key: Mapped[str] = mapped_column(String, primary_key=True)
+    files_json: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

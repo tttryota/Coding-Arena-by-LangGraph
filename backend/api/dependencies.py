@@ -38,6 +38,7 @@ class Container:
             self._init_ingestion_stores()
             self._init_llm_clients()
             self._init_chroma_clients()
+            self._init_graph_runner()
             self._init_scheduler()
         except Exception:
             self.executor.shutdown(wait=False)
@@ -146,6 +147,29 @@ class Container:
         else:
             self.explanation_rag_client = None  # type: ignore[assignment]
         self.note_topic_reader = ChromaNoteTopicReader(self._chroma)
+
+    def _init_graph_runner(self) -> None:
+        from quiz.application.graph import QuizGraphRunner, build_graph
+        from quiz.application.graph_types import GraphDependencies
+
+        if self.explanation_rag_client is None:
+            self.graph_runner = None  # type: ignore[assignment]
+            return
+        deps = GraphDependencies(
+            question_set_design_llm=self.question_set_design_llm,
+            question_delivery_llm=self.question_delivery_llm,
+            input_classification_llm=self.input_classification_llm,
+            chat_response_llm=self.chat_response_llm,
+            answer_evaluation_llm=self.answer_evaluation_llm,
+            explanation_rag=self.explanation_rag_client,
+            explanation_llm=self.explanation_llm,
+            progress_update_llm=self.progress_update_llm,
+            progress_update_store=self.progress_update_store,
+            summary_test_llm=self.summary_test_llm,
+            summary_test_store=self.summary_test_result_store,
+        )
+        compiled = build_graph(deps)
+        self.graph_runner = QuizGraphRunner(compiled)
 
     def _init_scheduler(self) -> None:
         from roadmap.infrastructure.thread_pool_scheduler import (

@@ -6,6 +6,9 @@ _InputType = Literal["answer", "question", "explanation_request"]
 
 
 class InputClassificationError(Exception):
+    error_code: str
+    message: str
+
     def __init__(self, *, error_code: str, message: str) -> None:
         super().__init__(message)
         self.error_code = error_code

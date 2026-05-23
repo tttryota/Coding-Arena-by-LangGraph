@@ -89,3 +89,4 @@ plugins = ["pydantic.mypy"]
 testpaths = ["."]
 norecursedirs = ["shared", ".venv", "__pycache__", ".mypy_cache", ".ruff_cache", ".git", "data", "docs"]
 pythonpath = ["."]
+addopts = "--import-mode=importlib"

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime
-from importlib import import_module
 from typing import TYPE_CHECKING
 
 import structlog
@@ -13,9 +12,7 @@ from quiz.application.progress_update_types import (
 )
 
 if TYPE_CHECKING:
-    from quiz.domain import session_state as session_state_domain
-else:
-    session_state_domain = import_module("quiz.domain.session_state")
+    from quiz.domain.session_state import SessionState
 
 logger = structlog.get_logger(__name__)
 
@@ -23,7 +20,7 @@ _FAILED_EVENT = "progress_update_failed"
 
 
 def update_progress(
-    state: session_state_domain.SessionState,
+    state: SessionState,
     *,
     llm: ProgressUpdateLlmClient,
     store: ProgressUpdateStore,

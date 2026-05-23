@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import import_module
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from quiz.domain import session_state as session_state_domain
-else:
-    session_state_domain = import_module("quiz.domain.session_state")
+    from quiz.domain.session_state import QuizAnswerRecord
 
 
 class ProgressUpdateError(Exception):
@@ -31,7 +28,7 @@ class ProgressUpdateLlmClient(Protocol):
         roadmap_item_title: str,
         roadmap_item_description: str,
         checkpoints: list[str],
-        answers: list[session_state_domain.QuizAnswerRecord],
+        answers: list[QuizAnswerRecord],
     ) -> ProgressOutput: ...
 
 

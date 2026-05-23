@@ -24,10 +24,8 @@ from shared.log_assertions import assert_single_log_event as _assert_single_log_
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from quiz.domain.session_state import RoadmapItemLevel
-
     from quiz.application.session_lifecycle_types import QuizAnswerRecordLike
-    from quiz.domain.session_state import SessionState
+    from quiz.domain.session_state import RoadmapItemLevel, SessionState
 
 
 _START_FAILED_EVENT = "quiz_session_start_failed"

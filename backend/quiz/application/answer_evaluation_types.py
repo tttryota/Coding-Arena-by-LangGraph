@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import import_module
 from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
-    from quiz.domain import session_state as session_state_domain
-else:
-    session_state_domain = import_module("quiz.domain.session_state")
+    from quiz.domain.session_state import (
+        ConfirmationPoint,
+        QuizAnswerRecord,
+        QuizAnswerType,
+    )
 
 _NextAction = Literal["next", "deepdive", "complete"]
 
@@ -24,7 +25,7 @@ class EvaluationOutput:
     next_action: _NextAction
     score: int
     feedback: str
-    deepdive_points: list[session_state_domain.ConfirmationPoint]
+    deepdive_points: list[ConfirmationPoint]
 
 
 class AnswerEvaluationLlmClient(Protocol):
@@ -33,8 +34,8 @@ class AnswerEvaluationLlmClient(Protocol):
         question_text: str,
         confirmation_point_content: str,
         answer_text: str,
-        answer_type: session_state_domain.QuizAnswerType,
-        past_answers: list[session_state_domain.QuizAnswerRecord],
+        answer_type: QuizAnswerType,
+        past_answers: list[QuizAnswerRecord],
         total_questions_asked: int,
     ) -> EvaluationOutput: ...
 

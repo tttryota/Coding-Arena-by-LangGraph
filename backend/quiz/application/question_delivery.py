@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from importlib import import_module
 from typing import TYPE_CHECKING
 
 import structlog
@@ -11,9 +10,7 @@ from quiz.application.question_delivery_types import (
 )
 
 if TYPE_CHECKING:
-    from quiz.domain import session_state as session_state_domain
-else:
-    session_state_domain = import_module("quiz.domain.session_state")
+    from quiz.domain.session_state import SessionState
 
 logger = structlog.get_logger(__name__)
 
@@ -24,7 +21,7 @@ _TOTAL_QUESTIONS_ASKED_INCREMENT = 1
 
 
 def deliver_question(
-    state: session_state_domain.SessionState,
+    state: SessionState,
     *,
     llm: QuestionDeliveryLlmClient,
 ) -> dict[str, object]:

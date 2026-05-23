@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import import_module
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from quiz.domain import session_state as session_state_domain
-else:
-    session_state_domain = import_module("quiz.domain.session_state")
+    from quiz.domain.session_state import QuizAnswerRecord
 
 
 class SummaryTestRecordError(Exception):
@@ -28,7 +25,7 @@ class SummaryTestLlmClient(Protocol):
         self,
         title: str,
         description: str,
-        answers: list[session_state_domain.QuizAnswerRecord],
+        answers: list[QuizAnswerRecord],
     ) -> SummaryAnalysis: ...
 
 

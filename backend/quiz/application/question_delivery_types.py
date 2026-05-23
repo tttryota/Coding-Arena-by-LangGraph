@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import import_module
 from typing import TYPE_CHECKING, Literal, Protocol, overload
 
 if TYPE_CHECKING:
-    from quiz.domain import session_state as session_state_domain
-else:
-    session_state_domain = import_module("quiz.domain.session_state")
+    from quiz.domain.session_state import QuizAnswerRecord
 
 _KnowledgeConfirmationPointFormat = Literal["knowledge"]
 _KnowledgeAndPracticeConfirmationPointFormat = Literal["knowledge_and_practice"]
@@ -46,7 +43,7 @@ class QuestionDeliveryLlmClient(Protocol):
         description: str,
         confirmation_point_content: str,
         confirmation_point_format: _KnowledgeConfirmationPointFormat,
-        past_answers: list[session_state_domain.QuizAnswerRecord],
+        past_answers: list[QuizAnswerRecord],
     ) -> QuestionOutput: ...
 
     @overload
@@ -56,7 +53,7 @@ class QuestionDeliveryLlmClient(Protocol):
         description: str,
         confirmation_point_content: str,
         confirmation_point_format: _KnowledgeAndPracticeConfirmationPointFormat,
-        past_answers: list[session_state_domain.QuizAnswerRecord],
+        past_answers: list[QuizAnswerRecord],
     ) -> QuestionOutput: ...
 
     @overload
@@ -66,7 +63,7 @@ class QuestionDeliveryLlmClient(Protocol):
         description: str,
         confirmation_point_content: str,
         confirmation_point_format: _ConfirmationPointFormat,
-        past_answers: list[session_state_domain.QuizAnswerRecord],
+        past_answers: list[QuizAnswerRecord],
     ) -> QuestionOutput: ...
 
     def generate_question(  # noqa: PLR0913
@@ -75,7 +72,7 @@ class QuestionDeliveryLlmClient(Protocol):
         description: str,
         confirmation_point_content: str,
         confirmation_point_format: _ConfirmationPointFormat,
-        past_answers: list[session_state_domain.QuizAnswerRecord],
+        past_answers: list[QuizAnswerRecord],
     ) -> QuestionOutput: ...
 
 

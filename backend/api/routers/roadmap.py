@@ -97,6 +97,38 @@ def get_generation_job(job_id: UUID, request: Request) -> dict:
     return dict(status)
 
 
+@router.put("/{roadmap_id}/items/{item_id}/move")
+def move_item(
+    roadmap_id: UUID,
+    item_id: UUID,
+    body: _MoveItemRequest,
+    request: Request,
+) -> dict:
+    from roadmap.application.roadmap_item_crud import move_roadmap_item
+    from roadmap.domain.roadmap_item_crud_types import (
+        RoadmapItemCrudInputError,
+        RoadmapItemCrudNotFoundError,
+        RoadmapItemMoveInput,
+    )
+
+    c = _container(request)
+    try:
+        result = move_roadmap_item(
+            RoadmapItemMoveInput(
+                roadmap_id=roadmap_id,
+                item_id=item_id,
+                target_parent_id=body.target_parent_id,
+                target_order=body.target_order,
+            ),
+            store=c.roadmap_item_crud_store,
+        )
+    except RoadmapItemCrudNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RoadmapItemCrudInputError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"moved_item": _serialize_crud_item(result.moved_item)}
+
+
 @router.post("/{roadmap_id}/items", status_code=201)
 def add_item(
     roadmap_id: UUID,

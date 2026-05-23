@@ -40,6 +40,7 @@ class Container:
             self._init_chroma_clients()
             self._init_graph_runner()
             self._init_scheduler()
+            self._init_batch_adapters()
         except Exception:
             self.executor.shutdown(wait=False)
             raise
@@ -203,6 +204,27 @@ class Container:
 
         return runner
 
+    def _init_batch_adapters(self) -> None:
+        from ingestion.infrastructure.batch_adapters import (
+            ChunkSplitterAdapter,
+            ChunkTaggerAdapter,
+            DefaultTaggingPromptStrategy,
+            EmbedderAdapter,
+            FileDiffDetectorAdapter,
+            SimpleTokenCounter,
+        )
+
+        self.batch_diff_detector = FileDiffDetectorAdapter(self.diff_snapshot_store)
+        self.batch_chunk_splitter = ChunkSplitterAdapter(SimpleTokenCounter())
+        self.batch_chunk_tagger = ChunkTaggerAdapter(
+            DefaultTaggingPromptStrategy(),
+            self.tag_classifier,
+        )
+        if self._embedder is not None:
+            self.batch_embedder = EmbedderAdapter(self._embedder)
+        else:
+            self.batch_embedder = None  # type: ignore[assignment]
+
     def shutdown(self) -> None:
         self.executor.shutdown(wait=True)
 
@@ -210,5 +232,6 @@ class Container:
 class _UtcClock:
     def now(self) -> str:
         return datetime.now(tz=UTC).isoformat()
+
 
 __all__ = ["Container"]

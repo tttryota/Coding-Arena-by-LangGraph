@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID  # noqa: TC003
 
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from api.dependencies import Container
@@ -13,11 +14,49 @@ if TYPE_CHECKING:
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
 
+class _TriggerRequest(BaseModel):
+    target_path: str
+    trigger: str = "startup"
+
+
 def _container(request: Request) -> Container:
     c = getattr(request.app.state, "container", None)
     if c is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
     return c  # type: ignore[return-value]
+
+
+@router.post("/trigger", status_code=202)
+def trigger_ingestion(body: _TriggerRequest, request: Request) -> dict:
+    from dataclasses import asdict
+
+    from ingestion.application.batch_executor import BatchExecutionConfig, run_once
+    from ingestion.domain.batch_scheduler_types import BatchSchedulerConfigError
+    from ingestion.infrastructure.batch_adapters import VaultMarkdownLoaderImpl
+
+    c = _container(request)
+    if c.batch_embedder is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Ingestion service unavailable: embedder not configured",
+        )
+    trigger = body.trigger
+    if trigger not in ("startup", "interval"):
+        raise HTTPException(status_code=422, detail=f"Invalid trigger: {trigger}")
+    try:
+        config = BatchExecutionConfig(
+            target_path=body.target_path,
+            diff_detector=c.batch_diff_detector,
+            markdown_loader=VaultMarkdownLoaderImpl(body.target_path),
+            chunk_splitter=c.batch_chunk_splitter,
+            chunk_tagger=c.batch_chunk_tagger,
+            embedder=c.batch_embedder,
+            chunk_store=c.chunk_store,
+        )
+        result = run_once(config, trigger=trigger)  # type: ignore[arg-type]
+    except BatchSchedulerConfigError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return asdict(result)
 
 
 @router.get("/feedbacks")

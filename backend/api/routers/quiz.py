@@ -56,6 +56,35 @@ def start_session(body: _StartSessionRequest, request: Request) -> dict:
     }
 
 
+@router.post("/{session_id}/input")
+def submit_input(session_id: str, request: Request) -> dict:
+    from quiz.application.session_lifecycle import resume_session
+    from quiz.application.session_lifecycle_types import (
+        QuizSessionLifecycleError,
+        ResumeSessionInput,
+    )
+
+    c = _container(request)
+    if c.graph_runner is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Quiz service unavailable: embedder not configured",
+        )
+    try:
+        result = resume_session(
+            ResumeSessionInput(session_id=session_id),
+            session_store=c.quiz_session_store,
+            answer_store=c.quiz_answer_store,
+            item_reader=c.roadmap_item_read_store,
+            graph_runner=c.graph_runner,
+        )
+    except QuizSessionLifecycleError as exc:
+        raise HTTPException(status_code=422, detail=exc.message) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return dict(result)
+
+
 @router.get("/{session_id}")
 def get_session(session_id: str, request: Request) -> dict:
     c = _container(request)

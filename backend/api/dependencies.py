@@ -1,0 +1,190 @@
+"""DI container: Settings -> concrete instances."""
+
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+from infrastructure.llm.codex_transport import CodexLlmTransport
+from infrastructure.uuid_generator import UuidGenerator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from uuid import UUID
+
+    from sqlalchemy import Engine
+
+
+class Container:
+    """Application-level DI container."""
+
+    def __init__(
+        self,
+        engine: Engine,
+        chroma_collection: object,
+        codex_base_url: str,
+        embedder: object | None = None,
+    ) -> None:
+        self._engine = engine
+        self._chroma = chroma_collection
+        self._embedder = embedder
+        self.transport = CodexLlmTransport(base_url=codex_base_url)
+        self.uuid_generator = UuidGenerator()
+        self.executor = ThreadPoolExecutor(max_workers=2)
+        try:
+            self._init_quiz_stores()
+            self._init_roadmap_stores()
+            self._init_ingestion_stores()
+            self._init_llm_clients()
+            self._init_chroma_clients()
+            self._init_scheduler()
+        except Exception:
+            self.executor.shutdown(wait=False)
+            raise
+
+    def _init_quiz_stores(self) -> None:
+        from quiz.infrastructure.sql_progress_update_store import (
+            SqlProgressUpdateStore,
+        )
+        from quiz.infrastructure.sql_quiz_answer_store import SqlQuizAnswerStore
+        from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
+        from quiz.infrastructure.sql_roadmap_item_read_store import (
+            SqlRoadmapItemReadStore,
+        )
+        from quiz.infrastructure.sql_summary_test_result_store import (
+            SqlSummaryTestResultStore,
+        )
+
+        self.quiz_session_store = SqlQuizSessionStore(self._engine)
+        self.quiz_answer_store = SqlQuizAnswerStore(self._engine)
+        self.roadmap_item_read_store = SqlRoadmapItemReadStore(self._engine)
+        self.progress_update_store = SqlProgressUpdateStore(self._engine)
+        self.summary_test_result_store = SqlSummaryTestResultStore(self._engine)
+
+    def _init_roadmap_stores(self) -> None:
+        from roadmap.infrastructure.in_memory_job_status_store import (
+            InMemoryJobStatusStore,
+        )
+        from roadmap.infrastructure.sql_roadmap_item_crud_store import (
+            SqlRoadmapItemCrudStore,
+        )
+        from roadmap.infrastructure.sql_roadmap_persistence_writer import (
+            SqlRoadmapPersistenceWriter,
+        )
+        from roadmap.infrastructure.sql_roadmap_retrieval_reader import (
+            SqlRoadmapRetrievalReader,
+        )
+        from roadmap.infrastructure.sql_topic_store import SqlTopicStore
+
+        self.roadmap_persistence_writer = SqlRoadmapPersistenceWriter(self._engine)
+        self.roadmap_retrieval_reader = SqlRoadmapRetrievalReader(self._engine)
+        self.roadmap_item_crud_store = SqlRoadmapItemCrudStore(self._engine)
+        self.job_status_store = InMemoryJobStatusStore()
+        self.topic_store = SqlTopicStore(self._engine)
+
+    def _init_ingestion_stores(self) -> None:
+        from ingestion.infrastructure.sql_file_diff_snapshot_store import (
+            SqlFileDiffSnapshotStore,
+        )
+        from ingestion.infrastructure.sql_ingestion_feedback_store import (
+            SqlIngestionFeedbackStore,
+        )
+
+        self.ingestion_feedback_store = SqlIngestionFeedbackStore(self._engine)
+        self.diff_snapshot_store = SqlFileDiffSnapshotStore(self._engine)
+
+    def _init_llm_clients(self) -> None:
+        from ingestion.infrastructure.codex_ingestion_feedback_llm import (
+            CodexIngestionFeedbackLlm,
+        )
+        from ingestion.infrastructure.codex_llm_tag_classifier import (
+            CodexLlmTagClassifier,
+        )
+        from quiz.infrastructure.codex_llm_adapters import (
+            CodexAnswerEvaluationLlm,
+            CodexChatResponseLlm,
+            CodexExplanationLlm,
+            CodexInputClassificationLlm,
+            CodexProgressUpdateLlm,
+            CodexQuestionDeliveryLlm,
+            CodexQuestionSetDesignLlm,
+            CodexSummaryTestLlm,
+        )
+        from roadmap.infrastructure.codex_roadmap_generation_llm import (
+            CodexRoadmapGenerationLlm,
+        )
+
+        t = self.transport
+        self.question_set_design_llm = CodexQuestionSetDesignLlm(t)
+        self.question_delivery_llm = CodexQuestionDeliveryLlm(t)
+        self.input_classification_llm = CodexInputClassificationLlm(t)
+        self.chat_response_llm = CodexChatResponseLlm(t)
+        self.answer_evaluation_llm = CodexAnswerEvaluationLlm(t)
+        self.explanation_llm = CodexExplanationLlm(t)
+        self.progress_update_llm = CodexProgressUpdateLlm(t)
+        self.summary_test_llm = CodexSummaryTestLlm(t)
+        self.roadmap_generation_llm = CodexRoadmapGenerationLlm(t)
+        self.ingestion_feedback_llm = CodexIngestionFeedbackLlm(t)
+        self.tag_classifier = CodexLlmTagClassifier(t)
+
+    def _init_chroma_clients(self) -> None:
+        from ingestion.infrastructure.chroma_chunk_store import ChromaChunkStore
+        from quiz.infrastructure.chroma_explanation_rag import (
+            ChromaExplanationRagClient,
+        )
+        from roadmap.infrastructure.chroma_note_topic_reader import (
+            ChromaNoteTopicReader,
+        )
+
+        self.chunk_store = ChromaChunkStore(self._chroma)
+        if self._embedder is not None:
+            self.explanation_rag_client = ChromaExplanationRagClient(
+                self._chroma,
+                self._embedder,
+            )
+        else:
+            self.explanation_rag_client = None  # type: ignore[assignment]
+        self.note_topic_reader = ChromaNoteTopicReader(self._chroma)
+
+    def _init_scheduler(self) -> None:
+        from roadmap.infrastructure.thread_pool_scheduler import (
+            ThreadPoolJobScheduler,
+        )
+
+        self.job_scheduler = ThreadPoolJobScheduler(
+            executor=self.executor,
+            job_runner=self._make_job_runner(),
+        )
+
+    def _make_job_runner(self) -> Callable[[UUID, str], None]:
+        from roadmap.application.roadmap_generation import (
+            _run_roadmap_generation_job,
+        )
+
+        llm = self.roadmap_generation_llm
+        persistence = self.roadmap_persistence_writer
+        job_store = self.job_status_store
+        clock = _UtcClock()
+
+        def runner(job_id: UUID, topic: str) -> None:
+            _run_roadmap_generation_job(
+                job_id,
+                topic,
+                llm_client=llm,
+                persistence=persistence,
+                job_store=job_store,
+                clock=clock,
+            )
+
+        return runner
+
+    def shutdown(self) -> None:
+        self.executor.shutdown(wait=True)
+
+
+class _UtcClock:
+    def now(self) -> str:
+        return datetime.now(tz=UTC).isoformat()
+
+__all__ = ["Container"]

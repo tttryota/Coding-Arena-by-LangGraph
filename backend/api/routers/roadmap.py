@@ -50,14 +50,17 @@ def list_roadmaps(request: Request) -> dict:
 
 @router.get("/{roadmap_id}")
 def get_roadmap(roadmap_id: UUID, request: Request) -> dict:
+    from dataclasses import asdict
+
     from roadmap.application.roadmap_retrieval import get_roadmap as _get
     from roadmap.domain.roadmap_retrieval_types import RoadmapRetrievalNotFoundError
 
     c = _container(request)
     try:
-        return _get(roadmap_id, reader=c.roadmap_retrieval_reader)  # type: ignore[return-value]
+        result = _get(roadmap_id, reader=c.roadmap_retrieval_reader)
     except RoadmapRetrievalNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return asdict(result)  # type: ignore[arg-type]
 
 
 @router.post("/generate", status_code=202)

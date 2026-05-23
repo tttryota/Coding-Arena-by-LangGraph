@@ -120,7 +120,23 @@ class SqlIngestionFeedbackStore:
 
 
 def _to_feedback_list_item(row: IngestionFeedback) -> FeedbackListItem:
+    from datetime import UTC
+
     from ingestion.domain.feedback_listing_types import FeedbackListItem
+
+    created_at = (
+        row.created_at.replace(tzinfo=UTC)
+        if row.created_at.tzinfo is None
+        else row.created_at
+    )
+    read_at = None
+    if row.read_at is not None:
+        read_at_dt = (
+            row.read_at.replace(tzinfo=UTC)
+            if row.read_at.tzinfo is None
+            else row.read_at
+        )
+        read_at = read_at_dt.isoformat()
 
     return FeedbackListItem(
         id=row.id,
@@ -129,8 +145,8 @@ def _to_feedback_list_item(row: IngestionFeedback) -> FeedbackListItem:
         title=row.title,
         body=row.body,
         is_read=row.is_read,
-        created_at=row.created_at.isoformat(),
-        read_at=row.read_at.isoformat() if row.read_at else None,
+        created_at=created_at.isoformat(),
+        read_at=read_at,
     )
 
 

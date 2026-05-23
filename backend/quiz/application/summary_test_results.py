@@ -15,6 +15,7 @@ def get_summary_test_results(
     existence_checker: RoadmapItemExistenceChecker,
     store: SummaryTestResultsStore,
 ) -> list[SummaryTestResultRecord]:
+    """まとめテスト結果の履歴をロードマップ項目 ID で取得する。"""
     try:
         exists = existence_checker.item_exists(roadmap_item_id)
     except Exception as exception:

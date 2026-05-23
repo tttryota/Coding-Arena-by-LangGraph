@@ -24,6 +24,7 @@ def record_summary_test(
     llm: SummaryTestLlmClient,
     store: SummaryTestStore,
 ) -> None:
+    """C9: まとめテストの LLM 定性分析を SummaryTestResult に保存する LangGraph ノード関数。"""
     level = state["roadmap_item_level"]
 
     if level == "detail":

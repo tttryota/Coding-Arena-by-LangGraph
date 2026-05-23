@@ -25,6 +25,7 @@ def deliver_question(
     *,
     llm: QuestionDeliveryLlmClient,
 ) -> dict[str, object]:
+    """C3: 確認ポイントから問題文を動的生成する LangGraph ノード関数。"""
     confirmation_points = state["confirmation_points"]
     current_point_index = state["current_point_index"]
     if current_point_index >= len(confirmation_points):

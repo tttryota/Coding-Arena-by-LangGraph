@@ -26,6 +26,7 @@ def design_question_set(
     *,
     llm_client: QuestionSetDesignLlmClient,
 ) -> dict[str, object]:
+    """C2: 確認ポイントリストを設計する LangGraph ノード関数。"""
     title = state["roadmap_item_title"]
     description = state["roadmap_item_description"]
     level = state["roadmap_item_level"]

@@ -23,6 +23,7 @@ def evaluate_answer(
     *,
     llm: AnswerEvaluationLlmClient,
 ) -> dict[str, object]:
+    """C4: ユーザー回答を評価し next/deepdive/complete を判断する LangGraph ノード関数。"""
     confirmation_points = state["confirmation_points"]
     current_point_index = state["current_point_index"]
     confirmation_point = confirmation_points[current_point_index]

@@ -24,6 +24,7 @@ def generate_explanation(
     rag: ExplanationRagClient,
     llm: ExplanationLlmClient,
 ) -> dict[str, object]:
+    """C6: RAG でノート参照し LLM で解説を生成する LangGraph ノード関数。"""
     question_text = state["current_question_text"]
     confirmation_points = state["confirmation_points"]
     current_point_index = state["current_point_index"]

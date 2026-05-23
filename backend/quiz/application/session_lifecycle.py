@@ -81,6 +81,7 @@ def start_session(
     input: StartSessionInput,  # noqa: A002
     **dependency_arguments: Unpack[_StartSessionDependencyArguments],
 ) -> StartSessionResult:
+    """新規セッションを開始する。in_progress 既存時は再開を促す。"""
     session_store = dependency_arguments["session_store"]
     item_reader = dependency_arguments["item_reader"]
     graph_runner = dependency_arguments["graph_runner"]
@@ -134,6 +135,7 @@ def record_answer(
     *,
     answer_store: QuizAnswerStore,
 ) -> None:
+    """回答を QuizAnswer に永続化する。"""
     answer_store.save_answer(session_id, answer)
 
 
@@ -143,6 +145,7 @@ def complete_session(
     *,
     session_store: QuizSessionStore,
 ) -> None:
+    """セッションを完了し score を反映する。"""
     session = session_store.find_session(session_id)
     session_store.complete_session(
         session.id,
@@ -156,6 +159,7 @@ def resume_session(
     input: ResumeSessionInput,  # noqa: A002
     **dependency_arguments: Unpack[_ResumeSessionDependencyArguments],
 ) -> SessionState:
+    """in_progress セッションを QuizAnswer 履歴から再開する。"""
     dependencies = _ResumeSessionDependencies(
         session_store=dependency_arguments["session_store"],
         answer_store=dependency_arguments["answer_store"],

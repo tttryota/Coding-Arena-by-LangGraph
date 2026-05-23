@@ -19,12 +19,13 @@ logger = structlog.get_logger(__name__)
 _FAILED_EVENT = "progress_update_failed"
 
 
-def update_progress(
+def update_progress(  # noqa: PLR0915
     state: SessionState,
     *,
     llm: ProgressUpdateLlmClient,
     store: ProgressUpdateStore,
 ) -> dict[str, object]:
+    """C7/C8: 全問答から総合評価し score を算出・反映する LangGraph ノード関数。"""
     session_id = state["session_id"]
     answers = state["answers"]
 

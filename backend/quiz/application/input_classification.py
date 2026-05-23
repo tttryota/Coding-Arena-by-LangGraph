@@ -22,6 +22,7 @@ def classify_input(
     *,
     llm: InputClassificationLlmClient,
 ) -> dict[str, object]:
+    """ユーザー入力を answer / question / explanation_request に分類する LangGraph ノード関数。"""
     try:
         input_type = llm.classify_input(
             question_text=state["current_question_text"],

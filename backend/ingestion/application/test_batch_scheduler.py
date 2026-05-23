@@ -317,6 +317,7 @@ def _make_config(
     dependencies: _Dependencies,
     *,
     target_path: str = _TARGET_PATH,
+    post_ingestion_hook: object | None = None,
 ) -> BatchExecutionConfig:
     return BatchExecutionConfig(
         target_path=target_path,
@@ -326,6 +327,7 @@ def _make_config(
         chunk_tagger=dependencies.chunk_tagger,
         embedder=dependencies.embedder,
         chunk_store=dependencies.chunk_store,
+        post_ingestion_hook=post_ingestion_hook,
     )
 
 
@@ -1140,3 +1142,368 @@ class TestBatchSchedulerLogging:
                 "stored_chunk_count": 0,
             },
         )
+
+
+# ---------------------------------------------------------------------------
+# PostIngestionHook
+# ---------------------------------------------------------------------------
+
+
+class _RecordingPostIngestionHook:
+    def __init__(
+        self,
+        operations: list[tuple[str, str]],
+        *,
+        errors: dict[str, Exception] | None = None,
+    ) -> None:
+        self.attempts: list[tuple[str, list[tuple[int, str]]]] = []
+        self.successful_calls: list[tuple[str, list[tuple[int, str]]]] = []
+        self._operations = operations
+        self._errors = dict(errors or {})
+
+    def on_file_ingested(
+        self,
+        source_path: str,
+        chunk_data: list[tuple[int, str]],
+    ) -> None:
+        self.attempts.append((source_path, list(chunk_data)))
+        self._operations.append(("post_ingestion_hook", source_path))
+        error = self._errors.get(source_path)
+        if error is not None:
+            raise error
+        self.successful_calls.append((source_path, list(chunk_data)))
+
+
+class TestBatchSchedulerPostIngestionHook:
+    def test_hook_called_after_upsert_for_new_file(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=["notes/a.md"],
+                updated_files=[],
+                deleted_files=[],
+            ),
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert result.ingested_success_count == 1
+        assert result.stored_chunk_count == 1
+        assert len(hook.successful_calls) == 1
+        assert hook.successful_calls[0][0] == "notes/a.md"
+        assert dependencies.operations == [
+            ("load", "notes/a.md"),
+            ("split", "notes/a.md"),
+            ("tag", "notes/a.md"),
+            ("embed", "notes/a.md"),
+            ("upsert_chunks", "notes/a.md"),
+            ("post_ingestion_hook", "notes/a.md"),
+        ]
+
+    def test_hook_called_after_upsert_for_updated_file(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=[],
+                updated_files=["notes/updated.md"],
+                deleted_files=[],
+            ),
+            split_chunk_counts={"notes/updated.md": 2},
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert result.ingested_success_count == 1
+        assert len(hook.successful_calls) == 1
+        source_path, chunk_data = hook.successful_calls[0]
+        assert source_path == "notes/updated.md"
+        assert chunk_data == [
+            (0, "chunk::notes/updated.md::0"),
+            (1, "chunk::notes/updated.md::1"),
+        ]
+        assert dependencies.operations == [
+            ("load", "notes/updated.md"),
+            ("split", "notes/updated.md"),
+            ("tag", "notes/updated.md"),
+            ("embed", "notes/updated.md"),
+            ("delete_by_source_path", "notes/updated.md"),
+            ("upsert_chunks", "notes/updated.md"),
+            ("post_ingestion_hook", "notes/updated.md"),
+        ]
+
+    def test_hook_not_called_for_deleted_files(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=[],
+                updated_files=[],
+                deleted_files=["notes/old.md"],
+            ),
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert hook.attempts == []
+        assert result.deleted_success_count == 1
+        assert ("delete_by_source_path", "notes/old.md") in dependencies.operations
+
+    def test_hook_not_called_for_failed_ingestion(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=["notes/bad.md"],
+                updated_files=[],
+                deleted_files=[],
+            ),
+            loader_errors={"notes/bad.md": FileNotFoundError("missing")},
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert hook.attempts == []
+        assert result.failed_file_count == 1
+        assert result.ingested_success_count == 0
+
+    def test_hook_failure_does_not_break_batch_new_files(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=["notes/a.md", "notes/b.md"],
+                updated_files=[],
+                deleted_files=[],
+            ),
+        )
+        hook = _RecordingPostIngestionHook(
+            dependencies.operations,
+            errors={"notes/a.md": RuntimeError("hook failed")},
+        )
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert result.ingested_success_count == 2
+        assert result.stored_chunk_count == 2
+        assert result.failed_file_count == 0
+        assert len(hook.attempts) == 2
+        assert len(hook.successful_calls) == 1
+        assert hook.successful_calls[0][0] == "notes/b.md"
+        assert dependencies.operations == [
+            ("load", "notes/a.md"),
+            ("split", "notes/a.md"),
+            ("tag", "notes/a.md"),
+            ("embed", "notes/a.md"),
+            ("upsert_chunks", "notes/a.md"),
+            ("post_ingestion_hook", "notes/a.md"),
+            ("load", "notes/b.md"),
+            ("split", "notes/b.md"),
+            ("tag", "notes/b.md"),
+            ("embed", "notes/b.md"),
+            ("upsert_chunks", "notes/b.md"),
+            ("post_ingestion_hook", "notes/b.md"),
+        ]
+
+    def test_hook_failure_does_not_break_batch_updated_file(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=[],
+                updated_files=["notes/up.md"],
+                deleted_files=[],
+            ),
+        )
+        hook = _RecordingPostIngestionHook(
+            dependencies.operations,
+            errors={"notes/up.md": RuntimeError("hook failed")},
+        )
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert result.ingested_success_count == 1
+        assert result.stored_chunk_count == 1
+        assert result.failed_file_count == 0
+        assert len(hook.attempts) == 1
+        assert hook.successful_calls == []
+        assert dependencies.operations == [
+            ("load", "notes/up.md"),
+            ("split", "notes/up.md"),
+            ("tag", "notes/up.md"),
+            ("embed", "notes/up.md"),
+            ("delete_by_source_path", "notes/up.md"),
+            ("upsert_chunks", "notes/up.md"),
+            ("post_ingestion_hook", "notes/up.md"),
+        ]
+
+    def test_hook_receives_correct_chunk_data(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=["notes/multi.md"],
+                updated_files=[],
+                deleted_files=[],
+            ),
+            split_chunk_counts={"notes/multi.md": 3},
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        run_once(config, trigger="interval")
+
+        assert len(hook.successful_calls) == 1
+        source_path, chunk_data = hook.successful_calls[0]
+        assert source_path == "notes/multi.md"
+        assert chunk_data == [
+            (0, "chunk::notes/multi.md::0"),
+            (1, "chunk::notes/multi.md::1"),
+            (2, "chunk::notes/multi.md::2"),
+        ]
+
+    def test_hook_not_called_when_not_configured(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=["notes/a.md"],
+                updated_files=[],
+                deleted_files=[],
+            ),
+        )
+        config = _make_config(dependencies)
+
+        result = run_once(config, trigger="interval")
+
+        assert result.ingested_success_count == 1
+        assert ("post_ingestion_hook", "notes/a.md") not in dependencies.operations
+
+    def test_hook_called_with_empty_data_for_empty_split(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=["notes/empty.md"],
+                updated_files=[],
+                deleted_files=[],
+            ),
+            split_empty_sources={"notes/empty.md"},
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert len(hook.successful_calls) == 1
+        assert hook.successful_calls[0] == ("notes/empty.md", [])
+        assert result.ingested_success_count == 1
+        assert result.failed_file_count == 0
+
+    def test_hook_not_called_when_upsert_fails(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=["notes/a.md"],
+                updated_files=[],
+                deleted_files=[],
+            ),
+            upsert_errors={"notes/a.md": ChunkStoreWriteError("upsert failed")},
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert hook.attempts == []
+        assert result.ingested_success_count == 0
+        assert result.failed_file_count == 1
+
+    def test_hook_not_called_when_delete_old_chunks_fails_for_updated(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=[],
+                updated_files=["notes/updated.md"],
+                deleted_files=[],
+            ),
+            delete_errors={
+                "notes/updated.md": ChunkStoreWriteError("delete failed"),
+            },
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert hook.attempts == []
+        assert result.ingested_success_count == 0
+        assert result.failed_file_count == 1
+
+    def test_hook_called_with_empty_data_for_empty_split_updated_file(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=[],
+                updated_files=["notes/empty-updated.md"],
+                deleted_files=[],
+            ),
+            split_empty_sources={"notes/empty-updated.md"},
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert len(hook.successful_calls) == 1
+        assert hook.successful_calls[0] == ("notes/empty-updated.md", [])
+        assert result.ingested_success_count == 1
+        assert result.failed_file_count == 0
+        assert ("upsert_chunks", "notes/empty-updated.md") not in (
+            dependencies.operations
+        )
+        assert ("delete_by_source_path", "notes/empty-updated.md") in (
+            dependencies.operations
+        )
+
+    @pytest.mark.parametrize(
+        ("error_kwarg", "error_key"),
+        [
+            ("split_errors", "split"),
+            ("tag_errors", "tag"),
+            ("embed_errors", "embed"),
+        ],
+    )
+    def test_hook_not_called_when_pipeline_step_fails(
+        self,
+        error_kwarg: str,
+        error_key: str,
+    ) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=["notes/fail.md"],
+                updated_files=[],
+                deleted_files=[],
+            ),
+            **{error_kwarg: {"notes/fail.md": RuntimeError(f"{error_key} failed")}},
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert hook.attempts == []
+        assert result.failed_file_count == 1
+        assert result.ingested_success_count == 0
+
+    def test_hook_not_called_when_updated_file_upsert_fails(self) -> None:
+        dependencies = _make_dependencies(
+            _make_diff_result(
+                new_files=[],
+                updated_files=["notes/up.md"],
+                deleted_files=[],
+            ),
+            upsert_errors={
+                "notes/up.md": ChunkStoreWriteError("upsert failed"),
+            },
+        )
+        hook = _RecordingPostIngestionHook(dependencies.operations)
+        config = _make_config(dependencies, post_ingestion_hook=hook)
+
+        result = run_once(config, trigger="interval")
+
+        assert hook.attempts == []
+        assert result.ingested_success_count == 0
+        assert result.failed_file_count == 1
+        assert ("delete_by_source_path", "notes/up.md") in dependencies.operations
+        assert ("upsert_chunks", "notes/up.md") in dependencies.operations

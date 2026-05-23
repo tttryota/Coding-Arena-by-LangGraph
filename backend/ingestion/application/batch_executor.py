@@ -20,6 +20,7 @@ from ingestion.domain.batch_scheduler_types import (
     FailedFileStep,
     FailedFileSummary,
     FileDiffDetector,
+    PostIngestionHook,
     VaultMarkdownLoader,
 )
 
@@ -64,6 +65,7 @@ class BatchExecutionConfig:
     chunk_tagger: ChunkTagger
     embedder: Embedder
     chunk_store: ChunkStore
+    post_ingestion_hook: PostIngestionHook | None = None
 
 
 @dataclass
@@ -259,6 +261,7 @@ def _ingest_new_file(
             action=INGEST_NEW_ACTION,
             stored_chunk_count=NO_STORED_CHUNKS,
         )
+        _invoke_post_ingestion_hook(config, source_path, [])
         return
 
     upsert_result = _run_step(
@@ -296,6 +299,7 @@ def _ingest_new_file(
         action=INGEST_NEW_ACTION,
         stored_chunk_count=upsert_result.stored_count,
     )
+    _invoke_post_ingestion_hook(config, source_path, prepared_chunks)
 
 
 def _ingest_updated_file(
@@ -333,6 +337,7 @@ def _ingest_updated_file(
             action=INGEST_UPDATED_ACTION,
             stored_chunk_count=NO_STORED_CHUNKS,
         )
+        _invoke_post_ingestion_hook(config, source_path, [])
         return
 
     upsert_result = _run_step(
@@ -370,6 +375,27 @@ def _ingest_updated_file(
         action=INGEST_UPDATED_ACTION,
         stored_chunk_count=upsert_result.stored_count,
     )
+    _invoke_post_ingestion_hook(config, source_path, prepared_chunks)
+
+
+def _invoke_post_ingestion_hook(
+    config: BatchExecutionConfig,
+    source_path: str,
+    prepared_chunks: list[tuple[_TaggedChunk, list[float]]],
+) -> None:
+    if config.post_ingestion_hook is None:
+        return
+    chunk_data = [(chunk.chunk_index, chunk.text) for chunk, _ in prepared_chunks]
+    try:
+        config.post_ingestion_hook.on_file_ingested(source_path, chunk_data)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "ingestion_post_hook_failed",
+            source_path=source_path,
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+            exc_info=exc,
+        )
 
 
 def _prepare_chunks(

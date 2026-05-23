@@ -132,3 +132,11 @@ class ChunkStore(Protocol):
         self,
         upsert_input: ChunkStoreUpsertInput,
     ) -> ChunkStoreUpsertResult: ...
+
+
+class PostIngestionHook(Protocol):
+    def on_file_ingested(
+        self,
+        source_path: str,
+        chunk_data: list[tuple[int, str]],
+    ) -> None: ...

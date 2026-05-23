@@ -27,7 +27,7 @@ def evaluate_answer(
     confirmation_points = state["confirmation_points"]
     current_point_index = state["current_point_index"]
     confirmation_point = confirmation_points[current_point_index]
-    answers = state["answers"]
+    answers = state.get("answers", [])
 
     try:
         output = llm.evaluate_answer(

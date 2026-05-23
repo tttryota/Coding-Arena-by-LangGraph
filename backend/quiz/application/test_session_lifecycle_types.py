@@ -14,6 +14,7 @@ from quiz.application.session_lifecycle_types import (
     StartSessionInput,
     StartSessionResult,
 )
+from quiz.domain.session_state import InputSource
 
 
 def _assert_frozen_dataclass(candidate: type[object]) -> None:
@@ -35,8 +36,16 @@ def test_resume_contract_stays_session_id_only_without_expiry_inputs() -> None:
     _assert_frozen_dataclass(StartSessionResult)
     assert [field.name for field in fields(StartSessionInput)] == ["roadmap_item_id"]
     assert start_input_hints == {"roadmap_item_id": str}
-    assert [field.name for field in fields(ResumeSessionInput)] == ["session_id"]
-    assert resume_input_hints == {"session_id": str}
+    assert [field.name for field in fields(ResumeSessionInput)] == [
+        "session_id",
+        "user_input",
+        "input_source",
+    ]
+    assert resume_input_hints == {
+        "session_id": str,
+        "user_input": str,
+        "input_source": InputSource,
+    }
     assert [field.name for field in fields(StartSessionResult)] == [
         "session_id",
         "resume_required",

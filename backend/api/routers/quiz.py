@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from api.dependencies import Container
@@ -15,6 +15,11 @@ router = APIRouter(prefix="/sessions", tags=["quiz"])
 
 class _StartSessionRequest(BaseModel):
     roadmap_item_id: str
+
+
+class _SubmitInputRequest(BaseModel):
+    user_input: str = Field(min_length=1)
+    input_source: Literal["form", "chat"] = "form"
 
 
 def _container(request: Request) -> Container:
@@ -57,7 +62,7 @@ def start_session(body: _StartSessionRequest, request: Request) -> dict:
 
 
 @router.post("/{session_id}/input")
-def submit_input(session_id: str, request: Request) -> dict:
+def submit_input(session_id: str, body: _SubmitInputRequest, request: Request) -> dict:
     from quiz.application.session_lifecycle import resume_session
     from quiz.application.session_lifecycle_types import (
         QuizSessionLifecycleError,
@@ -72,7 +77,11 @@ def submit_input(session_id: str, request: Request) -> dict:
         )
     try:
         result = resume_session(
-            ResumeSessionInput(session_id=session_id),
+            ResumeSessionInput(
+                session_id=session_id,
+                user_input=body.user_input,
+                input_source=body.input_source,
+            ),
             session_store=c.quiz_session_store,
             answer_store=c.quiz_answer_store,
             item_reader=c.roadmap_item_read_store,

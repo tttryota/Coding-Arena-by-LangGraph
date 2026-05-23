@@ -1,7 +1,7 @@
 """Quiz シナリオテスト Q-1..Q-4。
 
 Q-1, Q-3: セッションライフサイクル (graph_runner は NoOp に差替え)
-Q-2: グラフ resume (checkpointer 未対応のため制約あり)
+Q-2: グラフ interrupt/resume (MemorySaver + Command(resume) で実 LangGraph 動作確認)
 Q-4: 存在しない item_id → エラー
 """
 
@@ -68,10 +68,10 @@ VALID_ROADMAP_JSON = json.dumps(
 class _NoOpGraphRunner:
     """テスト用: start_graph / resume_graph を no-op にする。"""
 
-    def start_graph(self, state: object) -> None:
+    def start_graph(self, state: object, *, thread_id: str) -> None:
         pass
 
-    def resume_graph(self, state: object) -> None:
+    def resume_graph(self, user_input: object, *, thread_id: str) -> None:
         pass
 
 
@@ -200,3 +200,146 @@ class TestQ3ExistingSessionDetection:
         second_data = second_resp.json()
         assert second_data["resume_required"] is True
         assert second_data["resume_session_id"] == first_session_id
+
+
+# ---------------------------------------------------------------------------
+# Q-2: ユーザー入力送信 (interrupt/resume)
+# ---------------------------------------------------------------------------
+
+# LLM レスポンス定義
+_QUESTION_SET_DESIGN_RESPONSE = json.dumps(
+    [
+        {
+            "id": "cp-1",
+            "content": "基礎概念の理解",
+            "format": "knowledge",
+        },
+    ],
+    ensure_ascii=False,
+)
+
+_QUESTION_DELIVERY_RESPONSE = json.dumps(
+    {
+        "question_text": "TypeScriptのジェネリクスとは何ですか？",  # noqa: RUF001
+        "answer_type": "textarea",
+    },
+    ensure_ascii=False,
+)
+
+_ANSWER_EVALUATION_RESPONSE = json.dumps(
+    {
+        "next_action": "complete",
+        "score": 80,
+        "feedback": "型パラメータの概念を理解できています。",
+        "deepdive_points": [],
+    },
+    ensure_ascii=False,
+)
+
+_PROGRESS_UPDATE_RESPONSE = json.dumps(
+    {
+        "score": 80,
+        "comment": "基礎概念を十分に理解しています。",
+    },
+    ensure_ascii=False,
+)
+
+
+class TestQ2UserInputSubmission:
+    def test_start_then_submit_input_completes_graph(
+        self,
+        client: TestClient,
+        integration_container: object,
+        scenario_transport: ScenarioLlmTransport,
+    ) -> None:
+        """POST /sessions → interrupt → POST /sessions/{id}/input → グラフ完走。"""
+        # Arrange: ロードマップを作成して detail item_id を取得
+        detail_item_id = _create_roadmap_and_get_detail_item_id(
+            client,
+            scenario_transport,
+        )
+
+        # Arrange: 実 graph_runner を使う (MemorySaver 付き)
+        # integration_container は各テストで新規 Container (新規 MemorySaver) が作られるため隔離される
+
+        # Arrange: start_graph 用 LLM レスポンス (question_set_design, question_delivery)
+        # set_sequential_responses はレスポンスキューを置換しカウンタをリセットする
+        scenario_transport.set_sequential_responses([
+            _QUESTION_SET_DESIGN_RESPONSE,
+            _QUESTION_DELIVERY_RESPONSE,
+        ])
+        calls_before_start = scenario_transport.call_count
+
+        # Act: セッション開始 (グラフは interrupt で一時停止)
+        start_resp = client.post(
+            "/sessions",
+            json={"roadmap_item_id": detail_item_id},
+        )
+        assert start_resp.status_code == 201, start_resp.text
+        session_id = start_resp.json()["session_id"]
+
+        # Assert: start_graph で 2 ノード (question_set_design, question_delivery) が実行された
+        assert scenario_transport.call_count - calls_before_start == 2
+
+        # Arrange: resume 用 LLM レスポンス (answer_evaluation, progress_update)
+        scenario_transport.set_sequential_responses([
+            _ANSWER_EVALUATION_RESPONSE,
+            _PROGRESS_UPDATE_RESPONSE,
+        ])
+        calls_before_resume = scenario_transport.call_count
+
+        # Act: ユーザー入力送信 (グラフ resume → answer_evaluation → progress_update → END)
+        input_resp = client.post(
+            f"/sessions/{session_id}/input",
+            json={"user_input": "型パラメータで再利用可能な型を定義できます。", "input_source": "form"},
+        )
+        assert input_resp.status_code == 200, input_resp.text
+
+        # Assert: resume_graph で 2 ノード (answer_evaluation, progress_update) が実行された
+        assert scenario_transport.call_count - calls_before_resume == 2
+
+        # Assert: レスポンスボディに再開セッションの状態が含まれる
+        # resume_session はグラフ実行前の state を返す設計 (pre-graph state 契約)
+        input_data = input_resp.json()
+        assert set(input_data.keys()) == {
+            "session_id",
+            "roadmap_item_id",
+            "roadmap_item_level",
+            "roadmap_item_title",
+            "roadmap_item_description",
+            "is_resumed",
+            "answers",
+        }
+        assert input_data["session_id"] == session_id
+        assert input_data["roadmap_item_id"] == detail_item_id
+        assert input_data["roadmap_item_level"] == "detail"
+        assert input_data["is_resumed"] is True
+        assert input_data["answers"] == []  # DB に未記録 (初回セッション)
+
+        # Assert: グラフ完走後、セッションが完了状態 (再度 start しても resume_required=False)
+        # グラフ実行は不要なので NoOp に差替え
+        integration_container.graph_runner = _NoOpGraphRunner()  # type: ignore[attr-defined]
+        new_start_resp = client.post(
+            "/sessions",
+            json={"roadmap_item_id": detail_item_id},
+        )
+        assert new_start_resp.status_code == 201
+        assert new_start_resp.json()["resume_required"] is False
+
+    def test_submit_to_nonexistent_session_returns_error(
+        self,
+        client: TestClient,
+        integration_container: object,
+    ) -> None:
+        """存在しない session_id への入力送信 → エラー。"""
+        # graph_runner の None チェック (503) を通過させるため NoOp を設定
+        integration_container.graph_runner = _NoOpGraphRunner()  # type: ignore[attr-defined]
+
+        response = client.post(
+            "/sessions/00000000-0000-0000-0000-000000000000/input",
+            json={"user_input": "test", "input_source": "form"},
+        )
+
+        assert response.status_code == 422
+        detail = response.json().get("detail", "")
+        assert "00000000-0000-0000-0000-000000000000" in detail

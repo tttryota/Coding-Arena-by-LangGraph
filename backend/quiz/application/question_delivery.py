@@ -39,7 +39,7 @@ def deliver_question(
             state["roadmap_item_description"],
             confirmation_point["content"],
             confirmation_point["format"],
-            state["answers"],
+            state.get("answers", []),
         )
     except QuestionDeliveryError as exception:
         logger.exception(

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from quiz.domain.session_state import (
+    InputSource,
     QuizAnswerRecord,
     QuizAnswerType,
     RoadmapItemLevel,
@@ -29,6 +30,8 @@ class StartSessionInput:
 @dataclass(frozen=True)
 class ResumeSessionInput:
     session_id: str
+    user_input: str
+    input_source: InputSource
 
 
 @dataclass(frozen=True)
@@ -84,9 +87,9 @@ class RoadmapItemReader(Protocol):
 
 
 class GraphRunner(Protocol):
-    def start_graph(self, state: SessionState) -> None: ...
+    def start_graph(self, state: SessionState, *, thread_id: str) -> None: ...
 
-    def resume_graph(self, state: SessionState) -> None: ...
+    def resume_graph(self, user_input: dict[str, object], *, thread_id: str) -> None: ...
 
 
 __all__ = [

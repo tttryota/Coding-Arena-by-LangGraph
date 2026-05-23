@@ -150,6 +150,9 @@ class Container:
         self.note_topic_reader = ChromaNoteTopicReader(self._chroma)
 
     def _init_graph_runner(self) -> None:
+        # MemorySaver: in-memory checkpointer。プロセス再起動で interrupt 中のセッションは失われる。
+        from langgraph.checkpoint.memory import MemorySaver
+
         from quiz.application.graph import QuizGraphRunner, build_graph
         from quiz.application.graph_types import GraphDependencies
 
@@ -169,7 +172,7 @@ class Container:
             summary_test_llm=self.summary_test_llm,
             summary_test_store=self.summary_test_result_store,
         )
-        compiled = build_graph(deps)
+        compiled = build_graph(deps, checkpointer=MemorySaver())
         self.graph_runner = QuizGraphRunner(compiled)
 
     def _init_scheduler(self) -> None:

@@ -200,8 +200,12 @@ def resume_session(
         is_resumed=True,
         answers=answers,
     )
+    user_input_dict: dict[str, object] = {
+        "user_input": input.user_input,
+        "input_source": input.input_source,
+    }
     try:
-        dependencies.graph_runner.resume_graph(state)
+        dependencies.graph_runner.resume_graph(user_input_dict, thread_id=session.id)
     except Exception as exception:
         logger.exception(
             _RESUME_LLM_START_FAILED_EVENT,
@@ -358,7 +362,7 @@ def _start_session_graph_or_raise(
             roadmap_item=roadmap_item,
             is_resumed=False,
         )
-        dependencies.graph_runner.start_graph(state)
+        dependencies.graph_runner.start_graph(state, thread_id=source.id)
     except Exception as exception:
         try:
             dependencies.session_store.discard_session(cast("Any", session).id)

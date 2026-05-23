@@ -28,6 +28,7 @@ from quiz.application.summary_test_record_types import (  # noqa: TC001
 from quiz.domain.session_state import SessionState
 
 if TYPE_CHECKING:
+    from langgraph.checkpoint.base import BaseCheckpointSaver
     from langgraph.graph.state import CompiledStateGraph
 
     from quiz.application.graph_types import GraphDependencies
@@ -53,8 +54,11 @@ NODE_SUMMARY_TEST_RECORD = "summary_test_record"
 
 def _await_input(state: SessionState) -> dict[str, object]:
     """spec の __interrupt__ を実装。グラフを一時停止してユーザー入力を待つ。"""
-    interrupt(value=state)
-    return {}
+    user_input = interrupt(value=state)
+    if not isinstance(user_input, dict):
+        msg = f"Expected dict from interrupt resume, got {type(user_input).__name__}"
+        raise ValueError(msg)
+    return user_input
 
 
 def _summary_test_record_node(
@@ -120,7 +124,10 @@ def _route_by_roadmap_item_level(state: SessionState) -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_graph(deps: GraphDependencies) -> CompiledStateGraph:  # noqa: PLR0915
+def build_graph(  # noqa: PLR0915
+    deps: GraphDependencies,
+    checkpointer: BaseCheckpointSaver | None = None,
+) -> CompiledStateGraph:
     """全ノードとエッジを登録して CompiledStateGraph を返す。"""
     graph: StateGraph[SessionState] = StateGraph(SessionState)
 
@@ -216,7 +223,7 @@ def build_graph(deps: GraphDependencies) -> CompiledStateGraph:  # noqa: PLR0915
         },
     )
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
 # ---------------------------------------------------------------------------
@@ -230,13 +237,22 @@ class QuizGraphRunner:
     def __init__(self, compiled_graph: CompiledStateGraph) -> None:
         self._graph = compiled_graph
 
-    def start_graph(self, state: SessionState) -> None:
-        """新規セッション用にグラフを開始する。"""
-        self._graph.invoke(state)
+    def start_graph(self, state: SessionState, *, thread_id: str) -> None:
+        """新規セッション用にグラフを開始する。
 
-    def resume_graph(self, state: SessionState) -> None:
-        """再開セッション用にグラフを続行する。"""
-        self._graph.invoke(state)
+        invoke() は interrupt() でグラフが一時停止した場合、例外を送出せず
+        interrupt 時点の state を返す。返り値は不要 (checkpointer が state を保持する)。
+        """
+        self._graph.invoke(state, config={"configurable": {"thread_id": thread_id}})
+
+    def resume_graph(self, user_input: dict[str, object], *, thread_id: str) -> None:
+        """再開セッション用にグラフを続行する。Command(resume=...) で入力を渡す。"""
+        from langgraph.types import Command
+
+        self._graph.invoke(
+            Command(resume=user_input),
+            config={"configurable": {"thread_id": thread_id}},
+        )
 
 
 __all__ = [

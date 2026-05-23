@@ -151,10 +151,10 @@ class _FakeRoadmapItemReadStore:
 
 
 class _FakeGraphRunner:
-    def start_graph(self, state: object) -> None:
+    def start_graph(self, state: object, *, thread_id: str) -> None:
         pass
 
-    def resume_graph(self, state: object) -> None:
+    def resume_graph(self, user_input: object, *, thread_id: str) -> None:
         pass
 
 
@@ -357,7 +357,10 @@ class TestQuizSessionInputEndpoint:
         self,
         client_no_graph_runner: TestClient,
     ) -> None:
-        response = client_no_graph_runner.post("/sessions/some-session/input")
+        response = client_no_graph_runner.post(
+            "/sessions/some-session/input",
+            json={"user_input": "test", "input_source": "form"},
+        )
 
         assert response.status_code == 503
 
@@ -373,7 +376,10 @@ class TestQuizSessionInputEndpoint:
                 message="lifecycle error",
             ),
         ) as mock_resume:
-            response = client.post("/sessions/some-session/input")
+            response = client.post(
+                "/sessions/some-session/input",
+                json={"user_input": "test", "input_source": "form"},
+            )
 
         mock_resume.assert_called_once()
         assert response.status_code == 422
@@ -383,7 +389,10 @@ class TestQuizSessionInputEndpoint:
             "quiz.application.session_lifecycle.resume_session",
             side_effect=ValueError("bad value"),
         ) as mock_resume:
-            response = client.post("/sessions/some-session/input")
+            response = client.post(
+                "/sessions/some-session/input",
+                json={"user_input": "test", "input_source": "form"},
+            )
 
         mock_resume.assert_called_once()
         assert response.status_code == 422
@@ -404,12 +413,17 @@ class TestQuizSessionInputEndpoint:
             "quiz.application.session_lifecycle.resume_session",
             return_value=expected_state,
         ) as mock_resume:
-            response = client.post("/sessions/sess-1/input")
+            response = client.post(
+                "/sessions/sess-1/input",
+                json={"user_input": "answer text", "input_source": "form"},
+            )
 
         mock_resume.assert_called_once()
         call_input = mock_resume.call_args[0][0]
         assert isinstance(call_input, ResumeSessionInput)
         assert call_input.session_id == "sess-1"
+        assert call_input.user_input == "answer text"
+        assert call_input.input_source == "form"
 
         assert response.status_code == 200
         data = response.json()

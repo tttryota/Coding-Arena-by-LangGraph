@@ -25,6 +25,10 @@ class _AddItemRequest(BaseModel):
     order: int | None = None
 
 
+class _RegisterTopicRequest(BaseModel):
+    name: str
+
+
 class _MoveItemRequest(BaseModel):
     target_parent_id: UUID | None = None
     target_order: int
@@ -46,6 +50,40 @@ def list_roadmaps(request: Request) -> dict:
     c = _container(request)
     result = _list(reader=c.roadmap_retrieval_reader)
     return asdict(result)  # type: ignore[arg-type]
+
+
+@router.get("/topics")
+def list_topics(request: Request) -> dict:
+    from roadmap.application.topic_listing import list_topic_candidates
+
+    c = _container(request)
+    candidates = list_topic_candidates(
+        preset_reader=c.preset_reader,
+        note_topic_reader=c.note_topic_reader,
+        topic_store=c.topic_store,
+        note_count_reader=c.note_topic_reader,
+    )
+    return {"candidates": [_serialize_candidate(tc) for tc in candidates]}
+
+
+@router.post("/topics", status_code=201)
+def register_topic(body: _RegisterTopicRequest, request: Request) -> dict:
+    from roadmap.application.topic_listing import register_manual_topic
+    from roadmap.domain.topic_listing_types import TopicListingEmptyTopicNameError
+
+    c = _container(request)
+    try:
+        result = register_manual_topic(
+            body.name,
+            topic_store=c.topic_store,
+            note_count_reader=c.note_topic_reader,
+        )
+    except TopicListingEmptyTopicNameError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="Topic name must not be empty",
+        ) from exc
+    return _serialize_candidate(result)
 
 
 @router.get("/{roadmap_id}")
@@ -191,6 +229,14 @@ def delete_item(
     return {
         "deleted_item_ids": [str(i) for i in result.deleted_item_ids],
         "deleted_count": result.deleted_count,
+    }
+
+
+def _serialize_candidate(candidate: object) -> dict:
+    return {
+        "name": getattr(candidate, "name", ""),
+        "source": getattr(candidate, "source", ""),
+        "note_count": getattr(candidate, "note_count", 0),
     }
 
 

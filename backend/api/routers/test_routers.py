@@ -63,6 +63,9 @@ class _FakeContainer:
         self.batch_embedder = _FakeBatchEmbedder()
         self.chunk_store = _FakeChunkStore()
         self.post_ingestion_hook = _FakePostIngestionHook()
+        self.preset_reader = _FakePresetReader()
+        self.note_topic_reader = _FakeNoteTopicReader()
+        self.topic_store = _FakeTopicStore()
 
 
 class _FakeUuidGenerator:
@@ -192,6 +195,34 @@ class _FakePostIngestionHook:
         pass
 
 
+class _FakePresetReader:
+    def list_preset_topics(self) -> list:
+        return []
+
+
+class _FakeNoteTopicReader:
+    def list_note_topics(self) -> list:
+        return []
+
+    def list_note_counts(self, canonical_names: list[str]) -> list:
+        return []
+
+
+class _FakeTopicStore:
+    def list_manual_topics(self) -> list:
+        return []
+
+    def find_topic_by_canonical_name(self, canonical_name: str) -> None:
+        return None
+
+    def create_manual_topic(self, name: str, canonical_name: str) -> object:
+        from roadmap.domain.topic_listing_types import StoredTopicRecord
+
+        return StoredTopicRecord(
+            name=name, canonical_name=canonical_name, source="manual"
+        )
+
+
 class _FakeFeedbackStore:
     def find_feedbacks(
         self,
@@ -216,6 +247,138 @@ class TestRoadmapListEndpoint:
         response = client.get("/roadmaps")
 
         assert response.status_code == 200
+
+
+class TestTopicListEndpoint:
+    def test_returns_200_with_empty_candidates(self, client: TestClient) -> None:
+        response = client.get("/roadmaps/topics")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data == {"candidates": []}
+
+    def test_returns_candidates_from_application_layer(
+        self,
+        client: TestClient,
+    ) -> None:
+        from roadmap.domain.topic_listing_types import TopicCandidate
+
+        candidates = [
+            TopicCandidate(name="TypeScript", source="preset", note_count=12),
+            TopicCandidate(name="Docker", source="note", note_count=3),
+        ]
+
+        with patch(
+            "roadmap.application.topic_listing.list_topic_candidates",
+            return_value=candidates,
+        ) as mock_list:
+            response = client.get("/roadmaps/topics")
+
+        mock_list.assert_called_once()
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["candidates"]) == 2
+        assert data["candidates"][0] == {
+            "name": "TypeScript",
+            "source": "preset",
+            "note_count": 12,
+        }
+        assert data["candidates"][1] == {
+            "name": "Docker",
+            "source": "note",
+            "note_count": 3,
+        }
+
+
+class TestTopicRegisterEndpoint:
+    def test_returns_201_with_registered_topic(self, client: TestClient) -> None:
+        from roadmap.domain.topic_listing_types import TopicCandidate
+
+        with patch(
+            "roadmap.application.topic_listing.register_manual_topic",
+            return_value=TopicCandidate(
+                name="GraphRAG",
+                source="manual",
+                note_count=0,
+            ),
+        ) as mock_register:
+            response = client.post(
+                "/roadmaps/topics",
+                json={"name": "GraphRAG"},
+            )
+
+        mock_register.assert_called_once()
+        assert response.status_code == 201
+        data = response.json()
+        assert data == {"name": "GraphRAG", "source": "manual", "note_count": 0}
+
+    def test_returns_201_for_duplicate_topic(self, client: TestClient) -> None:
+        from roadmap.domain.topic_listing_types import TopicCandidate
+
+        with patch(
+            "roadmap.application.topic_listing.register_manual_topic",
+            return_value=TopicCandidate(
+                name="TypeScript",
+                source="preset",
+                note_count=12,
+            ),
+        ):
+            response = client.post(
+                "/roadmaps/topics",
+                json={"name": "typescript"},
+            )
+
+        assert response.status_code == 201
+        assert response.json()["name"] == "TypeScript"
+        assert response.json()["source"] == "preset"
+
+    def test_returns_422_for_empty_name(self, client: TestClient) -> None:
+        from roadmap.domain.topic_listing_types import TopicListingEmptyTopicNameError
+
+        with patch(
+            "roadmap.application.topic_listing.register_manual_topic",
+            side_effect=TopicListingEmptyTopicNameError,
+        ):
+            response = client.post(
+                "/roadmaps/topics",
+                json={"name": ""},
+            )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Topic name must not be empty"
+
+    def test_returns_422_for_whitespace_only(self, client: TestClient) -> None:
+        from roadmap.domain.topic_listing_types import TopicListingEmptyTopicNameError
+
+        with patch(
+            "roadmap.application.topic_listing.register_manual_topic",
+            side_effect=TopicListingEmptyTopicNameError,
+        ):
+            response = client.post(
+                "/roadmaps/topics",
+                json={"name": "   "},
+            )
+
+        assert response.status_code == 422
+
+    def test_response_has_exactly_three_fields(self, client: TestClient) -> None:
+        from roadmap.domain.topic_listing_types import TopicCandidate
+
+        with patch(
+            "roadmap.application.topic_listing.register_manual_topic",
+            return_value=TopicCandidate(
+                name="Test",
+                source="manual",
+                note_count=0,
+            ),
+        ):
+            response = client.post(
+                "/roadmaps/topics",
+                json={"name": "Test"},
+            )
+
+        assert response.status_code == 201
+        assert set(response.json().keys()) == {"name", "source", "note_count"}
 
 
 class TestRoadmapGetEndpoint:

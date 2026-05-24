@@ -24,10 +24,12 @@ class Container:
         engine: Engine,
         chroma_collection: object,
         embedder: object | None = None,
+        preset_topics_path: str = "data/preset_topics.json",
     ) -> None:
         self._engine = engine
         self._chroma = chroma_collection
         self._embedder = embedder
+        self._preset_topics_path = preset_topics_path
         self.transport = CodexLlmTransport()
         self.uuid_generator = UuidGenerator()
         self.executor = ThreadPoolExecutor(max_workers=2)
@@ -67,6 +69,9 @@ class Container:
         from roadmap.infrastructure.in_memory_job_status_store import (
             InMemoryJobStatusStore,
         )
+        from roadmap.infrastructure.preset_topic_file_reader import (
+            PresetTopicFileReader,
+        )
         from roadmap.infrastructure.sql_roadmap_item_crud_store import (
             SqlRoadmapItemCrudStore,
         )
@@ -83,6 +88,7 @@ class Container:
         self.roadmap_item_crud_store = SqlRoadmapItemCrudStore(self._engine)
         self.job_status_store = InMemoryJobStatusStore()
         self.topic_store = SqlTopicStore(self._engine)
+        self.preset_reader = PresetTopicFileReader(self._preset_topics_path)
 
     def _init_ingestion_stores(self) -> None:
         from ingestion.infrastructure.sql_file_diff_snapshot_store import (

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol, TypedDict
 
 if TYPE_CHECKING:
     from quiz.domain.session_state import (
-        ConfirmationPoint,
+        ConfirmationPointFormat,
         QuizAnswerRecord,
         QuizAnswerType,
     )
@@ -23,12 +23,19 @@ class AnswerEvaluationError(Exception):
         self.message = message
 
 
+class DeepdivePointDraft(TypedDict):
+    """LLM が返す deepdive ポイント(id なし)。id は application 層で採番する。"""
+
+    content: str
+    format: ConfirmationPointFormat
+
+
 @dataclass(frozen=True)
 class EvaluationOutput:
     next_action: _NextAction
     score: int
     feedback: str
-    deepdive_points: list[ConfirmationPoint]
+    deepdive_points: list[DeepdivePointDraft]
 
 
 class AnswerEvaluationLlmClient(Protocol):
@@ -40,11 +47,13 @@ class AnswerEvaluationLlmClient(Protocol):
         answer_type: QuizAnswerType,
         past_answers: list[QuizAnswerRecord],
         total_questions_asked: int,
+        remaining_points: list[tuple[str, str]],
     ) -> EvaluationOutput: ...
 
 
 __all__ = [
     "AnswerEvaluationError",
     "AnswerEvaluationLlmClient",
+    "DeepdivePointDraft",
     "EvaluationOutput",
 ]

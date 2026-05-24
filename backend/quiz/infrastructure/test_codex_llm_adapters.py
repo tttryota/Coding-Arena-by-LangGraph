@@ -193,7 +193,7 @@ class TestCodexAnswerEvaluationLlm:
         adapter = CodexAnswerEvaluationLlm(transport)
 
         result = adapter.evaluate_answer(
-            "問題文", "確認ポイント", "回答テキスト", "textarea", [], 1,
+            "問題文", "確認ポイント", "回答テキスト", "textarea", [], 1, [],
         )
 
         assert result.next_action == "next"
@@ -209,23 +209,23 @@ class TestCodexAnswerEvaluationLlm:
             "score": 50,
             "feedback": "深掘りが必要",
             "deepdive_points": [
-                {"id": "dp-001", "content": "型ガード", "format": "knowledge"},
+                {"content": "型ガード", "format": "knowledge"},
             ],
         })
         transport = FakeTransport(canned)
         adapter = CodexAnswerEvaluationLlm(transport)
 
         result = adapter.evaluate_answer(
-            "問題文", "確認ポイント", "回答", "textarea", [], 1,
+            "問題文", "確認ポイント", "回答", "textarea", [], 1, [],
         )
 
         assert result.next_action == "deepdive"
         assert result.score == 50
         assert result.feedback == "深掘りが必要"
         assert len(result.deepdive_points) == 1
-        assert result.deepdive_points[0]["id"] == "dp-001"
         assert result.deepdive_points[0]["content"] == "型ガード"
         assert result.deepdive_points[0]["format"] == "knowledge"
+        assert "id" not in result.deepdive_points[0]
 
     def test_returns_complete_action(self) -> None:
         from quiz.infrastructure.codex_llm_adapters import CodexAnswerEvaluationLlm
@@ -240,7 +240,7 @@ class TestCodexAnswerEvaluationLlm:
         adapter = CodexAnswerEvaluationLlm(transport)
 
         result = adapter.evaluate_answer(
-            "問題文", "確認ポイント", "回答", "textarea", [], 5,
+            "問題文", "確認ポイント", "回答", "textarea", [], 5, [],
         )
 
         assert result.next_action == "complete"
@@ -350,7 +350,7 @@ class TestDeepdiveEmptyRaises:
 
         with pytest.raises(AnswerEvaluationError):
             adapter.evaluate_answer(
-                "問題文", "確認ポイント", "回答", "textarea", [], 5,
+                "問題文", "確認ポイント", "回答", "textarea", [], 5, [],
             )
 
 

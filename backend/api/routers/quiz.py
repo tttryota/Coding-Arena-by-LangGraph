@@ -88,6 +88,8 @@ def submit_input(session_id: str, body: _SubmitInputRequest, request: Request) -
             graph_runner=c.graph_runner,
         )
     except QuizSessionLifecycleError as exc:
+        if exc.error_code == "session_resume_transient_llm_error":
+            raise HTTPException(status_code=503, detail=exc.message) from exc
         raise HTTPException(status_code=422, detail=exc.message) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

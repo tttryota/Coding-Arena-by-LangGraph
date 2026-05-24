@@ -87,6 +87,21 @@ def _validate_confirmation_point(item: object) -> dict[str, str]:
     return {"id": cp_id, "content": content, "format": fmt}
 
 
+def _validate_deepdive_point(item: object) -> dict[str, str]:
+    if not isinstance(item, dict):
+        msg = f"deepdive point must be dict, got {type(item).__name__}"
+        raise TypeError(msg)
+    content = _validate_str(item.get("content"), "content")
+    if not content.strip():
+        msg = "deepdive point content must not be empty"
+        raise ValueError(msg)
+    fmt = _validate_str(item.get("format"), "format")
+    if fmt not in _VALID_CP_FORMATS:
+        msg = f"invalid deepdive point format: {fmt}"
+        raise ValueError(msg)
+    return {"content": content, "format": fmt}
+
+
 def _parse_json(text: str) -> dict | list:
     """LLM レスポンスから JSON を抽出してパースする。"""
     cleaned = text.strip()
@@ -132,6 +147,7 @@ class CodexQuestionSetDesignLlm:
         system = (
             "あなたは学習支援AIです。与えられたトピックの理解度を確認するための"
             "確認ポイントリストを設計してください。\n"
+            "確認ポイントは必ず3〜5件にしてください。それ以上は不要です。\n"
             f"{_JSON_INSTRUCTION}\n"
             '形式: [{"id": "cp-001", "content": "確認内容", '
             '"format": "knowledge" | "knowledge_and_practice"}]'
@@ -160,7 +176,7 @@ class CodexQuestionDeliveryLlm:
     def __init__(self, transport: CodexLlmTransport) -> None:
         self._transport = transport
 
-    def generate_question(  # noqa: PLR0913
+    def generate_question(  # noqa: PLR0913, PLR0915
         self,
         title: str,
         description: str,
@@ -179,8 +195,10 @@ class CodexQuestionDeliveryLlm:
                 error_code="invalid_format", message=msg,
             )
 
+        expected_answer_type = _FORMAT_TO_ANSWER_TYPE[confirmation_point_format]
         system = (
             "あなたは学習支援AIです。確認ポイントに基づいて出題してください。\n"
+            f"answer_type は必ず \"{expected_answer_type}\" にしてください。\n"
             f"{_JSON_INSTRUCTION}\n"
             '形式: {"question_text": "問題文", "answer_type": "textarea" | "code"}'
         )
@@ -242,6 +260,7 @@ class CodexInputClassificationLlm:
             "- answer: 問題への回答\n"
             "- question: 出題内容への質問\n"
             "- explanation_request: 解説依頼\n"
+            "判断に迷う場合や入力が曖昧・短い場合は、必ず answer に分類してください。\n"
             f"{_JSON_INSTRUCTION}\n"
             '形式: {"input_type": "answer" | "question" | "explanation_request"}'
         )
@@ -313,18 +332,37 @@ class CodexAnswerEvaluationLlm:
         answer_type: QuizAnswerType,
         past_answers: list[QuizAnswerRecord],
         total_questions_asked: int,
+        remaining_points: list[tuple[str, str]],
     ) -> EvaluationOutput:
         from quiz.application.answer_evaluation_types import (
             AnswerEvaluationError,
+            DeepdivePointDraft,
             EvaluationOutput,
+        )
+
+        remaining_text = (
+            "\n".join(f"- [{fmt}] {content}" for content, fmt in remaining_points)
+            if remaining_points
+            else "(なし)"
         )
 
         system = (
             "回答を評価してください。\n"
+            "ルール:\n"
+            "- 回答が空の場合: score=0, next_action=\"next\", deepdive_points=[] とし、"
+            "回答を促すfeedbackを返してください。deepdiveしないでください。\n"
+            "- 出題総数が20以上の場合: next_action は \"next\" か \"complete\" のみにし、"
+            "\"deepdive\" は選ばないでください(収束ルール)。\n"
+            "- deepdive_points は最大2件までにしてください。\n"
+            "- deepdive_points の format ルール:\n"
+            "  - knowledge: 概念・比較・理由をテキストで説明するもの\n"
+            "  - knowledge_and_practice: コードを書いて動作を示すもの\n"
+            "- 以下の出題予定ポイントと重複する内容を deepdive_points に含めないでください:\n"
+            f"{remaining_text}\n"
             f"{_JSON_INSTRUCTION}\n"
             '形式: {"next_action": "next"|"deepdive"|"complete", '
             '"score": 0-100, "feedback": "フィードバック", '
-            '"deepdive_points": [{"id": "...", "content": "...", '
+            '"deepdive_points": [{"content": "...", '
             '"format": "knowledge"|"knowledge_and_practice"}]}'
         )
         try:
@@ -347,10 +385,10 @@ class CodexAnswerEvaluationLlm:
                 msg = f"invalid next_action from LLM: {next_action}"
                 raise AnswerEvaluationError(error_code="invalid_next_action", message=msg)
 
-            deepdive_points: list[dict[str, str]] = []
+            deepdive_points: list[DeepdivePointDraft] = []
             if next_action == "deepdive":
                 raw_points = data.get("deepdive_points", [])
-                deepdive_points = [_validate_confirmation_point(dp) for dp in raw_points]
+                deepdive_points = [_validate_deepdive_point(dp) for dp in raw_points]
                 if not deepdive_points:
                     msg = "LLM returned deepdive with empty deepdive_points"
                     raise AnswerEvaluationError(

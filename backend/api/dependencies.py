@@ -23,13 +23,12 @@ class Container:
         self,
         engine: Engine,
         chroma_collection: object,
-        codex_base_url: str,
         embedder: object | None = None,
     ) -> None:
         self._engine = engine
         self._chroma = chroma_collection
         self._embedder = embedder
-        self.transport = CodexLlmTransport(base_url=codex_base_url)
+        self.transport = CodexLlmTransport()
         self.uuid_generator = UuidGenerator()
         self.executor = ThreadPoolExecutor(max_workers=2)
         try:

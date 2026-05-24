@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     sqlite_path: Path = Path("data/app.db")
     chromadb_host: str = "localhost"
     chromadb_port: int = 8000
-    codex_api_url: str
     batch_interval_minutes: int = 15
     score_threshold_not_started: int = 25
     score_threshold_insufficient: int = 50

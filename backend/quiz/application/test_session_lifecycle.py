@@ -278,14 +278,17 @@ class _RecordingGraphRunner:
         *,
         start_error: Exception | None = None,
         resume_error: Exception | None = None,
+        retry_error: Exception | None = None,
         operation_log: list[str] | None = None,
     ) -> None:
         self._start_error = start_error
         self._resume_error = resume_error
+        self._retry_error = retry_error
         self._operation_log = operation_log
         self.graph_call_sequence: list[str] = []
         self.start_graph_calls: list[dict[str, object]] = []
         self.resume_graph_calls: list[dict[str, object]] = []
+        self.retry_graph_calls: list[str] = []
 
     def start_graph(self, state: SessionState, *, thread_id: str) -> None:
         snapshot: dict[str, object] = dict(state)
@@ -303,6 +306,14 @@ class _RecordingGraphRunner:
             self._operation_log.append("resume_graph")
         if self._resume_error is not None:
             raise self._resume_error
+
+    def retry_graph(self, *, thread_id: str) -> None:
+        self.graph_call_sequence.append("retry_graph")
+        self.retry_graph_calls.append(thread_id)
+        if self._operation_log is not None:
+            self._operation_log.append("retry_graph")
+        if self._retry_error is not None:
+            raise self._retry_error
 
 
 def _session(
@@ -1437,3 +1448,83 @@ def test_tc_32_resume_session_graph_failure_keeps_state_unchanged_and_logs_once(
     )
     assert_no_log_event(log_output, _START_FAILED_EVENT)
     assert_no_log_event(log_output, _RESUME_HISTORY_LOAD_FAILED_EVENT)
+
+
+# ---------------------------------------------------------------------------
+# Category: Transient LLM error handling
+# ---------------------------------------------------------------------------
+
+_RESUME_TRANSIENT_LLM_EVENT = "quiz_session_resume_transient_llm_error"
+
+
+def test_tc_40_resume_transient_error_raises_specific_code_and_keeps_session() -> None:
+    """一過性 LLM エラーで session_resume_transient_llm_error を返し、セッションを破棄しない。"""
+    from quiz.application.graph import TransientLlmNodeError
+
+    session = _session(session_id="session-transient")
+    roadmap_item = _item()
+    node_error = RuntimeError("timeout")
+    node_error.error_code = "llm_request_failed"  # type: ignore[attr-defined]
+    transient_error = TransientLlmNodeError(node_error=node_error, thread_id=session.id)
+    session_store = _RecordingSessionStore(sessions={session.id: session})
+    answer_store = _RecordingAnswerStore(histories={session.id: []})
+    item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
+    graph_runner = _RecordingGraphRunner(resume_error=transient_error)
+
+    with (
+        capture_logs() as log_output,
+        pytest.raises(QuizSessionLifecycleError) as exc_info,
+    ):
+        resume_session(
+            ResumeSessionInput(session_id=session.id, user_input="test", input_source="form"),
+            session_store=session_store,
+            answer_store=answer_store,
+            item_reader=item_reader,
+            graph_runner=graph_runner,
+        )
+
+    assert exc_info.value.error_code == "session_resume_transient_llm_error"
+    assert exc_info.value.__cause__ is transient_error
+    persisted = session_store.persisted_session(session.id)
+    assert persisted is not None
+    assert persisted.status == "in_progress"
+    assert session_store.discard_session_calls == []
+    _assert_single_log_event(
+        log_output,
+        _RESUME_TRANSIENT_LLM_EVENT,
+        {
+            "session_id": session.id,
+            "roadmap_item_id": roadmap_item.id,
+            "error_type": "RuntimeError",
+        },
+    )
+    # warning レベルであることを確認
+    assert log_output[0]["log_level"] == "warning"
+    assert_no_log_event(log_output, _RESUME_LLM_START_FAILED_EVENT)
+
+
+def test_tc_41_resume_after_transient_error_retries_via_retry_graph() -> None:
+    """前回一過性エラー後のリトライで resume_graph が InvalidUpdateError → retry_graph にフォールバック。"""
+    from langgraph.errors import InvalidUpdateError
+
+    session = _session(session_id="session-retry")
+    roadmap_item = _item()
+    session_store = _RecordingSessionStore(sessions={session.id: session})
+    answer_store = _RecordingAnswerStore(histories={session.id: []})
+    item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
+    graph_runner = _RecordingGraphRunner(
+        resume_error=InvalidUpdateError("Cannot resume; no task found for resume value"),
+    )
+
+    state = resume_session(
+        ResumeSessionInput(session_id=session.id, user_input="test", input_source="form"),
+        session_store=session_store,
+        answer_store=answer_store,
+        item_reader=item_reader,
+        graph_runner=graph_runner,
+    )
+
+    assert state["session_id"] == session.id
+    assert graph_runner.graph_call_sequence == ["resume_graph", "retry_graph"]
+    assert graph_runner.retry_graph_calls == [session.id]
+    assert session_store.discard_session_calls == []

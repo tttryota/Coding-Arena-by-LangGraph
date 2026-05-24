@@ -23,7 +23,6 @@ pydantic-settingsのBaseSettingsを継承した設定クラスで、全設定項
 | sqlite_path | Path | `data/app.db` | SQLiteファイルのパス |
 | chromadb_host | str | `localhost` | ChromaDBのホスト |
 | chromadb_port | int | `8000` | ChromaDBのポート |
-| codex_api_url | str | （必須） | Codex app-serverのURL |
 | batch_interval_minutes | int | `15` | 取り込みバッチの実行間隔（分） |
 | score_threshold_not_started | int | `25` | not_started判定の上限 |
 | score_threshold_insufficient | int | `50` | insufficient判定の上限 |
@@ -35,7 +34,6 @@ pydantic-settingsのBaseSettingsを継承した設定クラスで、全設定項
 `.env`ファイル:
 ```
 VAULT_PATH=/Users/user/ObsidianVault/study
-CODEX_API_URL=http://localhost:4000
 BATCH_INTERVAL_MINUTES=10
 ```
 
@@ -54,7 +52,7 @@ print(settings.batch_interval_minutes)  # 10
 
 ## 境界条件
 
-- 必須項目（vault_path, codex_api_url）が未設定 → アプリケーション起動時にバリデーションエラー
+- 必須項目（vault_path）が未設定 → アプリケーション起動時にバリデーションエラー
 - 不正な型の値が設定された場合 → pydanticのバリデーションエラー
 - .envファイルが存在しない → 環境変数のみから読み込む（エラーにはならない）
 

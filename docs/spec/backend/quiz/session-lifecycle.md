@@ -115,7 +115,9 @@ in_progressのセッションを再開する（ADR-005参照）。
 - 開始要求は観測可能な範囲で原子的に扱う。`QuizSession` 作成失敗時はLangGraphを開始しない。LangGraph開始失敗時は、その要求で新規に作成しようとした `QuizSession` を残さない
 - 再開要求の失敗時は、既存 `QuizSession.status` を `in_progress` のまま維持し、新規 `QuizSession` を作成せず、既存 `QuizAnswer` を変更しない
 - application層は開始・再開失敗を `QuizSessionLifecycleError` として送出し、例外インスタンス上で `error_code: str` と `message: str` を直接参照できるようにし、依存先で発生した元例外を `__cause__` に保持する
-- application層は開始・再開失敗時に自動再試行しない
+- application層は開始・再開失敗時に自動再試行しない。ただし再開要求で interrupt 消化済み（前回一過性エラーによる中断後のリトライ）の場合は、checkpointer の状態から失敗ノードを自動再実行する
+- 再開要求の問答進行中に LLM の一過性エラー（タイムアウト等）が発生した場合、`session_resume_transient_llm_error` を送出し、セッションを `in_progress` のまま維持する。フロントエンドは同じ入力で再試行可能（HTTP 503）
+- 再試行時は LangGraph checkpointer に残っている状態から、失敗したノードを再実行する
 - 失敗時は `structlog` の構造化ログを各失敗につきちょうど1件出力する
 
 | error_code | 発生条件 | message | ログイベント | 必須ログキー |
@@ -124,6 +126,7 @@ in_progressのセッションを再開する（ADR-005参照）。
 | `session_start_graph_failed` | `QuizSession` 作成後の LangGraph 開始に失敗した | `quiz session start graph failed` | `quiz_session_start_failed` | `roadmap_item_id`, `error_code`, `error_type` |
 | `session_resume_history_load_failed` | `QuizAnswer` 履歴取得に失敗した | `quiz session resume history load failed` | `quiz_session_resume_history_load_failed` | `session_id`, `roadmap_item_id`, `error_code`, `error_type` |
 | `session_resume_llm_start_failed` | 問答履歴を使ったLLM続行開始に失敗した | `quiz session resume llm start failed` | `quiz_session_resume_llm_start_failed` | `session_id`, `roadmap_item_id`, `error_code`, `error_type` |
+| `session_resume_transient_llm_error` | LLM の一過性エラー（タイムアウト等）で問答進行に失敗した。セッションは `in_progress` のまま再試行可能 | `quiz session resume transient llm error` | `quiz_session_resume_transient_llm_error` | `session_id`, `roadmap_item_id`, `error_type` |
 
 ## スコープ外
 

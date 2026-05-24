@@ -239,3 +239,138 @@ class TestQuizGraphRunnerProtocol:
         # Verify methods exist and are callable
         assert callable(runner.start_graph)
         assert callable(runner.resume_graph)
+        assert callable(runner.retry_graph)
+
+
+# ---------------------------------------------------------------------------
+# Category D: TransientLlmNodeError detection and wrapping
+# ---------------------------------------------------------------------------
+
+
+class _ErrorWithCode(Exception):
+    def __init__(self, error_code: str) -> None:
+        self.error_code = error_code
+        super().__init__(error_code)
+
+
+class TestIsTransientLlmError:
+    def test_llm_request_failed_is_transient(self) -> None:
+        from quiz.application.graph import _is_transient_llm_error
+
+        assert _is_transient_llm_error(_ErrorWithCode("llm_request_failed")) is True
+
+    def test_llm_response_parse_failed_is_not_transient(self) -> None:
+        from quiz.application.graph import _is_transient_llm_error
+
+        assert _is_transient_llm_error(_ErrorWithCode("llm_response_parse_failed")) is False
+
+    def test_no_error_code_is_not_transient(self) -> None:
+        from quiz.application.graph import _is_transient_llm_error
+
+        assert _is_transient_llm_error(RuntimeError("no code")) is False
+
+    def test_empty_error_code_is_not_transient(self) -> None:
+        from quiz.application.graph import _is_transient_llm_error
+
+        assert _is_transient_llm_error(_ErrorWithCode("")) is False
+
+
+def _make_mock_runner(
+    invoke_side_effect: Exception | None = None,
+) -> tuple[object, object]:
+    from unittest.mock import MagicMock
+
+    from quiz.application.graph import QuizGraphRunner
+
+    mock_graph = MagicMock()
+    if invoke_side_effect is not None:
+        mock_graph.invoke.side_effect = invoke_side_effect
+    return QuizGraphRunner(mock_graph), mock_graph
+
+
+class TestQuizGraphRunnerStartGraphWrapping:
+    def test_transient_error_wrapped(self) -> None:
+        from quiz.application.graph import TransientLlmNodeError
+
+        error = _ErrorWithCode("llm_request_failed")
+        runner, _ = _make_mock_runner(invoke_side_effect=error)
+
+        with pytest.raises(TransientLlmNodeError) as exc_info:
+            runner.start_graph({}, thread_id="t1")  # type: ignore[arg-type]
+
+        assert exc_info.value.node_error is error
+        assert exc_info.value.thread_id == "t1"
+        assert exc_info.value.__cause__ is error
+
+    def test_permanent_error_passthrough(self) -> None:
+        error = _ErrorWithCode("llm_response_parse_failed")
+        runner, _ = _make_mock_runner(invoke_side_effect=error)
+
+        with pytest.raises(type(error)) as exc_info:
+            runner.start_graph({}, thread_id="t1")  # type: ignore[arg-type]
+
+        assert exc_info.value is error
+
+    def test_non_llm_error_passthrough(self) -> None:
+        error = RuntimeError("unexpected")
+        runner, _ = _make_mock_runner(invoke_side_effect=error)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            runner.start_graph({}, thread_id="t1")  # type: ignore[arg-type]
+
+        assert exc_info.value is error
+
+
+class TestQuizGraphRunnerResumeGraphWrapping:
+    def test_transient_error_wrapped(self) -> None:
+        from quiz.application.graph import TransientLlmNodeError
+
+        error = _ErrorWithCode("llm_request_failed")
+        runner, _ = _make_mock_runner(invoke_side_effect=error)
+
+        with pytest.raises(TransientLlmNodeError) as exc_info:
+            runner.resume_graph({"user_input": "test"}, thread_id="t2")
+
+        assert exc_info.value.node_error is error
+        assert exc_info.value.thread_id == "t2"
+
+    def test_permanent_error_passthrough(self) -> None:
+        error = _ErrorWithCode("llm_response_parse_failed")
+        runner, _ = _make_mock_runner(invoke_side_effect=error)
+
+        with pytest.raises(type(error)) as exc_info:
+            runner.resume_graph({"user_input": "test"}, thread_id="t2")
+
+        assert exc_info.value is error
+
+
+class TestQuizGraphRunnerRetryGraph:
+    def test_transient_error_wrapped(self) -> None:
+        from quiz.application.graph import TransientLlmNodeError
+
+        error = _ErrorWithCode("llm_request_failed")
+        runner, _ = _make_mock_runner(invoke_side_effect=error)
+
+        with pytest.raises(TransientLlmNodeError) as exc_info:
+            runner.retry_graph(thread_id="t3")
+
+        assert exc_info.value.node_error is error
+        assert exc_info.value.thread_id == "t3"
+
+    def test_permanent_error_passthrough(self) -> None:
+        error = _ErrorWithCode("llm_response_parse_failed")
+        runner, _ = _make_mock_runner(invoke_side_effect=error)
+
+        with pytest.raises(type(error)) as exc_info:
+            runner.retry_graph(thread_id="t3")
+
+        assert exc_info.value is error
+
+    def test_invoke_called_with_none(self) -> None:
+        runner, mock_graph = _make_mock_runner()
+
+        runner.retry_graph(thread_id="t4")
+
+        mock_graph.invoke.assert_called_once_with(  # type: ignore[union-attr]
+            None, config={"configurable": {"thread_id": "t4"}},
+        )

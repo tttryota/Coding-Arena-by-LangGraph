@@ -6,7 +6,9 @@ from inspect import Parameter, Signature
 from typing import Any, Protocol, TypedDict, Unpack, cast
 
 import structlog
+from langgraph.errors import InvalidUpdateError
 
+from quiz.application.graph import TransientLlmNodeError
 from quiz.application.session_lifecycle_types import (
     GraphRunner,
     QuizAnswerRecordLike,
@@ -27,10 +29,12 @@ _START_FAILED_EVENT = "quiz_session_start_failed"
 _START_GRAPH_CLEANUP_FAILED_EVENT = "quiz_session_start_cleanup_failed"
 _RESUME_HISTORY_LOAD_FAILED_EVENT = "quiz_session_resume_history_load_failed"
 _RESUME_LLM_START_FAILED_EVENT = "quiz_session_resume_llm_start_failed"
+_RESUME_TRANSIENT_LLM_EVENT = "quiz_session_resume_transient_llm_error"
 _START_CLEANUP_FAILED_ERROR_CODE = "session_start_cleanup_failed"
 _START_PERSISTENCE_FAILED_ERROR_CODE = "session_start_persistence_failed"
 _RESUME_HISTORY_LOAD_FAILED_ERROR_CODE = "session_resume_history_load_failed"
 _RESUME_LLM_START_FAILED_ERROR_CODE = "session_resume_llm_start_failed"
+_RESUME_TRANSIENT_LLM_ERROR_CODE = "session_resume_transient_llm_error"
 _START_GRAPH_FAILED_ERROR_CODE = "session_start_graph_failed"
 _QUIZ_ANSWER_TYPE_VALUES = ("textarea", "code")
 
@@ -204,24 +208,12 @@ def resume_session(
         "user_input": input.user_input,
         "input_source": input.input_source,
     }
-    try:
-        dependencies.graph_runner.resume_graph(user_input_dict, thread_id=session.id)
-    except Exception as exception:
-        logger.exception(
-            _RESUME_LLM_START_FAILED_EVENT,
-            session_id=session.id,
-            roadmap_item_id=roadmap_item.id,
-            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
-            error_type=type(exception).__name__,
-        )
-        raise QuizSessionLifecycleError(
-            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
-            message=_format_lifecycle_error_message(
-                "quiz session resume llm start failed",
-                session_id=session.id,
-                roadmap_item_id=roadmap_item.id,
-            ),
-        ) from exception
+    _resume_graph_or_raise(
+        dependencies.graph_runner,
+        user_input_dict,
+        session_id=session.id,
+        roadmap_item_id=roadmap_item.id,
+    )
 
     return state
 
@@ -394,6 +386,97 @@ def _start_session_graph_or_raise(
             message=_format_lifecycle_error_message(
                 "quiz session start graph failed",
                 session_id=cast("Any", session).id,
+                roadmap_item_id=roadmap_item_id,
+            ),
+        ) from exception
+
+
+def _resume_graph_or_raise(
+    graph_runner: GraphRunner,
+    user_input: dict[str, object],
+    *,
+    session_id: str,
+    roadmap_item_id: str,
+) -> None:
+    """resume_graph を試み、一過性エラーや interrupt 消化済みの場合を処理する。"""
+    try:
+        graph_runner.resume_graph(user_input, thread_id=session_id)
+    except TransientLlmNodeError as exc:
+        logger.warning(
+            _RESUME_TRANSIENT_LLM_EVENT,
+            session_id=session_id,
+            roadmap_item_id=roadmap_item_id,
+            error_type=type(exc.node_error).__name__,
+        )
+        raise QuizSessionLifecycleError(
+            error_code=_RESUME_TRANSIENT_LLM_ERROR_CODE,
+            message=_format_lifecycle_error_message(
+                "quiz session resume transient llm error",
+                session_id=session_id,
+                roadmap_item_id=roadmap_item_id,
+            ),
+        ) from exc
+    except InvalidUpdateError:
+        _retry_graph_or_raise(
+            graph_runner,
+            session_id=session_id,
+            roadmap_item_id=roadmap_item_id,
+        )
+    except Exception as exception:
+        logger.exception(
+            _RESUME_LLM_START_FAILED_EVENT,
+            session_id=session_id,
+            roadmap_item_id=roadmap_item_id,
+            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
+            error_type=type(exception).__name__,
+        )
+        raise QuizSessionLifecycleError(
+            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
+            message=_format_lifecycle_error_message(
+                "quiz session resume llm start failed",
+                session_id=session_id,
+                roadmap_item_id=roadmap_item_id,
+            ),
+        ) from exception
+
+
+def _retry_graph_or_raise(
+    graph_runner: GraphRunner,
+    *,
+    session_id: str,
+    roadmap_item_id: str,
+) -> None:
+    """前回一過性エラーで中断したグラフを再実行する。"""
+    try:
+        graph_runner.retry_graph(thread_id=session_id)
+    except TransientLlmNodeError as exc:
+        logger.warning(
+            _RESUME_TRANSIENT_LLM_EVENT,
+            session_id=session_id,
+            roadmap_item_id=roadmap_item_id,
+            error_type=type(exc.node_error).__name__,
+        )
+        raise QuizSessionLifecycleError(
+            error_code=_RESUME_TRANSIENT_LLM_ERROR_CODE,
+            message=_format_lifecycle_error_message(
+                "quiz session resume transient llm error",
+                session_id=session_id,
+                roadmap_item_id=roadmap_item_id,
+            ),
+        ) from exc
+    except Exception as exception:
+        logger.exception(
+            _RESUME_LLM_START_FAILED_EVENT,
+            session_id=session_id,
+            roadmap_item_id=roadmap_item_id,
+            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
+            error_type=type(exception).__name__,
+        )
+        raise QuizSessionLifecycleError(
+            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
+            message=_format_lifecycle_error_message(
+                "quiz session resume llm start failed",
+                session_id=session_id,
                 roadmap_item_id=roadmap_item_id,
             ),
         ) from exception

@@ -91,6 +91,8 @@ class GraphRunner(Protocol):
 
     def resume_graph(self, user_input: dict[str, object], *, thread_id: str) -> None: ...
 
+    def retry_graph(self, *, thread_id: str) -> None: ...
+
 
 __all__ = [
     "GraphRunner",

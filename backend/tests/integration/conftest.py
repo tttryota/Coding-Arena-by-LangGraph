@@ -84,7 +84,6 @@ def integration_container(
     container = Container(
         engine=engine,
         chroma_collection=chroma_collection,
-        codex_base_url="http://stub-not-used",
         embedder=embedder,
     )
     _replace_transport(container, scenario_transport)

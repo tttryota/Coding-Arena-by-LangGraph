@@ -8,6 +8,7 @@ from structlog.testing import capture_logs
 from quiz.application.answer_evaluation import evaluate_answer
 from quiz.application.answer_evaluation_types import (
     AnswerEvaluationError,
+    DeepdivePointDraft,
     EvaluationOutput,
 )
 from shared.log_assertions import find_log_events
@@ -42,6 +43,7 @@ class _RecordingAnswerEvaluationLlm:
                 QuizAnswerType,
                 list[QuizAnswerRecord],
                 int,
+                list[tuple[str, str]],
             ]
         ] = []
 
@@ -53,6 +55,7 @@ class _RecordingAnswerEvaluationLlm:
         answer_type: QuizAnswerType,
         past_answers: list[QuizAnswerRecord],
         total_questions_asked: int,
+        remaining_points: list[tuple[str, str]],
     ) -> EvaluationOutput:
         self.calls.append(
             (
@@ -62,6 +65,7 @@ class _RecordingAnswerEvaluationLlm:
                 answer_type,
                 past_answers,
                 total_questions_asked,
+                remaining_points,
             ),
         )
         if self._error is not None:
@@ -158,6 +162,7 @@ def test_tc_01_evaluate_answer_public_return_contract_and_llm_argument_mapping()
             "textarea",
             [],
             3,
+            [],
         ),
     ]
     assert llm_client.calls[0][4] is state["answers"]
@@ -254,9 +259,8 @@ def test_tc_11_deepdive_appends_points_to_tail_and_increments_index() -> None:
         "knowledge",
         "knowledge_and_practice",
     )
-    deepdive_points: list[ConfirmationPoint] = [
+    deepdive_drafts: list[DeepdivePointDraft] = [
         {
-            "id": "cp_deepdive_003",
             "content": "深掘り: 制約付きジェネリクス",
             "format": "knowledge",
         },
@@ -270,7 +274,7 @@ def test_tc_11_deepdive_appends_points_to_tail_and_increments_index() -> None:
             next_action="deepdive",
             score=48,
             feedback="制約付きジェネリクスの理解を確認します。",
-            deepdive_points=deepdive_points,
+            deepdive_points=deepdive_drafts,
         ),
     )
 
@@ -280,7 +284,13 @@ def test_tc_11_deepdive_appends_points_to_tail_and_increments_index() -> None:
     # Assert
     assert result["next_action"] == "deepdive"
     assert result["current_point_index"] == 1
-    assert result["confirmation_points"] == [*confirmation_points, *deepdive_points]
+    result_cps = cast("list[ConfirmationPoint]", result["confirmation_points"])
+    assert len(result_cps) == 3
+    assert result_cps[:2] == confirmation_points
+    # application 層で id が採番される
+    assert result_cps[2]["id"] == "cp_001_deepdive_00"
+    assert result_cps[2]["content"] == "深掘り: 制約付きジェネリクス"
+    assert result_cps[2]["format"] == "knowledge"
 
 
 def test_tc_12_complete_sets_current_point_index_to_completion_boundary() -> None:
@@ -362,6 +372,7 @@ def test_tc_20_passes_total_questions_asked_convergence_signal_to_llm() -> None:
             "textarea",
             [],
             20,
+            [],
         ),
     ]
     assert result["next_action"] == "complete"

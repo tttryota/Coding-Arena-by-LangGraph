@@ -49,7 +49,6 @@ def _make_container() -> object:
     return Container(
         engine=_setup_db(),
         chroma_collection=_FakeChromaCollection(),
-        codex_base_url="http://localhost:11111",
     )
 
 
@@ -195,12 +194,6 @@ class TestContainerLlmClients:
             is container.answer_evaluation_llm._transport
         )
 
-    def test_transport_receives_codex_base_url(self) -> None:
-        url = "http://custom-codex:9999"
-        container = _make_container_with(codex_base_url=url)
-
-        assert container.transport._base_url == url
-
     def test_creates_roadmap_generation_llm(self) -> None:
         from roadmap.infrastructure.codex_roadmap_generation_llm import (
             CodexRoadmapGenerationLlm,
@@ -283,7 +276,6 @@ def _make_container_with(
     *,
     engine: Engine | None = None,
     chroma_collection: object | None = None,
-    codex_base_url: str = "http://localhost:11111",
     embedder: object | None = None,
 ) -> object:
     from api.dependencies import Container
@@ -295,6 +287,5 @@ def _make_container_with(
             if chroma_collection is not None
             else _FakeChromaCollection()
         ),
-        codex_base_url=codex_base_url,
         embedder=embedder,
     )

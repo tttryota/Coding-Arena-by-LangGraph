@@ -227,6 +227,26 @@ def build_graph(  # noqa: PLR0915
 
 
 # ---------------------------------------------------------------------------
+# Transient LLM error detection
+# ---------------------------------------------------------------------------
+
+
+class TransientLlmNodeError(Exception):
+    """一過性 LLM エラー。グラフは checkpointer に状態が残っており再試行可能。"""
+
+    def __init__(self, *, node_error: Exception, thread_id: str) -> None:
+        self.node_error = node_error
+        self.thread_id = thread_id
+        super().__init__(f"Transient LLM error (thread={thread_id}): {node_error}")
+
+
+def _is_transient_llm_error(exc: Exception) -> bool:
+    """error_code 属性が "llm_request_failed" なら一過性エラーと判定する。"""
+    error_code = getattr(exc, "error_code", None)
+    return error_code == "llm_request_failed"
+
+
+# ---------------------------------------------------------------------------
 # GraphRunner concrete implementation
 # ---------------------------------------------------------------------------
 
@@ -243,19 +263,51 @@ class QuizGraphRunner:
         invoke() は interrupt() でグラフが一時停止した場合、例外を送出せず
         interrupt 時点の state を返す。返り値は不要 (checkpointer が state を保持する)。
         """
-        self._graph.invoke(state, config={"configurable": {"thread_id": thread_id}})
+        try:
+            self._graph.invoke(state, config={"configurable": {"thread_id": thread_id}})
+        except Exception as exc:
+            if _is_transient_llm_error(exc):
+                raise TransientLlmNodeError(
+                    node_error=exc, thread_id=thread_id,
+                ) from exc
+            raise
 
     def resume_graph(self, user_input: dict[str, object], *, thread_id: str) -> None:
         """再開セッション用にグラフを続行する。Command(resume=...) で入力を渡す。"""
         from langgraph.types import Command
 
-        self._graph.invoke(
-            Command(resume=user_input),
-            config={"configurable": {"thread_id": thread_id}},
-        )
+        try:
+            self._graph.invoke(
+                Command(resume=user_input),
+                config={"configurable": {"thread_id": thread_id}},
+            )
+        except Exception as exc:
+            if _is_transient_llm_error(exc):
+                raise TransientLlmNodeError(
+                    node_error=exc, thread_id=thread_id,
+                ) from exc
+            raise
+
+    def retry_graph(self, *, thread_id: str) -> None:
+        """前回失敗したノードから再実行する。
+
+        LangGraph の checkpointer に失敗前の state が残っているため、
+        invoke(None) で失敗ノードから再実行できる。
+        """
+        try:
+            self._graph.invoke(
+                None, config={"configurable": {"thread_id": thread_id}},
+            )
+        except Exception as exc:
+            if _is_transient_llm_error(exc):
+                raise TransientLlmNodeError(
+                    node_error=exc, thread_id=thread_id,
+                ) from exc
+            raise
 
 
 __all__ = [
     "QuizGraphRunner",
+    "TransientLlmNodeError",
     "build_graph",
 ]

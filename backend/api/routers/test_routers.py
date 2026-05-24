@@ -62,6 +62,7 @@ class _FakeContainer:
         self.batch_chunk_tagger = _FakeBatchChunkTagger()
         self.batch_embedder = _FakeBatchEmbedder()
         self.chunk_store = _FakeChunkStore()
+        self.post_ingestion_hook = _FakePostIngestionHook()
 
 
 class _FakeUuidGenerator:
@@ -184,6 +185,11 @@ class _FakeChunkStore:
 
     def upsert_chunks(self, upsert_input: object) -> object:
         return None
+
+
+class _FakePostIngestionHook:
+    def on_file_ingested(self, source_path: str, chunk_data: list) -> None:
+        pass
 
 
 class _FakeFeedbackStore:

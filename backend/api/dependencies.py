@@ -216,6 +216,10 @@ class Container:
             FileDiffDetectorAdapter,
             SimpleTokenCounter,
         )
+        from ingestion.infrastructure.ingestion_feedback_hook import (
+            IngestionFeedbackHook,
+            RoadmapItemReaderAdapter,
+        )
 
         self.batch_diff_detector = FileDiffDetectorAdapter(self.diff_snapshot_store)
         self.batch_chunk_splitter = ChunkSplitterAdapter(SimpleTokenCounter())
@@ -227,6 +231,11 @@ class Container:
             self.batch_embedder = EmbedderAdapter(self._embedder)
         else:
             self.batch_embedder = None  # type: ignore[assignment]
+        self.post_ingestion_hook = IngestionFeedbackHook(
+            llm_client=self.ingestion_feedback_llm,
+            roadmap_reader=RoadmapItemReaderAdapter(self.roadmap_retrieval_reader),
+            writer=self.ingestion_feedback_store,
+        )
 
     def shutdown(self) -> None:
         self.executor.shutdown(wait=True)

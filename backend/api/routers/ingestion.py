@@ -52,6 +52,7 @@ def trigger_ingestion(body: _TriggerRequest, request: Request) -> dict:
             chunk_tagger=c.batch_chunk_tagger,
             embedder=c.batch_embedder,
             chunk_store=c.chunk_store,
+            post_ingestion_hook=c.post_ingestion_hook,
         )
         result = run_once(config, trigger=trigger)  # type: ignore[arg-type]
     except BatchSchedulerConfigError as exc:

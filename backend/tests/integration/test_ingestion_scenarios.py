@@ -1,8 +1,9 @@
-"""Ingestion シナリオテスト I-1..I-3。
+"""Ingestion シナリオテスト I-1..I-4。
 
 I-1: POST /ingestion/trigger → 実ファイルシステム → チャンク保存
 I-2: generate_for_file → list_feedbacks で表示確認 (app 層直接)
 I-3: 空チャンクスキップ (app 層直接)
+I-4: POST /ingestion/trigger → PostIngestionHook → フィードバック自動生成
 """
 
 from __future__ import annotations
@@ -181,3 +182,77 @@ class TestI3EmptyChunkSkip:
         assert result.skip_reason == "no_analyzable_chunks"
         assert result.created_feedback is None
         assert scenario_transport.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# I-4: PostIngestionHook 経由フィードバック自動生成
+# ---------------------------------------------------------------------------
+
+# フィードバック LLM レスポンス
+_FEEDBACK_LLM_RESPONSE = json.dumps(
+    {
+        "selected_roadmap_item_id": None,
+        "accuracy_check": "TypeScript の基本概念が正確に記述されています。",
+        "improvement_suggestions": ["具体的なコード例を追加するとより理解が深まります"],
+    },
+    ensure_ascii=False,
+)
+
+
+class TestI4PostIngestionHookFeedbackGeneration:
+    def test_trigger_generates_feedback_via_hook(
+        self,
+        client: TestClient,
+        integration_container: object,
+        scenario_transport: ScenarioLlmTransport,
+        tmp_path: Path,
+    ) -> None:
+        """POST /ingestion/trigger → Hook → フィードバック自動生成 → GET /feedbacks で確認。"""
+        # Arrange: 50 文字以上のテキストを持つ markdown を作成
+        md_file = tmp_path / "typescript_generics.md"
+        md_file.write_text(
+            "# TypeScript Generics\n\n"
+            "TypeScript のジェネリクスは型パラメータを使って再利用可能なコンポーネントを作成するための仕組みです。"
+            "関数やクラスに型を引数として渡すことで、型安全性を保ちながら柔軟なコードを書くことができます。",
+            encoding="utf-8",
+        )
+
+        # Arrange: LLM レスポンス (1: tagger, 2: feedback)
+        scenario_transport.set_sequential_responses([
+            json.dumps({"tags": ["typescript", "generics"]}, ensure_ascii=False),
+            _FEEDBACK_LLM_RESPONSE,
+        ])
+
+        # Act: バッチ取り込み実行
+        resp = client.post(
+            "/ingestion/trigger",
+            json={"target_path": str(tmp_path), "trigger": "startup"},
+        )
+        assert resp.status_code == 202, resp.text
+        data = resp.json()
+        assert data["status"] == "completed"
+        assert data["stored_chunk_count"] >= 1
+
+        # Assert: tagger + feedback の 2 回 LLM が呼ばれた
+        assert scenario_transport.call_count == 2, (
+            f"Expected 2 LLM calls (tagger + feedback), got {scenario_transport.call_count}"
+        )
+
+        # Assert: Hook 経由でフィードバックが生成された
+        list_resp = client.get("/ingestion/feedbacks")
+        assert list_resp.status_code == 200
+        feedbacks = list_resp.json()
+
+        feedback = next(
+            (f for f in feedbacks["items"] if "typescript_generics" in f["source_path"]),
+            None,
+        )
+        assert feedback is not None, (
+            f"Expected feedback for typescript_generics.md, got: "
+            f"{[f['source_path'] for f in feedbacks['items']]}"
+        )
+        assert feedback["is_read"] is False
+        assert feedback["roadmap_item_id"] is None  # ロードマップ未作成のため
+        assert "typescript_generics" in feedback["title"]
+        assert "TypeScript の基本概念が正確に記述されています" in feedback["body"]
+        assert "具体的なコード例を追加する" in feedback["body"]

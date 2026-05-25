@@ -89,6 +89,7 @@ export function RoadmapDetailPage() {
 
   const handleStartQuiz = useCallback(
     async (node: RoadmapTreeNode) => {
+      if (startSession.isPending) return;
       try {
         const result = await startSession.mutateAsync(node.id);
         if (result.resume_required && result.resume_session_id) {
@@ -194,6 +195,7 @@ export function RoadmapDetailPage() {
                 onAddChild={handleAddChild}
                 onDelete={handleDelete}
                 onMove={handleMove}
+                isStartingQuiz={startSession.isPending}
               />
             ) : (
               <DetailEmptyState

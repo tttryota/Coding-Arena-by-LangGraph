@@ -11,6 +11,7 @@ interface DetailNodeProps {
   onStartQuiz: (node: RoadmapTreeNode) => void;
   onDelete: (node: RoadmapTreeNode) => void;
   onMove: (node: RoadmapTreeNode) => void;
+  isStartingQuiz?: boolean;
 }
 
 export function DetailNode({
@@ -18,6 +19,7 @@ export function DetailNode({
   onStartQuiz,
   onDelete,
   onMove,
+  isStartingQuiz,
 }: DetailNodeProps) {
   const relTime = formatRelativeTime(node.last_quiz_at);
   const lvl = scoreLevel(node.score);
@@ -62,9 +64,19 @@ export function DetailNode({
           size="sm"
           className="h-7 gap-[5px] rounded-[5px] px-3 text-xs"
           onClick={() => onStartQuiz(node)}
+          disabled={isStartingQuiz}
         >
-          <Play className="h-3 w-3" />
-          クイズ開始
+          {isStartingQuiz ? (
+            <>
+              <span className="inline-block h-3 w-3 animate-[qs-spin_0.7s_linear_infinite] rounded-full border-[1.5px] border-[rgb(255_255_255/0.3)] border-t-white" />
+              生成中…
+            </>
+          ) : (
+            <>
+              <Play className="h-3 w-3" />
+              クイズ開始
+            </>
+          )}
         </Button>
 
         <OverflowMenu

@@ -10,6 +10,7 @@ interface RoadmapTreeProps {
   onAddChild: (parent: RoadmapTreeNode) => void;
   onDelete: (node: RoadmapTreeNode) => void;
   onMove: (node: RoadmapTreeNode) => void;
+  isStartingQuiz?: boolean;
 }
 
 function collectAllIds(nodes: RoadmapTreeNode[]): string[] {
@@ -31,6 +32,7 @@ export function RoadmapTree({
   onAddChild,
   onDelete,
   onMove,
+  isStartingQuiz,
 }: RoadmapTreeProps) {
   const expandAll = useTreeStore((s) => s.expandAll);
   const collapseAll = useTreeStore((s) => s.collapseAll);
@@ -75,6 +77,7 @@ export function RoadmapTree({
           onAddChild={onAddChild}
           onDelete={onDelete}
           onMove={onMove}
+          isStartingQuiz={isStartingQuiz}
         />
       ))}
     </div>

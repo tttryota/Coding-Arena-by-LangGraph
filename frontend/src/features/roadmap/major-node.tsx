@@ -16,6 +16,7 @@ interface MajorNodeProps {
   onAddChild: (parent: RoadmapTreeNode) => void;
   onDelete: (node: RoadmapTreeNode) => void;
   onMove: (node: RoadmapTreeNode) => void;
+  isStartingQuiz?: boolean;
 }
 
 export function MajorNode({
@@ -25,6 +26,7 @@ export function MajorNode({
   onAddChild,
   onDelete,
   onMove,
+  isStartingQuiz,
 }: MajorNodeProps) {
   const expanded = useTreeStore((s) => s.expandedIds.has(node.id));
   const toggle = useTreeStore((s) => s.toggle);
@@ -101,6 +103,7 @@ export function MajorNode({
                   onAddChild={onAddChild}
                   onDelete={onDelete}
                   onMove={onMove}
+                  isStartingQuiz={isStartingQuiz}
                 />
               ))}
             </div>

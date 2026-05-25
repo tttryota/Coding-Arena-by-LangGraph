@@ -15,6 +15,7 @@ interface MiddleNodeProps {
   onAddChild: (parent: RoadmapTreeNode) => void;
   onDelete: (node: RoadmapTreeNode) => void;
   onMove: (node: RoadmapTreeNode) => void;
+  isStartingQuiz?: boolean;
 }
 
 export function MiddleNode({
@@ -23,6 +24,7 @@ export function MiddleNode({
   onAddChild,
   onDelete,
   onMove,
+  isStartingQuiz,
 }: MiddleNodeProps) {
   const expanded = useTreeStore((s) => s.expandedIds.has(node.id));
   const toggle = useTreeStore((s) => s.toggle);
@@ -93,6 +95,7 @@ export function MiddleNode({
                   onStartQuiz={onStartQuiz}
                   onDelete={onDelete}
                   onMove={onMove}
+                  isStartingQuiz={isStartingQuiz}
                 />
               ))}
             </div>

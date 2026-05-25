@@ -1,0 +1,158 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   Design tokens — Obsidian Quiz dark-only theme
+   Mapped from the handoff's colors_and_type.css
+   --------------------------------------------------------------------------- */
+@theme {
+  /* Score palette (custom, not part of shadcn) */
+  --color-score-not-started-fg: #94a3b8;
+  --color-score-not-started-bg: #334155;
+  --color-score-insufficient-fg: #fb7185;
+  --color-score-insufficient-bg: #4c0519;
+  --color-score-partial-fg: #fbbf24;
+  --color-score-partial-bg: #451a03;
+  --color-score-sufficient-fg: #34d399;
+  --color-score-sufficient-bg: #022c22;
+
+  /* Primary hover state */
+  --color-primary-hover: #1d4ed8;
+
+  /* Typography */
+  --font-sans: "Noto Sans JP", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.6);
+}
+
+/* shadcn CSS-variable bridge — dark only, no .dark class needed */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:root {
+  --radius: 8px;
+
+  /* Surfaces — slate scale from design system */
+  --background: #020617;
+  --foreground: #f8fafc;
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --popover: #0f172a;
+  --popover-foreground: #f8fafc;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --border: #1e293b;
+  --input: #334155;
+  --ring: #3b82f6;
+
+  /* Accents */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #334155;
+  --secondary-foreground: #f1f5f9;
+  --accent: #334155;
+  --accent-foreground: #f1f5f9;
+  --destructive: #dc2626;
+}
+
+/* ---------------------------------------------------------------------------
+   Base resets
+   --------------------------------------------------------------------------- */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+/* Quiz session animations */
+@keyframes bubble-in {
+  from {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    transform: translate(-50%, 12px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes qs-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+@keyframes qs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

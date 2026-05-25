@@ -35,6 +35,13 @@ application層がセッション再開で受け取る公開入力は、以下の
 - C1 が責務を持たない `confirmation_points`、`current_point_index`、`current_question_text`、`current_answer_type`、`user_input`、`input_source`、`input_type`、`next_action`、`total_questions_asked` は未設定のまま許容する
 - C1 の責務は `QuizSession` 作成、`RoadmapItem` 情報取得、再開時の `QuizAnswer` 履歴復元までに限定し、再開候補列挙、自動再開、`confirmation_points` 生成は含めない
 
+### 公開関数の戻り値契約
+
+- `start_session(...) -> StartSessionResult` は既存契約を維持し、実行後 `SessionState` を公開返却しない
+- `resume_session(...) -> SessionState` は `graph_runner.resume_graph(...)` 成功後に同じ `thread_id` で `graph_runner.get_state(...)` を呼び、その post-run state を返す
+- `resume_session(...)` は実行前に組み立てた resume 用 seed state を返してはならない
+- `record_answer(...) -> None` と `complete_session(...) -> None` は既存契約を維持し、`graph_runner.get_state(...)` の公開返却対象に含めない
+
 ## 振る舞い
 
 ### セッション開始
@@ -63,6 +70,7 @@ in_progressのセッションを再開する（ADR-005参照）。
 - 復元した問答ペア列を使って新しいLangGraphセッションとして続行する
 - 「ここまでの問答を踏まえて、続きから出題して」と指示
 - `QuizAnswer` が0件の場合は空の履歴をLLMに渡し、新規開始と同じ公開結果として問題セット設計ノードから続行する
+- `resume_session(...)` の公開返却値は、続行後に `graph_runner.get_state(...)` で取得した authoritative な post-run `SessionState` とする
 
 中断の発生パターン:
 - ユーザーが明示的に中断ボタンを押す
@@ -102,7 +110,8 @@ in_progressのセッションを再開する（ADR-005参照）。
 ## 技術判断
 
 - statusを in_progress / completed の2値とする理由: 中断もタイムアウトもin_progressとして扱い、再開可能にする。abandonedを別ステータスにする必要がない
-- LangGraphのチェックポイント永続化を使わない理由: QuizAnswer履歴で代替可能。LangGraphへの依存を減らす（ADR-005参照）
+- 再開時の入力復元は `QuizAnswer` 履歴を正とする理由: 再開前の seed state 構築に必要な問答履歴を application 層で決定できるため
+- 再開後の公開返却値は LangGraph checkpointer 上の最新 state を正とする理由: `resume_session(...)` は seed state ではなく、ノード実行結果を反映済みの post-run `SessionState` を返す必要があるため
 
 ## 境界条件
 
@@ -140,6 +149,7 @@ in_progressのセッションを再開する（ADR-005参照）。
 - [ ] ロードマップ項目を選択してセッションを開始できる
 - [ ] 各回答が次の出題または完了処理より前にQuizAnswerへ永続化完了する
 - [ ] in_progressのセッションを `QuizAnswer.question_number` 昇順の問答ペア履歴から再開できる
+- [ ] `resume_session(...)` は `resume_graph(...)` 成功後に `graph_runner.get_state(...)` の戻り値を返す
 - [ ] 全確認ポイント完了時にstatusがcompletedに変わる
 - [ ] 完了時にRoadmapItem.scoreが更新される
 - [ ] 同一項目でin_progressのセッションがあれば再開を促す
@@ -159,9 +169,9 @@ in_progressのセッションを再開する（ADR-005参照）。
     - `QuizSessionStore(Protocol)` — `create_session(roadmap_item_id: str) -> QuizSessionRecord`, `find_in_progress_by_item(roadmap_item_id: str) -> QuizSessionRecord | None`, `find_session(session_id: str) -> QuizSessionRecord`, `mark_completed(session_id: str, completed_at: str) -> None`, `delete_session(session_id: str) -> None`（開始失敗時のロールバック用）
     - `QuizAnswerStore(Protocol)` — `save_answer(quiz_session_id: str, answer: QuizAnswerHistoryRecord) -> None`, `find_by_session(session_id: str) -> list[QuizAnswerHistoryRecord]`（question_number 昇順）
     - `RoadmapItemReader(Protocol)` — `find_item(item_id: str) -> RoadmapItemRecord`, `update_score(item_id: str, score: int) -> None`
-    - `GraphRunner(Protocol)` — `start_graph(state: SessionState) -> None`（LangGraph グラフを開始し、問題セット設計ノードへ遷移させる）, `resume_graph(state: SessionState) -> None`（再開時に LLM へ履歴を渡してグラフを続行する。「ここまでの問答を踏まえて、続きから出題して」と指示）
+    - `GraphRunner(Protocol)` — `start_graph(state: SessionState) -> None`（LangGraph グラフを開始し、問題セット設計ノードへ遷移させる）, `resume_graph(state: SessionState) -> None`（再開時に LLM へ履歴を渡してグラフを続行する。「ここまでの問答を踏まえて、続きから出題して」と指示）, `get_state(thread_id: str) -> SessionState`（同じ `thread_id` の最新 post-run state を取得する）
   - `backend/quiz/application/session_lifecycle.py`
     - `start_session(input: StartSessionInput, *, session_store: QuizSessionStore, item_reader: RoadmapItemReader, graph_runner: GraphRunner) -> StartSessionResult` — 新規開始。in_progress 既存時は `resume_required=True` を返しグラフは開始しない。新規時は QuizSession 作成 → RoadmapItem 取得 → SessionState 構築 → graph_runner.start_graph 呼び出し。QuizSession 作成後にグラフ開始が失敗した場合は delete_session でロールバック
-    - `resume_session(input: ResumeSessionInput, *, session_store: QuizSessionStore, answer_store: QuizAnswerStore, item_reader: RoadmapItemReader, graph_runner: GraphRunner) -> SessionState` — 再開。QuizAnswer 履歴を question_number 昇順で復元 → SessionState 構築 → graph_runner.resume_graph 呼び出し
+    - `resume_session(input: ResumeSessionInput, *, session_store: QuizSessionStore, answer_store: QuizAnswerStore, item_reader: RoadmapItemReader, graph_runner: GraphRunner) -> SessionState` — 再開。QuizAnswer 履歴を question_number 昇順で復元 → SessionState 構築 → graph_runner.resume_graph 呼び出し → 同じ `thread_id` で `graph_runner.get_state(...)` を呼び、その post-run state を返す
     - `record_answer(session_id: str, answer: QuizAnswerHistoryRecord, *, answer_store: QuizAnswerStore) -> None` — 回答を QuizAnswer に永続化。後続処理（次の出題/完了）より前に呼び出される
     - `complete_session(session_id: str, score: int, *, session_store: QuizSessionStore, item_reader: RoadmapItemReader) -> None` — 完了処理。status 更新 + completed_at 記録 + score 反映

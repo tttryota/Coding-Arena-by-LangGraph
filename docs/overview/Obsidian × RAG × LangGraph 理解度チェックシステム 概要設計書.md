@@ -93,8 +93,9 @@
 | LLM | OpenAI GPT-4o-mini または Claude 3.5 Haiku | コストと精度のバランスが良い |
 | バックエンドAPI | FastAPI（Python） | 非同期対応・型安全・自動ドキュメント生成 |
 | フロントエンド | React + TypeScript + Vite | 既存スキルの活用 |
-| 状態管理 | Jotai | 既存スキルの活用（モバイルでの経験あり） |
-| UIコンポーネント | Chakra UI | 既存スキルの活用（セマンティックトークン設計経験あり） |
+| サーバー状態管理 | TanStack Query | キャッシュ・再取得・ポーリングの統合管理 |
+| クライアント状態管理 | Zustand | 軽量で学習コストが低い |
+| UIコンポーネント | shadcn/ui (Radix UI + Tailwind CSS) | カスタマイズ性と型安全性 |
 
 ---
 
@@ -211,7 +212,7 @@ Generator → Evaluatorの二段構成を実装する。この段階ではフロ
 
 ### Phase 3（1週間）：FastAPI + React GUIの実装
 
-Phase 2までで動作が確認できたエージェントワークフローをFastAPIでAPIとして公開し、ReactのGUIから呼び出す。既存のスキル（React・TypeScript・Chakra UI・Jotai）をそのまま活用できるため、工数は最小限に抑えられる。
+Phase 2までで動作が確認できたエージェントワークフローをFastAPIでAPIとして公開し、ReactのGUIから呼び出す。既存のスキル（React・TypeScript・shadcn/ui・TanStack Query・Zustand）をそのまま活用できるため、工数は最小限に抑えられる。
 
 ### Phase 4（1週間）：Weakness Taggerの実装と精度チューニング
 

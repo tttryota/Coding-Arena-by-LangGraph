@@ -277,7 +277,15 @@ export function QuizSessionPage() {
             ) : (
               <div className="grid items-start gap-6 grid-cols-1 min-[1180px]:grid-cols-[1fr_288px]">
                 <div className="min-w-0 rounded-lg border border-border bg-card p-6">
-                  {(phase === "question" || phase === "chat_response") && (
+                  {(phase === "question" || phase === "chat_response") &&
+                    !sessionState.current_question_text && (
+                    <div className="flex flex-col items-center gap-4 py-12 text-muted-foreground">
+                      <span className="inline-block h-6 w-6 animate-[qs-spin_0.7s_linear_infinite] rounded-full border-2 border-[rgb(148_163_184/0.3)] border-t-[rgb(148_163_184/0.8)]" />
+                      <span className="text-sm">問題を生成中…</span>
+                    </div>
+                  )}
+                  {(phase === "question" || phase === "chat_response") &&
+                    sessionState.current_question_text && (
                     <QuestionPhase
                       sessionState={sessionState}
                       isSubmitting={isSubmitting}

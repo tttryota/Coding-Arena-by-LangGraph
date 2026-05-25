@@ -31,3 +31,6 @@ chroma_data/
 
 # Data (SQLite, ChromaDB, HuggingFace cache)
 data/
+
+# Playwright MCP
+.playwright-mcp/

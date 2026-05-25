@@ -168,4 +168,5 @@ export interface SessionDetailResponse {
     status: "in_progress" | "completed";
     completed_at: string | null;
   };
+  graph_state?: SessionState;
 }

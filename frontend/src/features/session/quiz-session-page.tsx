@@ -68,13 +68,18 @@ export function QuizSessionPage() {
     };
   }, [sessionId, reset]);
 
-  // Initialize sessionState from API response.
-  // When backend returns full SessionState from GET /sessions/:id,
-  // all fields will be populated. Currently only metadata is returned,
-  // so we build a minimal state. The response is spread to pick up
-  // any additional fields the backend may return in the future.
+  // Initialize sessionState from API response (graph_state contains the full quiz state).
+  // Re-run when graph_state becomes available (may arrive after initial fetch).
   useEffect(() => {
-    if (data && !sessionState) {
+    if (!data) return;
+
+    if (data.graph_state) {
+      // graph_state has question text — always update to latest
+      if (!sessionState || !sessionState.current_question_text) {
+        setSessionState(data.graph_state);
+      }
+    } else if (!sessionState) {
+      // Fallback: minimal state when graph_state is not yet available
       setSessionState({
         session_id: data.session_id,
         roadmap_item_id: data.session.roadmap_item_id,
@@ -82,14 +87,11 @@ export function QuizSessionPage() {
         roadmap_item_title: locState.topic ?? "",
         roadmap_item_description: "",
         is_resumed: false,
-        // Spread any extra SessionState fields the backend may include
-        ...("confirmation_points" in data ? data : {}),
       } as import("@/types/api").SessionState);
+    }
 
-      // If session is completed, go to summary phase
-      if (data.session.status === "completed") {
-        setPhase("summary");
-      }
+    if (data.session.status === "completed") {
+      setPhase("summary");
     }
   }, [data, sessionState, setSessionState, setPhase, locState.topic]);
 

@@ -60,7 +60,7 @@ export function DashboardPage() {
       <StatCard
         icon={TrendingUp}
         label="全体の平均スコア"
-        value={hasAvgScore ? stats.avgScore : "—"}
+        value={hasAvgScore ? stats.avgScore! : "—"}
         valueColor={avgLvl?.fg}
         hint={avgLvl ? avgLvl.label : "未計測"}
       />

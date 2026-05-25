@@ -33,7 +33,7 @@ export function MiddleNode({
   return (
     <Collapsible open={expanded} onOpenChange={() => toggle(node.id)}>
       <div className="tn-middle-block">
-        <CollapsibleTrigger asChild>
+        <CollapsibleTrigger>
           <div
             className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-[9px] transition-colors duration-[120ms] hover:bg-[rgb(51_65_85/0.32)]"
             role="button"

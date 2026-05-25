@@ -36,7 +36,7 @@ export function MajorNode({
       <div
         className={`py-0.5 ${!isFirst ? "mt-1 border-t border-border pt-1.5" : ""}`}
       >
-        <CollapsibleTrigger asChild>
+        <CollapsibleTrigger>
           <div
             className="flex cursor-pointer items-center gap-2.5 rounded-md p-3 transition-colors duration-[120ms] hover:bg-[rgb(51_65_85/0.32)]"
             role="button"

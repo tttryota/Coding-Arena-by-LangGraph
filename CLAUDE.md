@@ -4,7 +4,7 @@ Obsidian × RAG × LangGraph 理解度チェックシステム。
 
 # アーキテクチャ
 - backend/: Python (FastAPI + LangGraph + LangChain)
-- frontend/: TypeScript (React + Vite + shadcn/ui + Jotai)
+- frontend/: TypeScript (React + Vite + shadcn/ui + TanStack Query + Zustand)
 
 # 技術制約
 - LLM: Codex（app-server経由）
@@ -17,8 +17,12 @@ Obsidian × RAG × LangGraph 理解度チェックシステム。
 - backend/{機能}/application/        アプリケーション層（オーケストレーション。Protocol経由でI/O）
 - backend/{機能}/infrastructure/     インフラ層（concrete実装。直接I/O）
 - backend/infrastructure/            横断基盤（RDB, config, logging）
-- frontend/src/                      Reactコンポーネント
-- テスト: コロケーション方式（ソースと同ディレクトリに test_*.py）
+- frontend/src/features/{機能}/      機能単位グルーピング（コンポーネント・フック・テスト共存）
+- frontend/src/components/           横断コンポーネント（layout/, common/, ui/）
+- frontend/src/lib/                  UI非関連ユーティリティ
+- テスト: コロケーション方式
+  - backend: ソースと同ディレクトリに test_*.py
+  - frontend: ソースと同ディレクトリに *.test.ts / *.test.tsx（vitest）
 
 # コーディング規約
 - Python: ruff でフォーマット・リント

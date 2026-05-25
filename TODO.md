@@ -81,7 +81,7 @@ backend/
 
 | タスク | 概要 |
 |---|---|
-| プロジェクト初期化 | Vite + React + TypeScript + shadcn/ui + Jotai |
+| プロジェクト初期化 | Vite + React + TypeScript + shadcn/ui + TanStack Query + Zustand |
 | ロードマップ画面 | ツリー表示、進捗バー、項目 CRUD |
 | クイズ画面 | 問題表示、回答入力（文章/コード）、チャット UI |
 | ダッシュボード | 進捗一覧、フィードバック確認 |

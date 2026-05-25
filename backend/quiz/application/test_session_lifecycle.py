@@ -280,15 +280,18 @@ class _RecordingGraphRunner:
         resume_error: Exception | None = None,
         retry_error: Exception | None = None,
         operation_log: list[str] | None = None,
+        get_state_result: SessionState | None = None,
     ) -> None:
         self._start_error = start_error
         self._resume_error = resume_error
         self._retry_error = retry_error
         self._operation_log = operation_log
+        self._get_state_result = get_state_result
         self.graph_call_sequence: list[str] = []
         self.start_graph_calls: list[dict[str, object]] = []
         self.resume_graph_calls: list[dict[str, object]] = []
         self.retry_graph_calls: list[str] = []
+        self.get_state_calls: list[str] = []
 
     def start_graph(self, state: SessionState, *, thread_id: str) -> None:
         snapshot: dict[str, object] = dict(state)
@@ -314,6 +317,12 @@ class _RecordingGraphRunner:
             self._operation_log.append("retry_graph")
         if self._retry_error is not None:
             raise self._retry_error
+
+    def get_state(self, *, thread_id: str) -> SessionState:
+        self.get_state_calls.append(thread_id)
+        if self._get_state_result is not None:
+            return self._get_state_result
+        return {}  # type: ignore[return-value]
 
 
 def _session(
@@ -607,7 +616,45 @@ def test_tc_10_resume_session_rehydrates_ordered_pairs_and_continues_from_questi
     item_reader = _RecordingItemReader(
         items={roadmap_item.id: roadmap_item},
     )
-    graph_runner = _RecordingGraphRunner()
+    post_run_state: SessionState = {
+        "session_id": session.id,
+        "roadmap_item_id": roadmap_item.id,
+        "roadmap_item_level": roadmap_item.level,
+        "roadmap_item_title": roadmap_item.title,
+        "roadmap_item_description": roadmap_item.description,
+        "is_resumed": True,
+        "answers": [
+            _expected_answer_state(
+                question_number=1,
+                question_text="ジェネリクスは何を解決しますか。",
+                answer_text="型安全に共通化できます。",
+                score=72,
+                feedback="型安全性に触れられています。",
+                confirmation_point_id="cp-001",
+            ),
+            _expected_answer_state(
+                question_number=2,
+                question_text="制約付き型パラメータの例を挙げてください。",
+                answer_text="T extends HasId のように使います。",
+                score=80,
+                feedback="具体例が明確です。",
+                confirmation_point_id="cp-002",
+            ),
+            _expected_answer_state(
+                question_number=3,
+                question_text="ワイルドカードはいつ使いますか。",
+                answer_text="読み取り専用の境界を表したいときに使います。",
+                score=84,
+                feedback="用途が具体的です。",
+                confirmation_point_id="cp-003",
+            ),
+        ],
+        "current_question_text": "型消去とは何ですか。",
+        "current_answer_type": "textarea",
+        "total_questions_asked": 4,
+        "input_type": "answer",
+    }
+    graph_runner = _RecordingGraphRunner(get_state_result=post_run_state)
     resume_input = ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form")
 
     # Act
@@ -619,52 +666,18 @@ def test_tc_10_resume_session_rehydrates_ordered_pairs_and_continues_from_questi
         graph_runner=graph_runner,
     )
 
-    # Assert
-    expected_resumed_answers = [
-        _expected_answer_state(
-            question_number=1,
-            question_text="ジェネリクスは何を解決しますか。",
-            answer_text="型安全に共通化できます。",
-            score=72,
-            feedback="型安全性に触れられています。",
-            confirmation_point_id="cp-001",
-        ),
-        _expected_answer_state(
-            question_number=2,
-            question_text="制約付き型パラメータの例を挙げてください。",
-            answer_text="T extends HasId のように使います。",
-            score=80,
-            feedback="具体例が明確です。",
-            confirmation_point_id="cp-002",
-        ),
-        _expected_answer_state(
-            question_number=3,
-            question_text="ワイルドカードはいつ使いますか。",
-            answer_text="読み取り専用の境界を表したいときに使います。",
-            score=84,
-            feedback="用途が具体的です。",
-            confirmation_point_id="cp-003",
-        ),
-    ]
-    expected_state = {
-        "session_id": session.id,
-        "roadmap_item_id": roadmap_item.id,
-        "roadmap_item_level": roadmap_item.level,
-        "roadmap_item_title": roadmap_item.title,
-        "roadmap_item_description": roadmap_item.description,
-        "is_resumed": True,
-        "answers": expected_resumed_answers,
-    }
-    resumed_question_numbers = [
-        answer["question_number"] for answer in state["answers"]
-    ]
-    expected_next_question_number = 4
-    assert state == expected_state
+    # Assert — resume_session returns get_state() result (post-run state)
+    assert state == post_run_state
+    assert state["current_question_text"] == "型消去とは何ですか。"
+    assert state["total_questions_asked"] == 4
     assert graph_runner.resume_graph_calls == [
         {"user_input": "test answer", "input_source": "form"},
     ]
+    assert graph_runner.get_state_calls == [session.id]
+    resumed_question_numbers = [
+        answer["question_number"] for answer in state["answers"]
+    ]
     assert resumed_question_numbers == [1, 2, 3]
-    assert resumed_question_numbers[-1] + 1 == expected_next_question_number
     assert session_store.create_session_calls == []
     assert session_store.complete_session_calls == []
     assert session_store.discard_session_calls == []
@@ -702,10 +715,47 @@ def test_tc_30_resume_session_loads_all_persisted_answers_and_passes_them_to_gra
             confirmation_point_id="cp-003",
         ),
     ]
+    post_run_state: SessionState = {
+        "session_id": session.id,
+        "roadmap_item_id": roadmap_item.id,
+        "roadmap_item_level": roadmap_item.level,
+        "roadmap_item_title": roadmap_item.title,
+        "roadmap_item_description": roadmap_item.description,
+        "is_resumed": True,
+        "answers": [
+            _expected_answer_state(
+                question_number=1,
+                question_text="ジェネリクスは何を解決しますか。",
+                answer_text="型安全に共通化できます。",
+                score=72,
+                feedback="型安全性に触れられています。",
+                confirmation_point_id="cp-001",
+            ),
+            _expected_answer_state(
+                question_number=2,
+                question_text="制約付き型パラメータの例を挙げてください。",
+                answer_text="T extends HasId のように使います。",
+                score=80,
+                feedback="具体例が明確です。",
+                confirmation_point_id="cp-002",
+            ),
+            _expected_answer_state(
+                question_number=3,
+                question_text="ワイルドカードはいつ使いますか。",
+                answer_text="読み取り専用の境界を表したいときに使います。",
+                score=84,
+                feedback="用途が具体的です。",
+                confirmation_point_id="cp-003",
+            ),
+        ],
+        "current_question_text": "型消去とは何ですか。",
+        "current_answer_type": "textarea",
+        "total_questions_asked": 4,
+    }
     session_store = _RecordingSessionStore(sessions={session.id: session})
     answer_store = _RecordingAnswerStore(histories={session.id: persisted_answers})
     item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
-    graph_runner = _RecordingGraphRunner()
+    graph_runner = _RecordingGraphRunner(get_state_result=post_run_state)
 
     # Act
     state = resume_session(
@@ -716,42 +766,15 @@ def test_tc_30_resume_session_loads_all_persisted_answers_and_passes_them_to_gra
         graph_runner=graph_runner,
     )
 
-    # Assert
+    # Assert — resume_session returns get_state() result (post-run state)
     persisted_count = len(persisted_answers)
-    expected_resumed_answers = [
-        _expected_answer_state(
-            question_number=1,
-            question_text="ジェネリクスは何を解決しますか。",
-            answer_text="型安全に共通化できます。",
-            score=72,
-            feedback="型安全性に触れられています。",
-            confirmation_point_id="cp-001",
-        ),
-        _expected_answer_state(
-            question_number=2,
-            question_text="制約付き型パラメータの例を挙げてください。",
-            answer_text="T extends HasId のように使います。",
-            score=80,
-            feedback="具体例が明確です。",
-            confirmation_point_id="cp-002",
-        ),
-        _expected_answer_state(
-            question_number=3,
-            question_text="ワイルドカードはいつ使いますか。",
-            answer_text="読み取り専用の境界を表したいときに使います。",
-            score=84,
-            feedback="用途が具体的です。",
-            confirmation_point_id="cp-003",
-        ),
-    ]
+    assert state == post_run_state
     assert session.id in answer_store.find_by_session_calls
     assert len(answer_store.histories[session.id]) == persisted_count
-    assert isinstance(state["answers"], list)
-    assert len(state["answers"]) == persisted_count
-    assert state["answers"] == expected_resumed_answers
     assert graph_runner.resume_graph_calls == [
         {"user_input": "test answer", "input_source": "form"},
     ]
+    assert graph_runner.get_state_calls == [session.id]
     assert session_store.create_session_calls == []
     assert session_store.complete_session_calls == []
     assert session_store.discard_session_calls == []
@@ -764,7 +787,19 @@ def test_tc_12_resume_session_with_zero_answers_uses_empty_history() -> None:
     session_store = _RecordingSessionStore(sessions={session.id: session})
     answer_store = _RecordingAnswerStore(histories={session.id: []})
     item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
-    graph_runner = _RecordingGraphRunner()
+    post_run_state: SessionState = {
+        "session_id": session.id,
+        "roadmap_item_id": roadmap_item.id,
+        "roadmap_item_level": roadmap_item.level,
+        "roadmap_item_title": roadmap_item.title,
+        "roadmap_item_description": roadmap_item.description,
+        "is_resumed": True,
+        "answers": [],
+        "current_question_text": "最初の問題です。",
+        "current_answer_type": "textarea",
+        "total_questions_asked": 1,
+    }
+    graph_runner = _RecordingGraphRunner(get_state_result=post_run_state)
     fresh_session = _session(
         session_id="session-fresh",
         roadmap_item_id=roadmap_item.id,
@@ -788,16 +823,7 @@ def test_tc_12_resume_session_with_zero_answers_uses_empty_history() -> None:
         graph_runner=fresh_graph_runner,
     )
 
-    # Assert
-    expected_state = {
-        "session_id": session.id,
-        "roadmap_item_id": roadmap_item.id,
-        "roadmap_item_level": roadmap_item.level,
-        "roadmap_item_title": roadmap_item.title,
-        "roadmap_item_description": roadmap_item.description,
-        "is_resumed": True,
-        "answers": [],
-    }
+    # Assert — resume_session returns get_state() result
     expected_fresh_graph_state = {
         "session_id": fresh_session.id,
         "roadmap_item_id": roadmap_item.id,
@@ -807,10 +833,11 @@ def test_tc_12_resume_session_with_zero_answers_uses_empty_history() -> None:
         "is_resumed": False,
     }
     assert fresh_result.resume_required is False
-    assert state == expected_state
+    assert state == post_run_state
     assert graph_runner.resume_graph_calls == [
         {"user_input": "test answer", "input_source": "form"},
     ]
+    assert graph_runner.get_state_calls == [session.id]
     assert fresh_graph_runner.start_graph_calls == [expected_fresh_graph_state]
     assert session_store.create_session_calls == []
     assert session_store.complete_session_calls == []
@@ -826,7 +853,30 @@ def test_tc_20_interrupted_in_progress_session_keeps_persisted_state() -> None:
     )
     answer_store = _RecordingAnswerStore()
     item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
-    graph_runner = _RecordingGraphRunner()
+    post_run_state: SessionState = {
+        "session_id": session.id,
+        "roadmap_item_id": roadmap_item.id,
+        "roadmap_item_level": roadmap_item.level,
+        "roadmap_item_title": roadmap_item.title,
+        "roadmap_item_description": roadmap_item.description,
+        "is_resumed": True,
+        "answers": [
+            _expected_answer_state(
+                question_number=1,
+                question_text="1問目",
+                answer_text="1つ目の回答",
+            ),
+            _expected_answer_state(
+                question_number=2,
+                question_text="2問目",
+                answer_text="2つ目の回答",
+            ),
+        ],
+        "current_question_text": "3問目",
+        "current_answer_type": "textarea",
+        "total_questions_asked": 3,
+    }
+    graph_runner = _RecordingGraphRunner(get_state_result=post_run_state)
     first_answer = _answer(
         question_number=1,
         question_text="1問目",
@@ -841,7 +891,6 @@ def test_tc_20_interrupted_in_progress_session_keeps_persisted_state() -> None:
     # Act
     record_answer(session.id, first_answer, answer_store=answer_store)
     record_answer(session.id, second_answer, answer_store=answer_store)
-    # 中断イベント自体は module 外の責務であり、この module では中断後の persisted state を観測する。
     persisted_answers = answer_store.find_by_session(session.id)
     resumed_state = resume_session(
         ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form"),
@@ -853,27 +902,16 @@ def test_tc_20_interrupted_in_progress_session_keeps_persisted_state() -> None:
 
     # Assert
     persisted_session = session_store.persisted_session(session.id)
-    expected_resumed_answers = [
-        _expected_answer_state(
-            question_number=1,
-            question_text="1問目",
-            answer_text="1つ目の回答",
-        ),
-        _expected_answer_state(
-            question_number=2,
-            question_text="2問目",
-            answer_text="2つ目の回答",
-        ),
-    ]
     assert persisted_session is not None
     assert persisted_session.status == "in_progress"
     assert persisted_session.completed_at is None
     assert persisted_answers == [first_answer, second_answer]
+    assert resumed_state == post_run_state
     assert resumed_state["session_id"] == session.id
-    assert resumed_state["answers"] == expected_resumed_answers
     assert graph_runner.resume_graph_calls == [
         {"user_input": "test answer", "input_source": "form"},
     ]
+    assert graph_runner.get_state_calls == [session.id]
     assert answer_store.save_answer_calls == [
         (session.id, first_answer),
         (session.id, second_answer),
@@ -900,9 +938,38 @@ def test_tc_21_browser_close_then_explicit_resume_preserves_history_and_continue
         existing_in_progress={session.roadmap_item_id: session},
         sessions={session.id: session},
     )
+    expected_resumed_answers = [
+        _expected_answer_state(
+            question_number=1,
+            question_text="1問目",
+            answer_text="1つ目の回答",
+        ),
+        _expected_answer_state(
+            question_number=2,
+            question_text="2問目",
+            answer_text="2つ目の回答",
+        ),
+        _expected_answer_state(
+            question_number=3,
+            question_text="3問目",
+            answer_text="3つ目の回答",
+        ),
+    ]
+    post_run_state: SessionState = {
+        "session_id": session.id,
+        "roadmap_item_id": roadmap_item.id,
+        "roadmap_item_level": roadmap_item.level,
+        "roadmap_item_title": roadmap_item.title,
+        "roadmap_item_description": roadmap_item.description,
+        "is_resumed": True,
+        "answers": expected_resumed_answers,
+        "current_question_text": "4問目",
+        "current_answer_type": "textarea",
+        "total_questions_asked": 4,
+    }
     answer_store = _RecordingAnswerStore(histories={session.id: answers})
     item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
-    graph_runner = _RecordingGraphRunner()
+    graph_runner = _RecordingGraphRunner(get_state_result=post_run_state)
 
     # Act
     start_result = start_session(
@@ -921,29 +988,13 @@ def test_tc_21_browser_close_then_explicit_resume_preserves_history_and_continue
 
     # Assert
     persisted_session = session_store.persisted_session(session.id)
-    expected_resumed_answers = [
-        _expected_answer_state(
-            question_number=1,
-            question_text="1問目",
-            answer_text="1つ目の回答",
-        ),
-        _expected_answer_state(
-            question_number=2,
-            question_text="2問目",
-            answer_text="2つ目の回答",
-        ),
-        _expected_answer_state(
-            question_number=3,
-            question_text="3問目",
-            answer_text="3つ目の回答",
-        ),
-    ]
     resumed_question_numbers = [
         answer["question_number"] for answer in state["answers"]
     ]
     expected_next_question_number = 4
     assert start_result.resume_required is True
     assert start_result.resume_session_id == session.id
+    assert state == post_run_state
     assert state["session_id"] == session.id
     assert state["answers"] == expected_resumed_answers
     assert resumed_question_numbers == [1, 2, 3]
@@ -951,6 +1002,7 @@ def test_tc_21_browser_close_then_explicit_resume_preserves_history_and_continue
     assert graph_runner.resume_graph_calls == [
         {"user_input": "test answer", "input_source": "form"},
     ]
+    assert graph_runner.get_state_calls == [session.id]
     assert persisted_session is not None
     assert persisted_session.status == "in_progress"
     assert persisted_session.completed_at is None
@@ -974,10 +1026,28 @@ def test_tc_22_long_idle_in_progress_session_resumes_without_expiry_rejection() 
             answer_text="既存の回答",
         ),
     ]
+    post_run_state: SessionState = {
+        "session_id": session.id,
+        "roadmap_item_id": roadmap_item.id,
+        "roadmap_item_level": roadmap_item.level,
+        "roadmap_item_title": roadmap_item.title,
+        "roadmap_item_description": roadmap_item.description,
+        "is_resumed": True,
+        "answers": [
+            _expected_answer_state(
+                question_number=1,
+                question_text="既存の質問",
+                answer_text="既存の回答",
+            ),
+        ],
+        "current_question_text": "2問目",
+        "current_answer_type": "textarea",
+        "total_questions_asked": 2,
+    }
     session_store = _RecordingSessionStore(sessions={session.id: session})
     answer_store = _RecordingAnswerStore(histories={session.id: answers})
     item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
-    graph_runner = _RecordingGraphRunner()
+    graph_runner = _RecordingGraphRunner(get_state_result=post_run_state)
 
     # Act
     state = resume_session(
@@ -990,15 +1060,9 @@ def test_tc_22_long_idle_in_progress_session_resumes_without_expiry_rejection() 
 
     # Assert
     persisted_session = session_store.persisted_session(session.id)
-    expected_resumed_answers = [
-        _expected_answer_state(
-            question_number=1,
-            question_text="既存の質問",
-            answer_text="既存の回答",
-        ),
-    ]
+    assert state == post_run_state
     assert state["session_id"] == session.id
-    assert state["answers"] == expected_resumed_answers
+    assert state["answers"] == post_run_state["answers"]
     resumed_question_numbers = [
         answer["question_number"] for answer in state["answers"]
     ]
@@ -1007,6 +1071,7 @@ def test_tc_22_long_idle_in_progress_session_resumes_without_expiry_rejection() 
     assert graph_runner.resume_graph_calls == [
         {"user_input": "test answer", "input_source": "form"},
     ]
+    assert graph_runner.get_state_calls == [session.id]
     assert persisted_session is not None
     assert persisted_session.status == "in_progress"
     assert persisted_session.completed_at is None
@@ -1512,8 +1577,15 @@ def test_tc_41_resume_after_transient_error_retries_via_retry_graph() -> None:
     session_store = _RecordingSessionStore(sessions={session.id: session})
     answer_store = _RecordingAnswerStore(histories={session.id: []})
     item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
+    post_run_state: SessionState = {
+        "session_id": session.id,
+        "roadmap_item_id": roadmap_item.id,
+        "is_resumed": True,
+        "answers": [],
+    }
     graph_runner = _RecordingGraphRunner(
         resume_error=InvalidUpdateError("Cannot resume; no task found for resume value"),
+        get_state_result=post_run_state,
     )
 
     state = resume_session(
@@ -1524,7 +1596,9 @@ def test_tc_41_resume_after_transient_error_retries_via_retry_graph() -> None:
         graph_runner=graph_runner,
     )
 
+    assert state == post_run_state
     assert state["session_id"] == session.id
     assert graph_runner.graph_call_sequence == ["resume_graph", "retry_graph"]
     assert graph_runner.retry_graph_calls == [session.id]
+    assert graph_runner.get_state_calls == [session.id]
     assert session_store.discard_session_calls == []

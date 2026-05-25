@@ -93,6 +93,8 @@ class GraphRunner(Protocol):
 
     def retry_graph(self, *, thread_id: str) -> None: ...
 
+    def get_state(self, *, thread_id: str) -> SessionState: ...
+
 
 __all__ = [
     "GraphRunner",

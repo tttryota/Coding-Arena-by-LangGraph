@@ -7,6 +7,7 @@ session_init (C1) はグラフ外で session_lifecycle.py が担当する。
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -304,6 +305,27 @@ class QuizGraphRunner:
                     node_error=exc, thread_id=thread_id,
                 ) from exc
             raise
+
+    def get_state(self, *, thread_id: str) -> SessionState:
+        """checkpointer から thread_id に対応するグラフの最新 state を取得する。"""
+        if not thread_id:
+            msg = "thread_id must not be empty"
+            raise ValueError(msg)
+        try:
+            snapshot = self._graph.get_state(
+                {"configurable": {"thread_id": thread_id}},
+            )
+        except Exception as exc:
+            msg = f"Failed to read checkpoint for thread_id={thread_id!r}"
+            raise RuntimeError(msg) from exc
+        if snapshot.created_at is None:
+            msg = f"No checkpoint found for thread_id={thread_id!r}"
+            raise LookupError(msg)
+        values = snapshot.values
+        if not isinstance(values, Mapping):
+            msg = f"Checkpoint state is not a mapping for thread_id={thread_id!r}"
+            raise RuntimeError(msg)
+        return values  # type: ignore[return-value]
 
 
 __all__ = [

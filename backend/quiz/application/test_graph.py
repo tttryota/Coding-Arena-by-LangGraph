@@ -240,6 +240,121 @@ class TestQuizGraphRunnerProtocol:
         assert callable(runner.start_graph)
         assert callable(runner.resume_graph)
         assert callable(runner.retry_graph)
+        assert callable(runner.get_state)
+
+
+class TestQuizGraphRunnerGetState:
+    def test_get_state_returns_state_from_checkpointer(self) -> None:
+        from unittest.mock import MagicMock
+
+        from quiz.application.graph import QuizGraphRunner
+
+        mock_graph = MagicMock()
+        mock_snapshot = MagicMock()
+        mock_snapshot.values = {
+            "session_id": "sess_001",
+            "roadmap_item_id": "ri_001",
+        }
+        mock_graph.get_state.return_value = mock_snapshot
+
+        runner = QuizGraphRunner(mock_graph)
+        result = runner.get_state(thread_id="sess_001")
+
+        assert result["session_id"] == "sess_001"
+        assert result["roadmap_item_id"] == "ri_001"
+        mock_graph.get_state.assert_called_once_with(
+            {"configurable": {"thread_id": "sess_001"}},
+        )
+
+    def test_get_state_with_explanation_text(self) -> None:
+        from unittest.mock import MagicMock
+
+        from quiz.application.graph import QuizGraphRunner
+
+        mock_graph = MagicMock()
+        mock_snapshot = MagicMock()
+        mock_snapshot.values = {
+            "session_id": "sess_002",
+            "explanation_text": "解説テキスト",
+        }
+        mock_graph.get_state.return_value = mock_snapshot
+
+        runner = QuizGraphRunner(mock_graph)
+        result = runner.get_state(thread_id="sess_002")
+
+        assert result["explanation_text"] == "解説テキスト"
+
+    def test_get_state_with_chat_response_text(self) -> None:
+        from unittest.mock import MagicMock
+
+        from quiz.application.graph import QuizGraphRunner
+
+        mock_graph = MagicMock()
+        mock_snapshot = MagicMock()
+        mock_snapshot.values = {
+            "session_id": "sess_003",
+            "chat_response_text": "チャット応答テキスト",
+        }
+        mock_graph.get_state.return_value = mock_snapshot
+
+        runner = QuizGraphRunner(mock_graph)
+        result = runner.get_state(thread_id="sess_003")
+
+        assert result["chat_response_text"] == "チャット応答テキスト"
+
+    def test_get_state_raises_value_error_for_empty_thread_id(self) -> None:
+        from unittest.mock import MagicMock
+
+        from quiz.application.graph import QuizGraphRunner
+
+        runner = QuizGraphRunner(MagicMock())
+
+        with pytest.raises(ValueError, match="thread_id must not be empty"):
+            runner.get_state(thread_id="")
+
+    def test_get_state_raises_lookup_error_for_missing_checkpoint(self) -> None:
+        from unittest.mock import MagicMock
+
+        from quiz.application.graph import QuizGraphRunner
+
+        mock_graph = MagicMock()
+        mock_snapshot = MagicMock()
+        mock_snapshot.created_at = None
+        mock_snapshot.values = {}
+        mock_graph.get_state.return_value = mock_snapshot
+
+        runner = QuizGraphRunner(mock_graph)
+
+        with pytest.raises(LookupError, match="No checkpoint found"):
+            runner.get_state(thread_id="nonexistent")
+
+    def test_get_state_raises_runtime_error_on_checkpointer_failure(self) -> None:
+        from unittest.mock import MagicMock
+
+        from quiz.application.graph import QuizGraphRunner
+
+        mock_graph = MagicMock()
+        mock_graph.get_state.side_effect = RuntimeError("checkpointer broken")
+
+        runner = QuizGraphRunner(mock_graph)
+
+        with pytest.raises(RuntimeError, match="Failed to read checkpoint"):
+            runner.get_state(thread_id="sess_004")
+
+    def test_get_state_raises_runtime_error_for_non_mapping_values(self) -> None:
+        from unittest.mock import MagicMock
+
+        from quiz.application.graph import QuizGraphRunner
+
+        mock_graph = MagicMock()
+        mock_snapshot = MagicMock()
+        mock_snapshot.values = "not a mapping"
+        mock_graph.get_state.return_value = mock_snapshot
+
+        runner = QuizGraphRunner(mock_graph)
+
+        with pytest.raises(RuntimeError, match="not a mapping"):
+            runner.get_state(thread_id="sess_005")
 
 
 # ---------------------------------------------------------------------------

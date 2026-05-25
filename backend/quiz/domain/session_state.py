@@ -29,7 +29,7 @@ class QuizAnswerRecord(TypedDict):
 class SessionState(TypedDict, total=False):
     """Shared downstream contract for quiz session state, not only a shape.
 
-    Initialize and first-write responsibilities for all 16 keys:
+    Initialize and first-write responsibilities for all 18 keys:
     - C1 initialize/first write ``session_id``, ``roadmap_item_id``,
       ``roadmap_item_level``, ``roadmap_item_title``,
       ``roadmap_item_description``, and ``is_resumed``.
@@ -45,6 +45,10 @@ class SessionState(TypedDict, total=False):
     - C4 initialize/first write ``input_type`` on the
       ``input_source="form"`` path by normalizing it to ``"answer"`` by the
       end of C4.
+    - ``explanation_generation`` node initialize/first write
+      ``explanation_text``.
+    - ``chat_response`` node initialize/first write
+      ``chat_response_text``.
 
     Lifecycle rules after first write:
     - After C4 first writes ``answers``, it is append-only.
@@ -107,6 +111,8 @@ class SessionState(TypedDict, total=False):
     next_action: NextAction
     answers: list[QuizAnswerRecord]
     total_questions_asked: int
+    explanation_text: str
+    chat_response_text: str
 
 
 __all__ = [

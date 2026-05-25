@@ -68,11 +68,22 @@ VALID_ROADMAP_JSON = json.dumps(
 class _NoOpGraphRunner:
     """テスト用: start_graph / resume_graph を no-op にする。"""
 
+    def __init__(self, *, get_state_result: dict | None = None) -> None:
+        self._get_state_result = get_state_result or {}
+
     def start_graph(self, state: object, *, thread_id: str) -> None:
         pass
 
     def resume_graph(self, user_input: object, *, thread_id: str) -> None:
         pass
+
+    def retry_graph(self, *, thread_id: str) -> None:
+        pass
+
+    def get_state(self, *, thread_id: str) -> dict:
+        if self._get_state_result:
+            return self._get_state_result
+        raise LookupError(f"No checkpoint for {thread_id}")
 
 
 def _create_roadmap_and_get_detail_item_id(
@@ -298,23 +309,19 @@ class TestQ2UserInputSubmission:
         # Assert: resume_graph で 2 ノード (answer_evaluation, progress_update) が実行された
         assert scenario_transport.call_count - calls_before_resume == 2
 
-        # Assert: レスポンスボディに再開セッションの状態が含まれる
-        # resume_session はグラフ実行前の state を返す設計 (pre-graph state 契約)
+        # Assert: レスポンスボディにグラフ実行後の state が含まれる (post-run state 契約)
         input_data = input_resp.json()
-        assert set(input_data.keys()) == {
-            "session_id",
-            "roadmap_item_id",
-            "roadmap_item_level",
-            "roadmap_item_title",
-            "roadmap_item_description",
-            "is_resumed",
-            "answers",
-        }
+        # get_state() はグラフ完走後の全フィールドを返す
+        assert "session_id" in input_data
+        assert "roadmap_item_id" in input_data
+        assert "roadmap_item_level" in input_data
+        assert "is_resumed" in input_data
         assert input_data["session_id"] == session_id
         assert input_data["roadmap_item_id"] == detail_item_id
         assert input_data["roadmap_item_level"] == "detail"
         assert input_data["is_resumed"] is True
-        assert input_data["answers"] == []  # DB に未記録 (初回セッション)
+        # post-run state 固有フィールドが含まれることを確認（退行防止）
+        assert "next_action" in input_data or "input_type" in input_data
 
         # Assert: グラフ完走後、セッションが完了状態 (再度 start しても resume_required=False)
         # グラフ実行は不要なので NoOp に差替え

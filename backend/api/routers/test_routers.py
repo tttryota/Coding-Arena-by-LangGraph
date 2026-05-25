@@ -161,6 +161,12 @@ class _FakeGraphRunner:
     def resume_graph(self, user_input: object, *, thread_id: str) -> None:
         pass
 
+    def retry_graph(self, *, thread_id: str) -> None:
+        pass
+
+    def get_state(self, *, thread_id: str) -> dict:
+        raise LookupError(f"No checkpoint for {thread_id}")
+
 
 class _FakeBatchDiffDetector:
     def detect(self, target_path: object) -> object:
@@ -604,6 +610,70 @@ class TestQuizSessionGetEndpoint:
         response = client.get("/sessions/nonexistent")
 
         assert response.status_code == 404
+
+    def test_returns_session_with_graph_state_when_available(
+        self, client: TestClient,
+    ) -> None:
+        from unittest.mock import MagicMock
+
+        app = client.app
+        container = app.state.container  # type: ignore[union-attr]
+        mock_session = MagicMock()
+        mock_session.id = "sess-get-1"
+        container.quiz_session_store.find_session = MagicMock(return_value=mock_session)
+
+        mock_state = {"session_id": "sess-get-1", "current_question_text": "問題文"}
+        container.graph_runner.get_state = MagicMock(return_value=mock_state)
+
+        response = client.get("/sessions/sess-get-1")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == "sess-get-1"
+        assert "graph_state" in data
+        assert data["graph_state"]["current_question_text"] == "問題文"
+
+    def test_returns_session_without_graph_state_on_lookup_error(
+        self, client: TestClient,
+    ) -> None:
+        from unittest.mock import MagicMock
+
+        app = client.app
+        container = app.state.container  # type: ignore[union-attr]
+        mock_session = MagicMock()
+        mock_session.id = "sess-get-2"
+        container.quiz_session_store.find_session = MagicMock(return_value=mock_session)
+        container.graph_runner.get_state = MagicMock(
+            side_effect=LookupError("No checkpoint"),
+        )
+
+        response = client.get("/sessions/sess-get-2")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == "sess-get-2"
+        assert "graph_state" not in data
+
+    def test_returns_session_without_graph_state_when_graph_runner_is_none(
+        self, client: TestClient,
+    ) -> None:
+        from unittest.mock import MagicMock
+
+        app = client.app
+        container = app.state.container  # type: ignore[union-attr]
+        container.graph_runner = None  # type: ignore[assignment]
+        mock_session = MagicMock()
+        mock_session.id = "sess-get-3"
+        container.quiz_session_store.find_session = MagicMock(return_value=mock_session)
+
+        response = client.get("/sessions/sess-get-3")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == "sess-get-3"
+        assert "graph_state" not in data
+        # restore for other tests
+        container.graph_runner = _FakeGraphRunner()
 
 
 # ---------------------------------------------------------------------------

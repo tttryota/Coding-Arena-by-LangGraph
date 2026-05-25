@@ -105,4 +105,11 @@ def get_session(session_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="Session not found") from exc
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    return {"session_id": session_id, "session": session}
+    response: dict = {"session_id": session_id, "session": session}
+    if c.graph_runner is not None:
+        try:
+            graph_state = c.graph_runner.get_state(thread_id=session_id)
+            response["graph_state"] = dict(graph_state)
+        except LookupError:
+            pass
+    return response

@@ -25,6 +25,8 @@ _SESSION_STATE_KEYS = (
     "next_action",
     "answers",
     "total_questions_asked",
+    "explanation_text",
+    "chat_response_text",
 )
 
 _CONFIRMATION_POINT_KEYS = ("id", "content", "format")
@@ -74,7 +76,7 @@ def test_tc_01_session_state_public_contract_and_field_names() -> None:
     # Assert
     assert is_typeddict(SessionState)
     assert SessionState.__module__ == "quiz.domain.session_state"
-    assert len(annotations) == 16
+    assert len(annotations) == 18
     assert tuple(annotations) == _SESSION_STATE_KEYS
 
 
@@ -157,6 +159,7 @@ def test_tc_10_session_state_is_partial_typeddict() -> None:
 
     # Assert
     assert required_keys == frozenset()
+    assert len(optional_keys) == 18
     assert optional_keys == frozenset(_SESSION_STATE_KEYS)
 
 
@@ -212,6 +215,34 @@ def test_tc_13_quiz_answer_record_is_complete_record() -> None:
     # Assert
     assert required_keys == frozenset(_QUIZ_ANSWER_RECORD_KEYS)
     assert optional_keys == frozenset()
+
+
+def test_explanation_text_type_is_str() -> None:
+    hints = get_type_hints(SessionState)
+    assert hints["explanation_text"] is str
+
+
+def test_chat_response_text_type_is_str() -> None:
+    hints = get_type_hints(SessionState)
+    assert hints["chat_response_text"] is str
+
+
+def test_explanation_text_only_partial_state() -> None:
+    state: SessionState = {
+        "session_id": "sess_001",
+        "explanation_text": "解説テキスト",
+    }
+    assert state["explanation_text"] == "解説テキスト"
+    assert "chat_response_text" not in state
+
+
+def test_chat_response_text_only_partial_state() -> None:
+    state: SessionState = {
+        "session_id": "sess_001",
+        "chat_response_text": "チャット応答",
+    }
+    assert state["chat_response_text"] == "チャット応答"
+    assert "explanation_text" not in state
 
 
 def test_tc_20_answers_empty_state_before_first_question_is_valid() -> None:

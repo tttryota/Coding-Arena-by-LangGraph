@@ -177,7 +177,7 @@ def resume_session(
     )
 
     try:
-        answers = [
+        _ = [
             _to_answer_record(answer)
             for answer in dependencies.answer_store.find_by_session(session.id)
         ]
@@ -198,12 +198,6 @@ def resume_session(
             ),
         ) from exception
 
-    state = _build_session_state(
-        session_id=session.id,
-        roadmap_item=roadmap_item,
-        is_resumed=True,
-        answers=answers,
-    )
     user_input_dict: dict[str, object] = {
         "user_input": input.user_input,
         "input_source": input.input_source,
@@ -215,7 +209,7 @@ def resume_session(
         roadmap_item_id=roadmap_item.id,
     )
 
-    return state
+    return dependencies.graph_runner.get_state(thread_id=session.id)
 
 
 cast("Any", start_session).__signature__ = Signature(

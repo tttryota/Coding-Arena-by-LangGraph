@@ -1,0 +1,262 @@
+import { useMemo, useCallback } from "react";
+import { useQuery, useQueries } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
+import { useRoadmaps } from "@/features/roadmap/use-roadmaps";
+import type {
+  RoadmapListItem,
+  RoadmapTree,
+  RoadmapTreeNode,
+  FeedbackListItem,
+  FeedbackListResponse,
+} from "@/types/api";
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
+export interface DashboardStats {
+  roadmapCount: number;
+  avgScore: number | null;
+  unreadCount: number;
+  recentQuizCount: number;
+}
+
+export interface QuizActivity {
+  kind: "quiz";
+  itemId: string;
+  title: string;
+  score: number;
+  roadmapId: string;
+  lastQuizAt: string;
+}
+
+export interface FeedbackActivity {
+  kind: "feedback";
+  id: string;
+  title: string;
+  unread: boolean;
+  createdAt: string;
+}
+
+export type ActivityItem = QuizActivity | FeedbackActivity;
+
+export interface DashboardData {
+  stats: DashboardStats | null;
+  roadmaps: RoadmapListItem[];
+  totalRoadmapCount: number;
+  activity: ActivityItem[];
+  isLoading: boolean;
+  isError: boolean;
+  /** True when roadmap list is loaded and has 0 items (show welcome state) */
+  isEmpty: boolean;
+  refetch: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Tree helpers
+// ---------------------------------------------------------------------------
+
+function flattenDetailNodes(nodes: RoadmapTreeNode[]): RoadmapTreeNode[] {
+  const result: RoadmapTreeNode[] = [];
+  function walk(node: RoadmapTreeNode) {
+    if (node.level === "detail") result.push(node);
+    for (const child of node.children) walk(child);
+  }
+  for (const node of nodes) walk(node);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Hook
+// ---------------------------------------------------------------------------
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const SUMMARY_LIMIT = 5;
+const ACTIVITY_LIMIT = 10;
+const FEEDBACK_ACTIVITY_LIMIT = 5;
+
+export function useDashboardData(): DashboardData {
+  // 1. Roadmap list
+  const roadmapList = useRoadmaps();
+  const roadmapItems = roadmapList.data?.items ?? [];
+  const roadmapIds = useMemo(
+    () => roadmapItems.map((r) => r.roadmap_id),
+    [roadmapItems],
+  );
+
+  // 2. Roadmap details (parallel fetch for quiz activity)
+  // GET /roadmaps doesn't return tree data, so we fetch each detail.
+  // Query keys ["roadmap", id] are shared with the roadmap detail page cache.
+  const detailQueries = useQueries({
+    queries: roadmapIds.map((id) => ({
+      queryKey: ["roadmap", id] as const,
+      queryFn: async (): Promise<RoadmapTree> => {
+        const res = await apiFetch(`/roadmaps/${id}`);
+        return res.json() as Promise<RoadmapTree>;
+      },
+    })),
+  });
+
+  // 3. Unread feedbacks (provides both total_count for stat card and items
+  //    for activity timeline). Key uses "feedbacks" prefix so that
+  //    use-mark-as-read's invalidateQueries({ queryKey: ["feedbacks"] })
+  //    triggers a refetch. The key shape differs from useFeedbacks()
+  //    intentionally — the dashboard fetches unread-only without date filters.
+  const feedbacksQuery = useQuery({
+    queryKey: ["feedbacks", { read_status: "unread" }] as const,
+    queryFn: async (): Promise<FeedbackListResponse> => {
+      const res = await apiFetch("/ingestion/feedbacks?read_status=unread");
+      return res.json() as Promise<FeedbackListResponse>;
+    },
+    staleTime: 60_000,
+  });
+
+  // ---------------------------------------------------------------------------
+  // Derived state
+  // ---------------------------------------------------------------------------
+
+  const allDetailsLoaded =
+    roadmapIds.length === 0 || detailQueries.every((q) => !q.isLoading);
+  const isLoading =
+    roadmapList.isLoading || !allDetailsLoaded || feedbacksQuery.isLoading;
+  const isError =
+    roadmapList.isError ||
+    detailQueries.some((q) => q.isError) ||
+    feedbacksQuery.isError;
+  const isEmpty =
+    !roadmapList.isLoading && roadmapItems.length === 0 && !roadmapList.isError;
+
+  // Collect all detail trees that have loaded successfully
+  const detailTrees = useMemo(
+    () =>
+      detailQueries
+        .map((q) => q.data)
+        .filter((d): d is RoadmapTree => d != null),
+    [detailQueries],
+  );
+
+  // Stats
+  const stats = useMemo<DashboardStats | null>(() => {
+    if (roadmapList.isLoading) return null;
+    if (roadmapList.isError && roadmapItems.length === 0) return null;
+
+    const roadmapCount = roadmapList.data?.total_count ?? 0;
+
+    const avgScore =
+      roadmapItems.length > 0
+        ? Math.floor(
+            roadmapItems.reduce((s, r) => s + r.overall_score, 0) /
+              roadmapItems.length,
+          )
+        : null;
+
+    const unreadCount = feedbacksQuery.data?.total_count ?? 0;
+
+    // Recent quiz count from detail trees
+    const now = Date.now();
+    const cutoff = now - SEVEN_DAYS_MS;
+    let recentQuizCount = 0;
+    for (const tree of detailTrees) {
+      const details = flattenDetailNodes(tree.items);
+      for (const node of details) {
+        if (
+          node.last_quiz_at != null &&
+          new Date(node.last_quiz_at).getTime() >= cutoff
+        ) {
+          recentQuizCount++;
+        }
+      }
+    }
+
+    return {
+      roadmapCount,
+      avgScore,
+      unreadCount,
+      recentQuizCount,
+    };
+  }, [roadmapList.isLoading, roadmapList.isError, roadmapList.data, roadmapItems, feedbacksQuery.data, detailTrees]);
+
+  // Roadmap summary (top N)
+  const roadmaps = useMemo(
+    () => roadmapItems.slice(0, SUMMARY_LIMIT),
+    [roadmapItems],
+  );
+
+  const totalRoadmapCount = roadmapList.data?.total_count ?? 0;
+
+  // Activity timeline
+  const activity = useMemo<ActivityItem[]>(() => {
+    // Quiz activities from detail trees
+    const quizItems: QuizActivity[] = [];
+    for (const tree of detailTrees) {
+      const details = flattenDetailNodes(tree.items);
+      for (const node of details) {
+        if (node.last_quiz_at != null) {
+          quizItems.push({
+            kind: "quiz",
+            itemId: node.id,
+            title: node.title,
+            score: node.score,
+            roadmapId: tree.roadmap_id,
+            lastQuizAt: node.last_quiz_at,
+          });
+        }
+      }
+    }
+
+    // Feedback activities — limit to 5 items per spec before merging
+    const allFeedbacks = feedbacksQuery.data?.items ?? [];
+    const recentFeedbacks = [...allFeedbacks]
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      )
+      .slice(0, FEEDBACK_ACTIVITY_LIMIT);
+
+    const feedbackItems: FeedbackActivity[] = recentFeedbacks.map(
+      (f: FeedbackListItem) => ({
+        kind: "feedback" as const,
+        id: f.id,
+        title: f.title,
+        unread: !f.is_read,
+        createdAt: f.created_at,
+      }),
+    );
+
+    // Merge by timestamp descending
+    const merged: ActivityItem[] = [...quizItems, ...feedbackItems];
+    merged.sort((a, b) => {
+      const timeA =
+        a.kind === "quiz"
+          ? new Date(a.lastQuizAt).getTime()
+          : new Date(a.createdAt).getTime();
+      const timeB =
+        b.kind === "quiz"
+          ? new Date(b.lastQuizAt).getTime()
+          : new Date(b.createdAt).getTime();
+      return timeB - timeA;
+    });
+
+    return merged.slice(0, ACTIVITY_LIMIT);
+  }, [detailTrees, feedbacksQuery.data]);
+
+  // Refetch all
+  const refetch = useCallback(() => {
+    void roadmapList.refetch();
+    for (const q of detailQueries) {
+      void q.refetch();
+    }
+    void feedbacksQuery.refetch();
+  }, [roadmapList, detailQueries, feedbacksQuery]);
+
+  return {
+    stats,
+    roadmaps,
+    totalRoadmapCount,
+    activity,
+    isLoading,
+    isError,
+    isEmpty,
+    refetch,
+  };
+}

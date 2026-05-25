@@ -58,14 +58,16 @@
 ```typescript
 // レスポンス
 {
-  roadmaps: Array<{
+  items: Array<{
     roadmap_id: string       // UUID
     topic: string            // トピック名（例: "TypeScript"）
     overall_score: number    // 0-100（全大枠の平均、floor）
-    items: RoadmapTreeNode[] // ツリー構造（この画面では項目数のカウントのみ使用）
-  }>
+  }>,
+  total_count: number
 }
 ```
+
+注: 一覧 API はツリー構造を含まない。項目数サマリーや最終活動日は詳細 API (`GET /roadmaps/:id`) から取得する。
 
 ### `POST /roadmaps/generate`
 
@@ -76,7 +78,7 @@
 { topic: string }
 
 // レスポンス（202 Accepted）
-{ job_id: string, status: "pending" }
+{ job_id: string, status: "queued" }
 ```
 
 ### `GET /roadmaps/generate/{job_id}`
@@ -87,9 +89,10 @@
 // レスポンス
 {
   job_id: string
-  status: "pending" | "running" | "completed" | "failed"
-  roadmap_id?: string   // completed時のみ
-  error?: string        // failed時のみ
+  status: "queued" | "running" | "completed" | "failed"
+  roadmap_id?: string       // completed時のみ
+  error_code?: string       // failed時のみ
+  error_message?: string    // failed時のみ
 }
 ```
 
@@ -137,27 +140,23 @@
 
 | 要素 | 表示内容 | 使用コンポーネント |
 |:---|:---|:---|
-| トピック名 | `topic`（CardHeaderのタイトル） | CardHeader |
-| スコア表示 | `overall_score` の数値 + カラーBadge + Progressバー | Badge, Progress |
-| 項目数サマリー | ツリーの各レベルの件数を集計して表示 | CardContent内のテキスト |
-| | 例: 「大枠 3 / 中枠 12 / 具体 45」 | |
-| 最終活動日 | detail項目の`last_quiz_at`のうち最新のもの | CardFooter、日時表示パターン |
+| トピック名 | `topic`（font-semibold, 15px） | テキスト |
+| スコア表示 | `overall_score` の数値（mono, 26px） + カラーBadge + Progressバー | ScoreBadge, Progress |
 
-**項目数サマリーの算出方法**:
-- `items`配列を再帰的に走査し、`level`ごとにカウントする
-- `major`の件数、`middle`の件数、`detail`の件数をそれぞれ表示
+注: 一覧 API (`GET /roadmaps`) は `roadmap_id`, `topic`, `overall_score` のみ返す。項目数サマリーや最終活動日はツリーデータが必要なため、詳細画面で表示する。
 
 ### 新規作成ダイアログ（GenerateRoadmapDialog）
 
-「新規作成」ボタンで開くDialog。
+「新規作成」ボタンで開くDialog。候補選択 + 自由入力の併用方式（詳細は `01-roadmap-list-amendment.md` を参照）。
 
-**入力フォーム状態:**
+**入力フォーム状態（候補選択式）:**
 
 | 要素 | 仕様 |
 |:---|:---|
-| トピック入力 | Input（placeholder: 「例: TypeScript」）、必須 |
-| 生成ボタン | 「ロードマップを生成」（primary） |
-| キャンセルボタン | 「キャンセル」（secondary） |
+| 候補リスト | `GET /roadmaps/topics` から取得、ラジオ選択 |
+| 自由入力 | `POST /roadmaps/topics` で登録、リストに追加 |
+| 生成ボタン | 「ロードマップを生成」（primary、未選択時disabled） |
+| キャンセルボタン | 「キャンセル」（ghost） |
 
 **生成中状態:**
 

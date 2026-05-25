@@ -24,7 +24,7 @@ Obsidianの学習ノートを知識ソースとして、LLMが理解度をチェ
 |:---|:---|
 | フレームワーク | React + TypeScript |
 | ビルド | Vite |
-| UIコンポーネント | shadcn/ui（Radix UI + Tailwind CSS） |
+| UIコンポーネント | shadcn/ui（Base UI + Tailwind CSS） |
 | サーバー状態管理 | TanStack Query |
 | クライアント状態管理 | Zustand |
 | スタイリング | Tailwind CSS |

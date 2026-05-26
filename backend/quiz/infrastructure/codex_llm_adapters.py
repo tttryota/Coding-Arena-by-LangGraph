@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _JSON_INSTRUCTION = "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
+_QUIZ_MODEL = "gpt-5.3-codex-spark"
 
 _VALID_INPUT_TYPES = frozenset({"answer", "question", "explanation_request"})
 _VALID_NEXT_ACTIONS = frozenset({"next", "deepdive", "complete"})
@@ -174,7 +175,7 @@ class CodexQuestionSetDesignLlm:
         )
         user = f"タイトル: {title}\n説明: {description}\nレベル: {level}"
         try:
-            raw = self._transport.call([
+            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
@@ -233,13 +234,17 @@ class CodexQuestionDeliveryLlm:
         expected_answer_type = _FORMAT_TO_ANSWER_TYPE[confirmation_point_format]
         system = (
             "あなたは学習支援AIです。確認ポイントに基づいて、学習者の理解を深める問いを1つ作成してください。\n\n"
-            "出題ルール:\n"
-            "- 問題文の冒頭に、確認ポイントに関する簡潔な背景説明（1〜2文）を含めてください。\n"
-            "  学習者がその概念を初めて目にしても取り組めるよう、文脈を与えてください。\n"
-            "- その上で、1つの問いを出してください。\n"
+            "出題の構成:\n"
+            "- 問題文は「概念の説明 → 問い」の2部構成にしてください。\n"
+            "- 前半（2〜3文）: 確認ポイントに関する概念を教えてください。\n"
+            "  用語の定義、仕組み、具体例などを含め、学習者がこの概念を初めて知る前提で書いてください。\n"
+            "- 後半（1文）: 教えた内容を踏まえ、「なぜそうなっているか」「どういう場面で役立つか」\n"
+            "  「自分の言葉で言い換えるとどうなるか」のような思考を促す問いを出してください。\n"
+            "- 「〜を説明してください」「〜とは何ですか」のような知識の再現を求める問いは避けてください。\n"
+            "  代わりに「なぜ」「どういう利点があるか」「どう使い分けるか」のように考えさせる問いにしてください。\n\n"
+            "制約:\n"
             "- 「〜を説明し、さらに〜も述べてください」のような複合問は禁止です。\n"
             "- 回答の目安は3〜5文程度で済む分量にしてください。\n"
-            "- 過去の回答がない（初問の）場合は、用語の意味や基本的な役割を問う入門レベルにしてください。\n"
             "- 過去の回答がある場合は、それまでの理解度に応じて段階的に深めてください。\n"
             f"answer_type は必ず \"{expected_answer_type}\" にしてください。\n"
             f"{_JSON_INSTRUCTION}\n"
@@ -252,7 +257,7 @@ class CodexQuestionDeliveryLlm:
                 f"形式: {confirmation_point_format}\n"
                 f"過去の回答:\n{_answers_to_text(past_answers)}"
             )
-            raw = self._transport.call([
+            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
@@ -299,17 +304,22 @@ class CodexInputClassificationLlm:
         )
 
         system = (
-            "ユーザー入力を分類してください。\n"
-            "- answer: 問題への回答\n"
-            "- question: 出題内容への質問\n"
-            "- explanation_request: 解説依頼\n"
-            "判断に迷う場合や入力が曖昧・短い場合は、必ず answer に分類してください。\n"
+            "ユーザー入力を分類してください。この入力はチャット欄から送信されたものです。\n\n"
+            "- question: 出題内容やトピックについての質問・疑問（デフォルト）\n"
+            "- explanation_request: 解説・説明を求めるリクエスト\n"
+            "- answer: 問題に対する直接的な回答\n\n"
+            "判断に迷う場合は question に分類してください。\n\n"
+            "例:\n"
+            '出題: "ASGIとWSGIの違いは何ですか？"\n'
+            'ユーザー入力: "非同期って具体的にどういうこと？" → {"input_type": "question"}\n'
+            'ユーザー入力: "解説してほしい" → {"input_type": "explanation_request"}\n'
+            'ユーザー入力: "ASGIは非同期通信をサポートし、WSGIは同期のみです" → {"input_type": "answer"}\n\n'
             f"{_JSON_INSTRUCTION}\n"
-            '形式: {"input_type": "answer" | "question" | "explanation_request"}'
+            '形式: {"input_type": "question" | "explanation_request" | "answer"}'
         )
         user = f"出題: {question_text}\nユーザー入力: {user_input}"
         try:
-            raw = self._transport.call([
+            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
@@ -347,7 +357,7 @@ class CodexChatResponseLlm:
         system = "あなたは学習支援AIです。ユーザーの質問に丁寧に回答してください。"
         user = f"出題中の問題: {question_text}\nユーザーの質問: {user_input}"
         try:
-            return self._transport.call([
+            return self._transport.call(model=_QUIZ_MODEL, messages=[
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
@@ -421,7 +431,7 @@ class CodexAnswerEvaluationLlm:
                 f"出題総数: {total_questions_asked}\n"
                 f"過去の回答:\n{_answers_to_text(past_answers)}"
             )
-            raw = self._transport.call([
+            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
@@ -494,7 +504,7 @@ class CodexExplanationLlm:
             f"関連ノート:\n{chunks_text}"
         )
         try:
-            return self._transport.call([
+            return self._transport.call(model=_QUIZ_MODEL, messages=[
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
@@ -538,7 +548,7 @@ class CodexProgressUpdateLlm:
                 f"確認ポイント:\n{checkpoints_text}\n"
                 f"回答履歴:\n{_answers_to_text(answers)}"
             )
-            raw = self._transport.call([
+            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
@@ -584,7 +594,7 @@ class CodexSummaryTestLlm:
                 f"タイトル: {title}\n説明: {description}\n"
                 f"回答履歴:\n{_answers_to_text(answers)}"
             )
-            raw = self._transport.call([
+            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])

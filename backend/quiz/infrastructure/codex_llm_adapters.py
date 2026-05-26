@@ -19,6 +19,8 @@ from infrastructure.llm.codex_transport import (
     CodexTransportResponseError,
 )
 
+from quiz.application.question_set_design_types import QuestionSetDesignResult
+
 if TYPE_CHECKING:
     from quiz.application.answer_evaluation_types import EvaluationOutput
     from quiz.application.progress_update_types import ProgressOutput
@@ -141,13 +143,16 @@ class CodexQuestionSetDesignLlm:
         title: str,
         description: str,
         level: RoadmapItemLevel,
-    ) -> list[ConfirmationPoint]:
+    ) -> QuestionSetDesignResult:
         from quiz.application.question_set_design_types import QuestionSetDesignError
 
         system = (
-            "あなたは学習支援AIです。与えられたトピックの理解度を確認するための"
-            "確認ポイントリストを設計してください。\n\n"
-            "設計ルール:\n"
+            "あなたは学習支援AIです。与えられたトピックについて、"
+            "学習概要と確認ポイントリストを設計してください。\n\n"
+            "topic_overview ルール:\n"
+            "- タイトルと説明の範囲で、学習者が問題に取り組む前に知っておくべき概要を3〜5文で書いてください。\n"
+            "- 用語の定義、基本概念、なぜ重要かを含めてください。\n\n"
+            "確認ポイント設計ルール:\n"
             "- 確認ポイントは必ず3〜5件にしてください。それ以上は不要です。\n"
             "- 基礎→応用の順に並べてください。最初のポイントはそのトピックの最も基本的な概念にしてください。\n"
             "- 1つの確認ポイントには1つの観点だけを含めてください。複数の概念を1つにまとめないでください。\n"
@@ -163,8 +168,9 @@ class CodexQuestionSetDesignLlm:
             "  - middle: 複数の概念の関連性を問う（ただし1ポイント1観点は維持）\n"
             "  - major: 設計判断や全体像を問う（ただし1ポイント1観点は維持）\n"
             f"{_JSON_INSTRUCTION}\n"
-            '形式: [{"id": "cp-001", "content": "確認内容", '
-            '"format": "knowledge" | "knowledge_and_practice"}]'
+            '形式: {"topic_overview": "学習概要テキスト", '
+            '"confirmation_points": [{"id": "cp-001", "content": "確認内容", '
+            '"format": "knowledge" | "knowledge_and_practice"}]}'
         )
         user = f"タイトル: {title}\n説明: {description}\nレベル: {level}"
         try:
@@ -173,7 +179,22 @@ class CodexQuestionSetDesignLlm:
                 CodexMessage(role="user", content=user),
             ])
             data = _parse_json(raw)
-            return [_validate_confirmation_point(item) for item in data]
+            topic_overview = _validate_str(
+                data.get("topic_overview", ""), "topic_overview",
+            )
+            if not topic_overview.strip():
+                msg = "topic_overview is empty"
+                raise ValueError(msg)  # noqa: TRY301
+            points = [
+                _validate_confirmation_point(item)
+                for item in data["confirmation_points"]
+            ]
+            return QuestionSetDesignResult(
+                confirmation_points=points,
+                topic_overview=topic_overview,
+            )
+        except QuestionSetDesignError:
+            raise
         except Exception as exc:
             raise QuestionSetDesignError(
                 error_code=_error_code_for(exc),
@@ -211,12 +232,15 @@ class CodexQuestionDeliveryLlm:
 
         expected_answer_type = _FORMAT_TO_ANSWER_TYPE[confirmation_point_format]
         system = (
-            "あなたは学習支援AIです。確認ポイントに基づいて1問を出題してください。\n\n"
+            "あなたは学習支援AIです。確認ポイントに基づいて、学習者の理解を深める問いを1つ作成してください。\n\n"
             "出題ルール:\n"
-            "- 問題文は1つの問いに絞ってください。「〜を説明し、さらに〜も述べてください」のような複合問は禁止です。\n"
+            "- 問題文の冒頭に、確認ポイントに関する簡潔な背景説明（1〜2文）を含めてください。\n"
+            "  学習者がその概念を初めて目にしても取り組めるよう、文脈を与えてください。\n"
+            "- その上で、1つの問いを出してください。\n"
+            "- 「〜を説明し、さらに〜も述べてください」のような複合問は禁止です。\n"
             "- 回答の目安は3〜5文程度で済む分量にしてください。\n"
-            "- 過去の回答がない（初問の）場合は、そのトピックの入門レベルの問いにしてください。\n"
-            "- 過去の回答がある場合は、それまでの理解度に応じて難易度を調整してください。\n"
+            "- 過去の回答がない（初問の）場合は、用語の意味や基本的な役割を問う入門レベルにしてください。\n"
+            "- 過去の回答がある場合は、それまでの理解度に応じて段階的に深めてください。\n"
             f"answer_type は必ず \"{expected_answer_type}\" にしてください。\n"
             f"{_JSON_INSTRUCTION}\n"
             '形式: {"question_text": "問題文", "answer_type": "textarea" | "code"}'
@@ -366,8 +390,14 @@ class CodexAnswerEvaluationLlm:
         )
 
         system = (
-            "回答を評価してください。\n"
-            "ルール:\n"
+            "あなたは学習支援AIです。回答を評価し、学習者が理解を深められるフィードバックを返してください。\n\n"
+            "評価ルール:\n"
+            "- score（0-100）は理解度の目安です。\n"
+            "- feedback は採点理由だけでなく、以下を含めてください:\n"
+            "  - 回答の良かった点（部分的に正しい場合も認める）\n"
+            "  - 不足している観点と、その観点が重要な理由の簡潔な説明\n"
+            "  - スコアが50未満の場合は、正解に必要な核心的知識を1〜2文で教えてください\n\n"
+            "制御ルール:\n"
             "- 回答が空の場合: score=0, next_action=\"next\", deepdive_points=[] とし、"
             "回答を促すfeedbackを返してください。deepdiveしないでください。\n"
             "- 出題総数が20以上の場合: next_action は \"next\" か \"complete\" のみにし、"
@@ -449,7 +479,16 @@ class CodexExplanationLlm:
         )
 
         chunks_text = "\n---\n".join(note_chunks) if note_chunks else "(関連ノートなし)"
-        system = "あなたは学習支援AIです。問題の解説を生成してください。ノートの内容を参照して説明します。"
+        system = (
+            "あなたは学習支援AIです。問題の解説を、学習者が概念を理解できるように生成してください。\n\n"
+            "解説ルール:\n"
+            "- まず概念の定義を簡潔に述べてください\n"
+            "- なぜその概念が重要なのか、実務上の意義を1〜2文で説明してください\n"
+            "- 具体的な例やユースケースを1つ含めてください\n"
+            "- 関連ノートが提供されている場合は、その内容に関連付けて説明してください\n"
+            "- 関連ノートがない場合は、一般的な知識に基づいて説明してください\n"
+            "- 全体で5〜10文程度にまとめてください"
+        )
         user = (
             f"問題: {question_text}\n確認ポイント: {confirmation_point_content}\n"
             f"関連ノート:\n{chunks_text}"

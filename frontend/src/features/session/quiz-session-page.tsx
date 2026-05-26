@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { useSession } from "./use-session";
 import { useSubmitInput } from "./use-submit-input";
+import { LearningPhase } from "./learning-phase";
 import { useQuizSessionStore } from "./use-quiz-session-store";
 import { SessionHeader } from "./session-header";
 import { QuestionPhase } from "./question-phase";
@@ -60,40 +61,36 @@ export function QuizSessionPage() {
   } = useQuizSessionStore();
 
   const [showToast, setShowToast] = useState(false);
+  const hasHydratedRef = useRef(false);
 
   // Reset store on unmount or sessionId change
   useEffect(() => {
     return () => {
+      hasHydratedRef.current = false;
       reset();
     };
   }, [sessionId, reset]);
 
-  // Initialize sessionState from API response (graph_state contains the full quiz state).
-  // Re-run when graph_state becomes available (may arrive after initial fetch).
+  // Initialize sessionState from API response — one-shot via hasHydratedRef.
   useEffect(() => {
-    if (!data) return;
+    if (!data || hasHydratedRef.current) return;
 
-    if (data.graph_state) {
-      // graph_state has question text — always update to latest
-      if (!sessionState || !sessionState.current_question_text) {
-        setSessionState(data.graph_state);
-      }
-    } else if (!sessionState) {
-      // Fallback: minimal state when graph_state is not yet available
-      setSessionState({
-        session_id: data.session_id,
-        roadmap_item_id: data.session.roadmap_item_id,
-        roadmap_item_level: "detail",
-        roadmap_item_title: locState.topic ?? "",
-        roadmap_item_description: "",
-        is_resumed: false,
-      } as import("@/types/api").SessionState);
+    const gs = data.graph_state;
+    if (!gs) {
+      // graph_state なし → 復旧不能（後述の描画分岐で処理）
+      return;
     }
+
+    hasHydratedRef.current = true;
+    setSessionState(gs);
 
     if (data.session.status === "completed") {
       setPhase("summary");
+    } else if (gs.topic_overview && (!gs.answers || gs.answers.length === 0)) {
+      setPhase("learning");
     }
-  }, [data, sessionState, setSessionState, setPhase, locState.topic]);
+    // それ以外は初期値 "question" のまま
+  }, [data, setSessionState, setPhase]);
 
   const handleSubmitAnswer = useCallback(
     async (text: string) => {
@@ -214,6 +211,10 @@ export function QuizSessionPage() {
     setAnswerDraft("");
   }, [setPhase, setAnswerDraft]);
 
+  const handleStartTest = useCallback(() => {
+    setPhase("question");
+  }, [setPhase]);
+
   const handleBack = useCallback(() => {
     if (locState.roadmapId) {
       navigate(`/roadmaps/${locState.roadmapId}`);
@@ -264,72 +265,102 @@ export function QuizSessionPage() {
           </div>
         )}
 
+        {/* graph_state 欠落 — 復旧不能 */}
+        {!isLoading && !isError && data && !data.graph_state && (
+          <div className="mx-auto flex max-w-[480px] flex-col items-center px-6 pb-24 pt-14 text-center">
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-[rgb(244_63_94/0.25)] bg-[rgb(244_63_94/0.1)]">
+              <AlertTriangle className="h-8 w-8 text-[#fb7185]" />
+            </div>
+            <div className="mb-1.5 text-base font-semibold tracking-tight">
+              セッションの状態を復元できません
+            </div>
+            <div className="mb-6 text-[13px] leading-relaxed text-muted-foreground">
+              サーバーが再起動された可能性があります。新しいクイズを開始してください。
+            </div>
+            <Button onClick={handleBack}>
+              <ArrowLeft className="h-4 w-4" />
+              ロードマップへ
+            </Button>
+          </div>
+        )}
+
         {/* Loaded */}
         {!isLoading && !isError && sessionState && (
           <>
-            {phase !== "summary" && (
-              <SessionHeader sessionState={sessionState} />
+            {/* Learning phase — 1カラム、SessionHeader なし */}
+            {phase === "learning" && (
+              <LearningPhase
+                sessionState={sessionState}
+                onStartTest={handleStartTest}
+              />
             )}
 
-            {phase === "summary" ? (
+            {/* Summary phase — SessionHeader なし */}
+            {phase === "summary" && (
               <SummaryPhase
                 answers={sessionState.answers ?? []}
                 onBack={handleBack}
               />
-            ) : (
-              <div className="grid items-start gap-6 grid-cols-1 min-[1180px]:grid-cols-[1fr_288px]">
-                <div className="min-w-0 rounded-lg border border-border bg-card p-6">
-                  {(phase === "question" || phase === "chat_response") &&
-                    !sessionState.current_question_text && (
-                    <div className="flex flex-col items-center gap-4 py-12 text-muted-foreground">
-                      <span className="inline-block h-6 w-6 animate-[qs-spin_0.7s_linear_infinite] rounded-full border-2 border-[rgb(148_163_184/0.3)] border-t-[rgb(148_163_184/0.8)]" />
-                      <span className="text-sm">問題を生成中…</span>
-                    </div>
-                  )}
-                  {(phase === "question" || phase === "chat_response") &&
-                    sessionState.current_question_text && (
-                    <QuestionPhase
-                      sessionState={sessionState}
-                      isSubmitting={isSubmitting}
-                      chatMessages={chatMessages}
-                      answerDraft={answerDraft}
-                      chatDraft={chatDraft}
-                      onAnswerDraftChange={setAnswerDraft}
-                      onChatDraftChange={setChatDraft}
-                      onSubmitAnswer={(t) => void handleSubmitAnswer(t)}
-                      onSubmitChat={(t) => void handleSubmitChat(t)}
-                      onExplain={handleExplain}
-                    />
-                  )}
-                  {phase === "feedback" && (
-                    <FeedbackPhase
-                      sessionState={sessionState}
-                      onNext={handleNext}
-                    />
-                  )}
-                  {phase === "explanation" && (
-                    <ExplanationPhase
-                      sessionState={sessionState}
-                      explanationText={explanationText}
-                      questionText={
-                        questionSnapshot?.text ??
-                        sessionState.current_question_text ??
-                        ""
-                      }
-                      questionNumber={
-                        questionSnapshot?.number ??
-                        sessionState.total_questions_asked ??
-                        1
-                      }
-                      onContinue={handleContinue}
-                    />
-                  )}
+            )}
+
+            {/* Question/Feedback/Explanation phases — 2カラム + SessionHeader */}
+            {phase !== "learning" && phase !== "summary" && (
+              <>
+                <SessionHeader sessionState={sessionState} />
+                <div className="grid items-start gap-6 grid-cols-1 min-[1180px]:grid-cols-[1fr_288px]">
+                  <div className="min-w-0 rounded-lg border border-border bg-card p-6">
+                    {(phase === "question" || phase === "chat_response") &&
+                      !sessionState.current_question_text && (
+                      <div className="flex flex-col items-center gap-4 py-12 text-muted-foreground">
+                        <span className="inline-block h-6 w-6 animate-[qs-spin_0.7s_linear_infinite] rounded-full border-2 border-[rgb(148_163_184/0.3)] border-t-[rgb(148_163_184/0.8)]" />
+                        <span className="text-sm">問題を生成中…</span>
+                      </div>
+                    )}
+                    {(phase === "question" || phase === "chat_response") &&
+                      sessionState.current_question_text && (
+                      <QuestionPhase
+                        sessionState={sessionState}
+                        isSubmitting={isSubmitting}
+                        chatMessages={chatMessages}
+                        answerDraft={answerDraft}
+                        chatDraft={chatDraft}
+                        onAnswerDraftChange={setAnswerDraft}
+                        onChatDraftChange={setChatDraft}
+                        onSubmitAnswer={(t) => void handleSubmitAnswer(t)}
+                        onSubmitChat={(t) => void handleSubmitChat(t)}
+                        onExplain={handleExplain}
+                      />
+                    )}
+                    {phase === "feedback" && (
+                      <FeedbackPhase
+                        sessionState={sessionState}
+                        onNext={handleNext}
+                      />
+                    )}
+                    {phase === "explanation" && (
+                      <ExplanationPhase
+                        sessionState={sessionState}
+                        explanationText={explanationText}
+                        questionText={
+                          questionSnapshot?.text ??
+                          sessionState.current_question_text ??
+                          ""
+                        }
+                        questionNumber={
+                          questionSnapshot?.number ??
+                          sessionState.total_questions_asked ??
+                          1
+                        }
+                        onContinue={handleContinue}
+                      />
+                    )}
+                  </div>
+                  <SessionProgress
+                    sessionState={sessionState}
+                    phase={phase}
+                  />
                 </div>
-                <SessionProgress
-                  sessionState={sessionState}
-                  phase={phase}
-                />
-              </div>
+              </>
             )}
           </>
         )}

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { SessionState } from "@/types/api";
 
 export type QuizPhase =
+  | "learning"
   | "question"
   | "feedback"
   | "explanation"

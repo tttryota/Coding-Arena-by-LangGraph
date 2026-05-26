@@ -124,6 +124,7 @@ export interface SessionState {
   roadmap_item_title: string;
   roadmap_item_description: string;
   is_resumed: boolean;
+  topic_overview?: string;
   confirmation_points?: ConfirmationPoint[];
   current_point_index?: number;
   current_question_text?: string;

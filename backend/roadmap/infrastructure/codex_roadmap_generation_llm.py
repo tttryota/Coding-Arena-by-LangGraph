@@ -9,6 +9,7 @@ from infrastructure.llm.codex_transport import (
 from roadmap.domain.roadmap_generation_types import RoadmapGenerationLlmError
 
 _JSON_INSTRUCTION = "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
+_ROADMAP_MODEL = "gpt-5.5"
 
 
 class CodexRoadmapGenerationLlm:
@@ -33,7 +34,7 @@ class CodexRoadmapGenerationLlm:
         )
         user = f"トピック: {topic}"
         try:
-            return self._transport.call([
+            return self._transport.call(model=_ROADMAP_MODEL, messages=[
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])

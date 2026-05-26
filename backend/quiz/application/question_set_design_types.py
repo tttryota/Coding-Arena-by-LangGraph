@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
@@ -16,16 +17,23 @@ class QuestionSetDesignError(Exception):
         self.message = message
 
 
+@dataclass(frozen=True)
+class QuestionSetDesignResult:
+    confirmation_points: list[ConfirmationPoint]
+    topic_overview: str
+
+
 class QuestionSetDesignLlmClient(Protocol):
     def generate_confirmation_points(
         self,
         title: str,
         description: str,
         level: RoadmapItemLevel,
-    ) -> list[ConfirmationPoint]: ...
+    ) -> QuestionSetDesignResult: ...
 
 
 __all__ = [
     "QuestionSetDesignError",
     "QuestionSetDesignLlmClient",
+    "QuestionSetDesignResult",
 ]

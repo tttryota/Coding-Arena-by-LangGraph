@@ -32,7 +32,7 @@ def design_question_set(
     level = state["roadmap_item_level"]
 
     try:
-        confirmation_points = llm_client.generate_confirmation_points(
+        result = llm_client.generate_confirmation_points(
             title,
             description,
             level,
@@ -50,16 +50,17 @@ def design_question_set(
 
     if (
         not _MIN_CONFIRMATION_POINT_COUNT
-        <= len(confirmation_points)
+        <= len(result.confirmation_points)
         <= (_MAX_CONFIRMATION_POINT_COUNT)
     ):
         logger.warning(
             _POINT_COUNT_WARNING_EVENT,
-            confirmation_point_count=len(confirmation_points),
+            confirmation_point_count=len(result.confirmation_points),
         )
 
     return {
-        "confirmation_points": confirmation_points,
+        "topic_overview": result.topic_overview,
+        "confirmation_points": result.confirmation_points,
         "current_point_index": _INITIAL_POINT_INDEX,
     }
 

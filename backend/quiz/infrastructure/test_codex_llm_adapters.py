@@ -47,27 +47,52 @@ class TestCodexQuestionSetDesignLlm:
     def test_returns_confirmation_points(self) -> None:
         from quiz.infrastructure.codex_llm_adapters import CodexQuestionSetDesignLlm
 
-        canned = json.dumps([
-            {"id": "cp-001", "content": "型推論の仕組み", "format": "knowledge"},
-            {"id": "cp-002", "content": "ジェネリクスの実装", "format": "knowledge_and_practice"},
-        ])
+        canned = json.dumps({
+            "topic_overview": "TypeScriptのジェネリクスは型安全なコードを書くための重要な機能です。",
+            "confirmation_points": [
+                {"id": "cp-001", "content": "型推論の仕組み", "format": "knowledge"},
+                {"id": "cp-002", "content": "ジェネリクスの実装", "format": "knowledge_and_practice"},
+            ],
+        })
         transport = FakeTransport(canned)
         adapter = CodexQuestionSetDesignLlm(transport)
 
         result = adapter.generate_confirmation_points("TypeScript", "TS基礎", "detail")
 
-        assert len(result) == 2
-        assert result[0]["id"] == "cp-001"
-        assert result[0]["content"] == "型推論の仕組み"
-        assert result[0]["format"] == "knowledge"
-        assert result[1]["id"] == "cp-002"
-        assert result[1]["content"] == "ジェネリクスの実装"
-        assert result[1]["format"] == "knowledge_and_practice"
+        assert result.topic_overview == "TypeScriptのジェネリクスは型安全なコードを書くための重要な機能です。"
+        assert len(result.confirmation_points) == 2
+        assert result.confirmation_points[0]["id"] == "cp-001"
+        assert result.confirmation_points[0]["content"] == "型推論の仕組み"
+        assert result.confirmation_points[0]["format"] == "knowledge"
+        assert result.confirmation_points[1]["id"] == "cp-002"
+        assert result.confirmation_points[1]["content"] == "ジェネリクスの実装"
+        assert result.confirmation_points[1]["format"] == "knowledge_and_practice"
+
+    def test_empty_topic_overview_raises(self) -> None:
+        import pytest
+
+        from quiz.application.question_set_design_types import QuestionSetDesignError
+        from quiz.infrastructure.codex_llm_adapters import CodexQuestionSetDesignLlm
+
+        canned = json.dumps({
+            "topic_overview": "  ",
+            "confirmation_points": [
+                {"id": "cp-001", "content": "テスト", "format": "knowledge"},
+            ],
+        })
+        transport = FakeTransport(canned)
+        adapter = CodexQuestionSetDesignLlm(transport)
+
+        with pytest.raises(QuestionSetDesignError):
+            adapter.generate_confirmation_points("Test", "test", "detail")
 
     def test_prompt_contains_title_and_level(self) -> None:
         from quiz.infrastructure.codex_llm_adapters import CodexQuestionSetDesignLlm
 
-        transport = FakeTransport(json.dumps([]))
+        transport = FakeTransport(json.dumps({
+            "topic_overview": "概要",
+            "confirmation_points": [],
+        }))
         adapter = CodexQuestionSetDesignLlm(transport)
         adapter.generate_confirmation_points("React Hooks", "Hooks詳細", "middle")
 

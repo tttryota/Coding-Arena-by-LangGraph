@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from quiz.application.question_set_design import design_question_set
+from quiz.application.question_set_design_types import QuestionSetDesignResult
 
 if TYPE_CHECKING:
     from quiz.domain.session_state import (
@@ -10,6 +11,8 @@ if TYPE_CHECKING:
         RoadmapItemLevel,
         SessionState,
     )
+
+_STUB_TOPIC_OVERVIEW = "テスト概要テキスト"
 
 
 class _StubQuestionSetDesignLlm:
@@ -21,8 +24,11 @@ class _StubQuestionSetDesignLlm:
         title: str,
         description: str,
         level: RoadmapItemLevel,
-    ) -> list[ConfirmationPoint]:
-        return list(self._confirmation_points)
+    ) -> QuestionSetDesignResult:
+        return QuestionSetDesignResult(
+            confirmation_points=list(self._confirmation_points),
+            topic_overview=_STUB_TOPIC_OVERVIEW,
+        )
 
 
 def test_tc_02_question_set_design_public_contract_uses_confirmation_point_dto() -> (

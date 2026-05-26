@@ -15,6 +15,7 @@ _SESSION_STATE_KEYS = (
     "roadmap_item_title",
     "roadmap_item_description",
     "is_resumed",
+    "topic_overview",
     "confirmation_points",
     "current_point_index",
     "current_question_text",
@@ -76,7 +77,7 @@ def test_tc_01_session_state_public_contract_and_field_names() -> None:
     # Assert
     assert is_typeddict(SessionState)
     assert SessionState.__module__ == "quiz.domain.session_state"
-    assert len(annotations) == 18
+    assert len(annotations) == 19
     assert tuple(annotations) == _SESSION_STATE_KEYS
 
 
@@ -159,7 +160,7 @@ def test_tc_10_session_state_is_partial_typeddict() -> None:
 
     # Assert
     assert required_keys == frozenset()
-    assert len(optional_keys) == 18
+    assert len(optional_keys) == 19
     assert optional_keys == frozenset(_SESSION_STATE_KEYS)
 
 

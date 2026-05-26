@@ -29,12 +29,12 @@ class QuizAnswerRecord(TypedDict):
 class SessionState(TypedDict, total=False):
     """Shared downstream contract for quiz session state, not only a shape.
 
-    Initialize and first-write responsibilities for all 18 keys:
+    Initialize and first-write responsibilities for all 19 keys:
     - C1 initialize/first write ``session_id``, ``roadmap_item_id``,
       ``roadmap_item_level``, ``roadmap_item_title``,
       ``roadmap_item_description``, and ``is_resumed``.
-    - C2 initialize/first write ``confirmation_points`` and
-      ``current_point_index``.
+    - C2 initialize/first write ``confirmation_points``,
+      ``current_point_index``, and ``topic_overview``.
     - C3 initialize/first write ``current_question_text``,
       ``current_answer_type``, and ``total_questions_asked``.
     - External input acceptance initialize/first write ``user_input`` and
@@ -101,6 +101,7 @@ class SessionState(TypedDict, total=False):
     roadmap_item_title: str
     roadmap_item_description: str
     is_resumed: bool
+    topic_overview: str
     confirmation_points: list[ConfirmationPoint]
     current_point_index: int
     current_question_text: str

@@ -6,7 +6,10 @@ import pytest
 from structlog.testing import capture_logs
 
 from quiz.application.question_set_design import design_question_set
-from quiz.application.question_set_design_types import QuestionSetDesignError
+from quiz.application.question_set_design_types import (
+    QuestionSetDesignError,
+    QuestionSetDesignResult,
+)
 from shared.log_assertions import assert_single_log_event as _assert_single_log_event
 from shared.log_assertions import find_log_events
 
@@ -24,14 +27,19 @@ if TYPE_CHECKING:
 _FAILED_EVENT = "question_set_design_failed"
 
 
+_DEFAULT_TOPIC_OVERVIEW = "テストトピックの概要です。"
+
+
 class _RecordingQuestionSetDesignLlm:
     def __init__(
         self,
         *,
         confirmation_points: list[ConfirmationPoint] | None = None,
+        topic_overview: str = _DEFAULT_TOPIC_OVERVIEW,
         error: QuestionSetDesignError | None = None,
     ) -> None:
         self._confirmation_points = confirmation_points
+        self._topic_overview = topic_overview
         self._error = error
         self.calls: list[tuple[str, str, RoadmapItemLevel]] = []
 
@@ -40,12 +48,15 @@ class _RecordingQuestionSetDesignLlm:
         title: str,
         description: str,
         level: RoadmapItemLevel,
-    ) -> list[ConfirmationPoint]:
+    ) -> QuestionSetDesignResult:
         self.calls.append((title, description, level))
         if self._error is not None:
             raise self._error
         assert self._confirmation_points is not None
-        return list(self._confirmation_points)
+        return QuestionSetDesignResult(
+            confirmation_points=list(self._confirmation_points),
+            topic_overview=self._topic_overview,
+        )
 
 
 def _state(
@@ -159,6 +170,7 @@ def test_tc_01_design_question_set_reads_required_state_and_returns_base_shape()
         ),
     ]
     assert result == {
+        "topic_overview": _DEFAULT_TOPIC_OVERVIEW,
         "confirmation_points": confirmation_points,
         "current_point_index": 0,
     }

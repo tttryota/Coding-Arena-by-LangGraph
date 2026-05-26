@@ -219,13 +219,16 @@ class TestQ3ExistingSessionDetection:
 
 # LLM レスポンス定義
 _QUESTION_SET_DESIGN_RESPONSE = json.dumps(
-    [
-        {
-            "id": "cp-1",
-            "content": "基礎概念の理解",
-            "format": "knowledge",
-        },
-    ],
+    {
+        "topic_overview": "このトピックでは基礎概念を学びます。",
+        "confirmation_points": [
+            {
+                "id": "cp-1",
+                "content": "基礎概念の理解",
+                "format": "knowledge",
+            },
+        ],
+    },
     ensure_ascii=False,
 )
 

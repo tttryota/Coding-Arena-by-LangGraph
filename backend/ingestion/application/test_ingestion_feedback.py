@@ -348,6 +348,9 @@ def _assert_single_log_event_includes(
 
 class TestIngestionFeedbackGeneration:
     def test_tc_01_creates_feedback_with_roadmap_and_logs_success(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         expected_body = (
             "反映先ロードマップ: TypeScript > 基礎 > ジェネリクス\n\n"
             "正確性チェック:\n"
@@ -450,6 +453,9 @@ class TestIngestionFeedbackGeneration:
         )
 
     def test_tc_02_creates_feedback_without_roadmap_candidates(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         expected_body = (
             "正確性チェック:\n"
             "概要説明としては妥当だが、ネットワークや volume の観点が省略されている。\n\n"
@@ -551,6 +557,9 @@ class TestIngestionFeedbackGeneration:
         )
 
     def test_tc_03_skips_when_all_chunks_are_too_short(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         input_data = _make_input(
             source_path="daily/2026-05-20.md",
             chunks=[
@@ -597,6 +606,9 @@ class TestIngestionFeedbackGeneration:
         assert "feedback_id" not in log_entry
 
     def test_tc_10_uses_strip_length_for_threshold_and_sorts_chunks(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         event_log: list[str] = []
         roadmap_candidates = _make_roadmap_candidates()[:1]
         input_data = _make_input(
@@ -671,6 +683,9 @@ class TestIngestionFeedbackGeneration:
         assert event_log == ["llm.analyze", "writer.create"]
 
     def test_tc_11_omits_roadmap_line_when_llm_returns_null_selection(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         expected_body = (
             "正確性チェック:\n"
             "候補はあるが、特定のロードマップ項目へはまだ紐付かない。\n\n"
@@ -748,6 +763,9 @@ class TestIngestionFeedbackGeneration:
         assert "反映先ロードマップ:" not in writer.calls[0].body
 
     def test_tc_12_aggregates_four_analyzable_chunks_per_file(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         input_data = _make_input(
             source_path="study/rust/ownership.md",
             chunks=[
@@ -811,6 +829,9 @@ class TestIngestionFeedbackGeneration:
         assert len(writer.calls) == 1
 
     def test_tc_13_appends_new_record_for_same_source_path(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         expected_body = (
             "反映先ロードマップ: TypeScript > 基礎 > ジェネリクス\n\n"
             "正確性チェック:\n"
@@ -882,6 +903,9 @@ class TestIngestionFeedbackGeneration:
         )
 
     def test_tc_20_skips_empty_chunk_list_without_external_calls(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         input_data = _make_input(
             source_path="study/empty.md",
             chunks=[],
@@ -954,6 +978,9 @@ class TestIngestionFeedbackGeneration:
         self,
         input_data: IngestionFeedbackGenerateInput,
     ) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_reader = _RecordingRoadmapReader(items=_make_roadmap_candidates())
         llm_client = _RecordingLlmClient(response=_make_success_response())
         writer = _RecordingWriter(
@@ -1029,6 +1056,9 @@ class TestIngestionFeedbackGeneration:
         roadmap_candidates: list[RoadmapCandidate],
         llm_response: object,
     ) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         input_data = _make_input(
             chunks=[_chunk(chunk_index=0, text="分析可能な十分長いチャンク本文です。")],
         )
@@ -1056,6 +1086,9 @@ class TestIngestionFeedbackGeneration:
         _assert_no_log_event(log_output, "ingestion_feedback_created")
 
     def test_tc_30_works_with_protocol_only_dependency_objects(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         expected_body = (
             "正確性チェック:\n"
             "Protocol を満たす依存だけで処理できる。\n\n"
@@ -1147,6 +1180,9 @@ class TestIngestionFeedbackGeneration:
         ]
 
     def test_tc_31_raises_when_roadmap_lookup_fails(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         input_data = _make_input(
             chunks=[_chunk(chunk_index=0, text="分析可能な十分長いチャンク本文です。")],
         )
@@ -1188,6 +1224,9 @@ class TestIngestionFeedbackGeneration:
         _assert_no_log_event(log_output, "ingestion_feedback_skipped")
 
     def test_tc_32_raises_when_llm_call_fails(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         input_data = _make_input(
             chunks=[
                 _chunk(chunk_index=0, text="一つ目の分析可能チャンク本文です。"),
@@ -1232,6 +1271,9 @@ class TestIngestionFeedbackGeneration:
         _assert_no_log_event(log_output, "ingestion_feedback_skipped")
 
     def test_tc_33_raises_when_persistence_fails(self) -> None:
+        """テスト対象: IngestionFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         input_data = _make_input(
             chunks=[
                 _chunk(

@@ -267,6 +267,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_01_upsert_returns_natural_key_ids_in_input_order(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         collection = _ChunkCollectionDouble()
         store = _make_store(collection)
         upsert_input = _make_upsert_input(
@@ -338,6 +341,9 @@ class TestChromaChunkStore:
         )
 
     def test_chunk_store_tc_02_get_returns_chunks_sorted_by_chunk_index(self) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         source_path = "study/typescript/generics.md"
         collection = _ChunkCollectionDouble(
             raw_get_result=_make_raw_get_result(
@@ -403,6 +409,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_03_delete_removes_only_exact_source_path_records(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         source_path = "study/typescript/generics.md"
         bak_path = "study/typescript/generics.md.bak"
         collection = _ChunkCollectionDouble(
@@ -461,6 +470,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_10_empty_batch_short_circuits_without_backend_upsert(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         collection = _ChunkCollectionDouble()
         store = _make_store(collection)
         upsert_input = _make_upsert_input(source_path="study/empty.md", chunks=[])
@@ -488,6 +500,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_11_duplicate_chunk_index_is_rejected_before_upsert(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         collection = _ChunkCollectionDouble()
         store = _make_store(collection)
         upsert_input = _make_upsert_input(
@@ -522,6 +537,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_12_get_uses_exact_source_path_not_prefix(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         source_path = "study/typescript/generics.md"
         collection = _ChunkCollectionDouble(
             records=[
@@ -552,6 +570,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_13_delete_uses_exact_source_path_not_prefix(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         source_path = "study/typescript/generics.md"
         bak_path = "study/typescript/generics.md.bak"
         collection = _ChunkCollectionDouble(
@@ -594,6 +615,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_14_validation_error_wins_over_duplicate_chunk_index(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         collection = _ChunkCollectionDouble()
         store = _make_store(collection)
         upsert_input = _make_upsert_input(
@@ -637,6 +661,9 @@ class TestChromaChunkStore:
         self,
         invalid_chunks: list[ChunkStoreChunkInput],
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         collection = _ChunkCollectionDouble()
         store = _make_store(collection)
 
@@ -651,6 +678,9 @@ class TestChromaChunkStore:
         assert collection.upsert_calls == []
 
     def test_chunk_store_tc_20_upsert_rejects_empty_source_path(self) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         collection = _ChunkCollectionDouble()
         store = _make_store(collection)
 
@@ -673,6 +703,9 @@ class TestChromaChunkStore:
         operation_name: str,
         call: Any,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         collection = _ChunkCollectionDouble()
         store = _make_store(collection)
 
@@ -687,6 +720,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_22_get_rejects_id_metadata_source_path_mismatch(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         collection = _ChunkCollectionDouble(
             raw_get_result=_make_raw_get_result(
                 [
@@ -894,6 +930,9 @@ class TestChromaChunkStore:
         self,
         raw_get_result: dict[str, object],
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         collection = _ChunkCollectionDouble(raw_get_result=raw_get_result)
         store = _make_store(collection)
 
@@ -907,6 +946,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_30_upsert_backend_errors_are_wrapped_with_cause(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         source_path = "study/backend/infra.md"
         backend_error = TimeoutError("upsert timed out")
         collection = _ChunkCollectionDouble(upsert_error=backend_error)
@@ -944,6 +986,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_31_get_backend_errors_are_wrapped_with_cause(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         source_path = "study/backend/infra.md"
         backend_error = ConnectionError("collection unavailable")
         collection = _ChunkCollectionDouble(get_error=backend_error)
@@ -973,6 +1018,9 @@ class TestChromaChunkStore:
     def test_chunk_store_tc_32_delete_backend_errors_are_wrapped_with_cause(
         self,
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         source_path = "study/backend/infra.md"
         backend_error = RuntimeError("delete failed")
         collection = _ChunkCollectionDouble(delete_error=backend_error)
@@ -1010,6 +1058,9 @@ class TestChromaChunkStore:
         self,
         raw_get_result: dict[str, object],
     ) -> None:
+        """テスト対象: ChromaChunkStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         source_path = "study/typescript/generics.md"
         collection = _ChunkCollectionDouble(raw_get_result=raw_get_result)
         store = _make_store(collection)

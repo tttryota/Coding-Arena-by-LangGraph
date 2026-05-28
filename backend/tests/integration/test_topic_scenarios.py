@@ -57,7 +57,9 @@ class TestF4TopicMergeAndManualRegistration:
         self,
         integration_container: object,
     ) -> None:
-        """3ソース (preset, manual, note) からマージし、重複排除を確認する。"""
+        """テスト対象: F4TopicMergeAndManualRegistration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.application.topic_listing import (
             list_topic_candidates,
             register_manual_topic,
@@ -114,7 +116,9 @@ class TestF4TopicMergeAndManualRegistration:
         self,
         integration_container: object,
     ) -> None:
-        """同じ canonical name で2回登録しても重複しない。"""
+        """テスト対象: F4TopicMergeAndManualRegistration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.application.topic_listing import register_manual_topic
 
         container = integration_container
@@ -143,7 +147,9 @@ class TestF4TopicMergeAndManualRegistration:
         self,
         integration_container: object,
     ) -> None:
-        """preset と manual に同じトピックがある場合、preset が優先される。"""
+        """テスト対象: F4TopicMergeAndManualRegistration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.application.topic_listing import (
             list_topic_candidates,
             register_manual_topic,

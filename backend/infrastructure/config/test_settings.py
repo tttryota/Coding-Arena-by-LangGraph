@@ -9,6 +9,9 @@ from infrastructure.config.settings import Settings
 
 class TestSettingsDefaults:
     def test_default_values_applied(self) -> None:
+        """テスト対象: SettingsDefaults の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         with patch.dict(
             "os.environ",
             {"VAULT_PATH": "/test/vault"},
@@ -26,6 +29,9 @@ class TestSettingsDefaults:
         assert settings.session_max_questions == 20
 
     def test_required_fields_raise_on_missing(self) -> None:
+        """テスト対象: SettingsDefaults の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         with (
             patch.dict("os.environ", {}, clear=True),
             pytest.raises(
@@ -35,6 +41,9 @@ class TestSettingsDefaults:
             Settings(_env_file=None)
 
     def test_vault_path_missing_raises(self) -> None:
+        """テスト対象: SettingsDefaults の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         with (
             patch.dict("os.environ", {}, clear=True),
             pytest.raises(ValidationError),
@@ -44,6 +53,9 @@ class TestSettingsDefaults:
 
 class TestSettingsEnvOverride:
     def test_env_vars_loaded(self) -> None:
+        """テスト対象: SettingsEnvOverride の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         with patch.dict(
             "os.environ",
             {
@@ -58,6 +70,9 @@ class TestSettingsEnvOverride:
         assert settings.batch_interval_minutes == 10
 
     def test_env_file_loaded(self, tmp_path: Path) -> None:
+        """テスト対象: SettingsEnvOverride の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         env_file = tmp_path / ".env"
         env_file.write_text("VAULT_PATH=/env/vault\n")
         with patch.dict("os.environ", {}, clear=True):
@@ -66,6 +81,9 @@ class TestSettingsEnvOverride:
         assert settings.vault_path == Path("/env/vault")
 
     def test_env_var_overrides_env_file(self, tmp_path: Path) -> None:
+        """テスト対象: SettingsEnvOverride の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         env_file = tmp_path / ".env"
         env_file.write_text("VAULT_PATH=/env/vault\n")
         with patch.dict(
@@ -80,6 +98,9 @@ class TestSettingsEnvOverride:
 
 class TestSettingsScoreThresholds:
     def test_custom_thresholds(self) -> None:
+        """テスト対象: SettingsScoreThresholds の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         with patch.dict(
             "os.environ",
             {

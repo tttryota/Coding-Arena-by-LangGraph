@@ -50,6 +50,9 @@ class _BlockingJobRunner:
 
 class TestThreadPoolJobScheduler:
     def test_enqueue_returns_before_runner_completes(self) -> None:
+        """テスト対象: ThreadPoolJobScheduler の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.thread_pool_scheduler import (
             ThreadPoolJobScheduler,
         )
@@ -65,6 +68,9 @@ class TestThreadPoolJobScheduler:
             blocker.release.set()
 
     def test_enqueue_runs_job_on_different_thread(self) -> None:
+        """テスト対象: ThreadPoolJobScheduler の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.thread_pool_scheduler import (
             ThreadPoolJobScheduler,
         )
@@ -81,6 +87,9 @@ class TestThreadPoolJobScheduler:
             assert runner.thread_ids[0] != caller_thread_id
 
     def test_enqueue_submits_job_with_correct_args(self) -> None:
+        """テスト対象: ThreadPoolJobScheduler の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.thread_pool_scheduler import (
             ThreadPoolJobScheduler,
         )
@@ -96,6 +105,9 @@ class TestThreadPoolJobScheduler:
             assert runner.calls == [(job_id, "TypeScript")]
 
     def test_enqueue_raises_schedule_error_on_submission_failure(self) -> None:
+        """テスト対象: ThreadPoolJobScheduler の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.roadmap_generation_types import (
             RoadmapGenerationScheduleError,
         )
@@ -117,6 +129,9 @@ class TestThreadPoolJobScheduler:
         assert isinstance(cause, RuntimeError)
 
     def test_enqueue_multiple_jobs(self) -> None:
+        """テスト対象: ThreadPoolJobScheduler の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.thread_pool_scheduler import (
             ThreadPoolJobScheduler,
         )
@@ -137,6 +152,9 @@ class TestThreadPoolJobScheduler:
         assert submitted == {(id1, "React"), (id2, "Go")}
 
     def test_job_runner_exception_does_not_prevent_next_enqueue(self) -> None:
+        """テスト対象: ThreadPoolJobScheduler の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.thread_pool_scheduler import (
             ThreadPoolJobScheduler,
         )

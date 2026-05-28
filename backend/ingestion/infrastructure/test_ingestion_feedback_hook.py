@@ -96,6 +96,9 @@ _LONG_TEXT = "This is a long enough chunk text for analysis purposes." * 3
 
 class TestRoadmapItemReaderAdapterEmpty:
     def test_returns_empty_list_when_no_roadmaps(self) -> None:
+        """テスト対象: RoadmapItemReaderAdapterEmpty の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         adapter = RoadmapItemReaderAdapter(_StubRetrievalReader(roadmaps=[]))
 
         result = adapter.list_items()
@@ -105,6 +108,9 @@ class TestRoadmapItemReaderAdapterEmpty:
 
 class TestRoadmapItemReaderAdapterDisplayPath:
     def test_builds_display_path_for_flat_items(self) -> None:
+        """テスト対象: RoadmapItemReaderAdapterDisplayPath の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         major_id = uuid4()
         roadmap = _RoadmapRecord(
             roadmap_id=uuid4(),
@@ -125,6 +131,9 @@ class TestRoadmapItemReaderAdapterDisplayPath:
         assert result[0].display_path == "TypeScript > 基礎"
 
     def test_builds_nested_display_path(self) -> None:
+        """テスト対象: RoadmapItemReaderAdapterDisplayPath の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         major_id = uuid4()
         middle_id = uuid4()
         detail_id = uuid4()
@@ -159,6 +168,9 @@ class TestRoadmapItemReaderAdapterDisplayPath:
         assert detail.display_path == "TypeScript > 基礎 > 型システム > ジェネリクス"
 
     def test_merges_items_from_multiple_roadmaps(self) -> None:
+        """テスト対象: RoadmapItemReaderAdapterDisplayPath の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         r1 = _RoadmapRecord(
             roadmap_id=uuid4(), topic="TypeScript",
             items=[
@@ -187,7 +199,9 @@ class TestRoadmapItemReaderAdapterDisplayPath:
         assert "React > Hooks" in paths
 
     def test_orphan_parent_shows_placeholder(self) -> None:
-        """parent_id が存在しない item を参照している場合 '?' を表示。"""
+        """テスト対象: RoadmapItemReaderAdapterDisplayPath の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         orphan_parent_id = uuid4()
         item_id = uuid4()
         roadmap = _RoadmapRecord(
@@ -208,7 +222,9 @@ class TestRoadmapItemReaderAdapterDisplayPath:
         assert result[0].display_path == "Test > ? > Child"
 
     def test_cycle_does_not_loop_infinitely(self) -> None:
-        """parent_id が循環参照している場合、無限ループしない。"""
+        """テスト対象: RoadmapItemReaderAdapterDisplayPath の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         id_a = uuid4()
         id_b = uuid4()
         roadmap = _RoadmapRecord(
@@ -239,6 +255,9 @@ class TestRoadmapItemReaderAdapterDisplayPath:
 
 class TestIngestionFeedbackHookCallsGenerateForFile:
     def test_calls_generate_for_file_with_correct_input(self) -> None:
+        """テスト対象: IngestionFeedbackHookCallsGenerateForFile の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         llm = _RecordingLlmClient()
         writer = _StubWriter()
         hook = IngestionFeedbackHook(
@@ -267,6 +286,9 @@ class TestIngestionFeedbackHookCallsGenerateForFile:
         assert llm_req.chunk_texts == [_LONG_TEXT]  # type: ignore[union-attr]
 
     def test_skips_when_chunks_too_short(self) -> None:
+        """テスト対象: IngestionFeedbackHookCallsGenerateForFile の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         writer = _StubWriter()
         llm = _RecordingLlmClient()
         hook = IngestionFeedbackHook(
@@ -284,6 +306,9 @@ class TestIngestionFeedbackHookCallsGenerateForFile:
         assert len(llm.captured_requests) == 0
 
     def test_skips_when_chunk_data_empty(self) -> None:
+        """テスト対象: IngestionFeedbackHookCallsGenerateForFile の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         writer = _StubWriter()
         hook = IngestionFeedbackHook(
             llm_client=_RecordingLlmClient(),  # type: ignore[arg-type]
@@ -296,7 +321,9 @@ class TestIngestionFeedbackHookCallsGenerateForFile:
         assert len(writer.records) == 0
 
     def test_llm_error_propagates(self) -> None:
-        """LLM エラーは Hook 内で catch せず呼び出し元に伝搬する。"""
+        """テスト対象: IngestionFeedbackHookCallsGenerateForFile の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.domain.ingestion_feedback_types import (
             IngestionFeedbackLlmCallError,
         )

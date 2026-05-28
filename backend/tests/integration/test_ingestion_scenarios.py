@@ -33,6 +33,9 @@ class TestI1BatchTrigger:
         tmp_path: Path,
     ) -> None:
         # Arrange: tmp_path に markdown ファイルを作成
+        """テスト対象: I1BatchTrigger の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         md_file = tmp_path / "test_note.md"
         md_file.write_text(
             "# Test\n\nThis is a test note with enough text for chunking.",
@@ -78,7 +81,9 @@ class TestI2FeedbackGeneration:
         integration_container: object,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
-        """generate_for_file でフィードバック生成し、GET /feedbacks で確認。"""
+        """テスト対象: I2FeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.application.ingestion_feedback import generate_for_file
         from ingestion.domain.ingestion_feedback_types import (
             IngestionFeedbackChunkInput,
@@ -149,7 +154,9 @@ class TestI3EmptyChunkSkip:
         integration_container: object,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
-        """minimum_chunk_characters 未満のチャンクのみ → status="skipped"。"""
+        """テスト対象: I3EmptyChunkSkip の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.application.ingestion_feedback import generate_for_file
         from ingestion.domain.ingestion_feedback_types import (
             IngestionFeedbackChunkInput,
@@ -207,7 +214,9 @@ class TestI4PostIngestionHookFeedbackGeneration:
         scenario_transport: ScenarioLlmTransport,
         tmp_path: Path,
     ) -> None:
-        """POST /ingestion/trigger → Hook → フィードバック自動生成 → GET /feedbacks で確認。"""
+        """テスト対象: I4PostIngestionHookFeedbackGeneration の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         # Arrange: 50 文字以上のテキストを持つ markdown を作成
         md_file = tmp_path / "typescript_generics.md"
         md_file.write_text(

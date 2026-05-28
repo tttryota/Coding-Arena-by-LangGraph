@@ -306,6 +306,9 @@ def _orphan_snapshot() -> RoadmapItemCrudRoadmapRecord:
 
 
 def test_tc_01_public_api_and_types_exist_in_target_modules() -> None:
+    """テスト対象: add_roadmap_item 関数・move_roadmap_item 関数・delete_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     add_signature = inspect.signature(add_roadmap_item)
     move_signature = inspect.signature(move_roadmap_item)
     delete_signature = inspect.signature(delete_roadmap_item)
@@ -456,6 +459,9 @@ def test_tc_01_public_api_and_types_exist_in_target_modules() -> None:
 
 
 def test_tc_02_adds_root_major_and_shifts_following_siblings() -> None:
+    """テスト対象: add_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     roadmap = _record(
         [
             _item(
@@ -534,6 +540,9 @@ def test_tc_02_adds_root_major_and_shifts_following_siblings() -> None:
 
 
 def test_tc_03_same_parent_move_removes_then_inserts_at_target_order() -> None:
+    """テスト対象: move_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     roadmap = _record(
         [
             _item(
@@ -635,6 +644,9 @@ def test_tc_03_same_parent_move_removes_then_inserts_at_target_order() -> None:
 def test_tc_04_delete_major_removes_subtree_in_preorder_and_compacts_root_orders() -> (
     None
 ):
+    """テスト対象: delete_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     roadmap = _record(
         [
             _item(
@@ -781,6 +793,9 @@ def test_tc_04_delete_major_removes_subtree_in_preorder_and_compacts_root_orders
 
 
 def test_tc_10_add_under_major_creates_middle_and_appends_at_end() -> None:
+    """テスト対象: add_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     roadmap = _record(
         [
             _item(
@@ -877,6 +892,9 @@ def test_tc_10_add_under_major_creates_middle_and_appends_at_end() -> None:
 
 
 def test_tc_11_add_under_middle_creates_detail_and_shifts_existing_details() -> None:
+    """テスト対象: add_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     roadmap = _record(
         [
             _item(
@@ -991,6 +1009,9 @@ def test_tc_11_add_under_middle_creates_detail_and_shifts_existing_details() -> 
 
 
 def test_tc_12_adds_root_major_at_end_when_parent_and_order_are_none() -> None:
+    """テスト対象: add_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     roadmap = _record(
         [
             _item(
@@ -1069,6 +1090,9 @@ def test_tc_12_adds_root_major_at_end_when_parent_and_order_are_none() -> None:
 
 
 def test_tc_13_move_detail_to_another_parent_reindexes_both_sibling_sets() -> None:
+    """テスト対象: move_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     roadmap = _record(
         [
             _item(
@@ -1204,6 +1228,9 @@ def test_tc_13_move_detail_to_another_parent_reindexes_both_sibling_sets() -> No
 
 
 def test_tc_14_move_root_major_allows_none_parent_and_reindexes_root_siblings() -> None:
+    """テスト対象: move_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     roadmap = _record(
         [
             _item(
@@ -1285,6 +1312,9 @@ def test_tc_14_move_root_major_allows_none_parent_and_reindexes_root_siblings() 
 
 
 def test_tc_15_delete_middle_removes_descendants_and_compacts_sibling_orders() -> None:
+    """テスト対象: delete_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     roadmap = _record(
         [
             _item(
@@ -1413,6 +1443,9 @@ def test_tc_15_delete_middle_removes_descendants_and_compacts_sibling_orders() -
 
 
 def test_tc_20_missing_roadmap_raises_not_found_for_add_move_and_delete() -> None:
+    """テスト対象: add_roadmap_item 関数・move_roadmap_item 関数・delete_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     add_store = _RecordingStore(roadmap=None)
     add_id_generator = _RecordingIdGenerator(
         generated_ids=[UUID("99999999-9999-9999-9999-999999999999")],
@@ -1476,6 +1509,9 @@ def test_tc_20_missing_roadmap_raises_not_found_for_add_move_and_delete() -> Non
 
 
 def test_tc_21_add_distinguishes_invalid_input_from_reference_resolution() -> None:
+    """テスト対象: add_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     foreign_parent = _item(
         item_id="88888888-8888-8888-8888-888888888888",
         roadmap_id=_FOREIGN_ROADMAP_ID,
@@ -1598,6 +1634,9 @@ def test_tc_21_add_distinguishes_invalid_input_from_reference_resolution() -> No
 
 
 def test_tc_22_move_distinguishes_not_found_hierarchy_cycle_and_range_errors() -> None:
+    """テスト対象: move_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     foreign_item = _item(
         item_id="77777777-7777-7777-7777-777777777777",
         roadmap_id=_FOREIGN_ROADMAP_ID,
@@ -1770,6 +1809,9 @@ def test_tc_22_move_distinguishes_not_found_hierarchy_cycle_and_range_errors() -
 
 
 def test_tc_23_delete_distinguishes_not_found_foreign_and_last_major_errors() -> None:
+    """テスト対象: delete_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     foreign_item = _item(
         item_id="99999999-9999-9999-9999-999999999999",
         roadmap_id=_FOREIGN_ROADMAP_ID,
@@ -1832,6 +1874,9 @@ def test_tc_23_delete_distinguishes_not_found_foreign_and_last_major_errors() ->
 
 
 def test_tc_24_snapshot_lookup_inconsistency_raises_store_error_across_entrypoints() -> None:
+    """テスト対象: add_roadmap_item 関数・move_roadmap_item 関数・delete_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     missing_parent_id = UUID("88888888-8888-8888-8888-888888888888")
     add_store = _RecordingStore(
         roadmap=_delete_validation_snapshot(),
@@ -1961,6 +2006,9 @@ def test_tc_24_snapshot_lookup_inconsistency_raises_store_error_across_entrypoin
 
 
 def test_tc_25_unreachable_snapshot_nodes_fail_closed_before_replace() -> None:
+    """テスト対象: add_roadmap_item 関数・move_roadmap_item 関数・delete_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     add_store = _RecordingStore(roadmap=_orphan_snapshot())
     add_id_generator = _RecordingIdGenerator(
         generated_ids=[UUID("44444444-4444-4444-4444-444444444444")],
@@ -2022,6 +2070,9 @@ def test_tc_25_unreachable_snapshot_nodes_fail_closed_before_replace() -> None:
 
 
 def test_tc_30_add_wraps_id_generator_failure_and_skips_replace() -> None:
+    """テスト対象: add_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     store = _RecordingStore(roadmap=_add_validation_snapshot())
     error = RuntimeError("uuid failed")
     id_generator = _RecordingIdGenerator(error=error)
@@ -2047,6 +2098,9 @@ def test_tc_30_add_wraps_id_generator_failure_and_skips_replace() -> None:
 
 
 def test_tc_31_wraps_find_roadmap_and_find_item_failures() -> None:
+    """テスト対象: add_roadmap_item 関数・move_roadmap_item 関数・delete_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     find_roadmap_error = ConnectionError("lookup failed")
 
     add_find_roadmap_store = _RecordingStore(
@@ -2149,6 +2203,9 @@ def test_tc_31_wraps_find_roadmap_and_find_item_failures() -> None:
 
 
 def test_tc_32_wraps_replace_items_failure_for_add_move_and_delete() -> None:
+    """テスト対象: add_roadmap_item 関数・move_roadmap_item 関数・delete_roadmap_item 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     replace_error = OSError("write failed")
 
     add_store = _RecordingStore(

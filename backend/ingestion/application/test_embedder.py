@@ -133,6 +133,9 @@ def _assert_single_log_event_includes(
 
 class TestEmbedderPhase1:
     def test_embedder_tc_01_reconstructs_single_chunk_result(self) -> None:
+        """テスト対象: EmbedderPhase1 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[[0.12, -0.03, 0.44, 0.08]]])
         batch_input = _make_batch_input(
             chunks=[(0, "TypeScript のジェネリクスは型引数を使って再利用性を高める。")],
@@ -153,6 +156,9 @@ class TestEmbedderPhase1:
         ]
 
     def test_embedder_tc_01_accepts_int_elements_in_embedding_vector(self) -> None:
+        """テスト対象: EmbedderPhase1 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[[1, 2.0, -3, 4.0]]])
         batch_input = _make_batch_input(
             chunks=[(0, "整数要素を含むベクトル")],
@@ -166,6 +172,9 @@ class TestEmbedderPhase1:
         ]
 
     def test_embedder_tc_02_short_circuits_empty_batch_and_logs_success(self) -> None:
+        """テスト対象: EmbedderPhase1 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([])
         batch_input = _make_batch_input(
             chunks=[],
@@ -194,6 +203,9 @@ class TestEmbedderPhase1:
 
 class TestEmbedderPhase2:
     def test_embedder_tc_10_passes_multiple_chunks_once_in_input_order(self) -> None:
+        """テスト対象: EmbedderPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel(
             [
                 [
@@ -229,6 +241,9 @@ class TestEmbedderPhase2:
         ]
 
     def test_embedder_tc_11_logs_required_fields_for_non_empty_success(self) -> None:
+        """テスト対象: EmbedderPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel(
             [
                 [
@@ -267,6 +282,9 @@ class TestEmbedderPhase2:
         )
 
     def test_embedder_tc_12_fails_fast_on_blank_chunk_without_model_call(self) -> None:
+        """テスト対象: EmbedderPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[[0.1, 0.2]]])
         batch_input = _make_batch_input(
             chunks=[(0, "有効な本文"), (1, "   ")],
@@ -288,6 +306,9 @@ class TestEmbedderPhase2:
         self,
         bad_chunk_index: object,
     ) -> None:
+        """テスト対象: EmbedderPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[[0.1, 0.2]]])
         batch_input = _make_batch_input(
             chunks=[(bad_chunk_index, "有効な本文")],
@@ -301,6 +322,9 @@ class TestEmbedderPhase2:
         assert embedding_model.calls == []
 
     def test_embedder_tc_14_rejects_non_string_text(self) -> None:
+        """テスト対象: EmbedderPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[[0.1, 0.2]]])
         batch_input = _make_batch_input(
             chunks=[(0, 123)],
@@ -316,6 +340,9 @@ class TestEmbedderPhase2:
 
 class TestEmbedderPhase3:
     def test_embedder_tc_20_rejects_non_callable_embed_method(self) -> None:
+        """テスト対象: EmbedderPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         batch_input = _make_batch_input(
             chunks=[(0, "TypeScript のジェネリクスを整理した。")],
             embedding_model=_NonCallableEmbeddingModel(),
@@ -326,6 +353,9 @@ class TestEmbedderPhase3:
             embed(batch_input)
 
     def test_embedder_tc_21_raises_count_mismatch_error(self) -> None:
+        """テスト対象: EmbedderPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[[0.1, 0.2, 0.3, 0.4]]])
         batch_input = _make_batch_input(
             chunks=[
@@ -350,6 +380,9 @@ class TestEmbedderPhase3:
         ]
 
     def test_embedder_tc_22_raises_format_error_for_non_list_vector(self) -> None:
+        """テスト対象: EmbedderPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[(0.1, 0.2, 0.3, 0.4)]])
         batch_input = _make_batch_input(
             chunks=[(0, "Docker Compose でアプリケーションを起動する。")],
@@ -366,6 +399,9 @@ class TestEmbedderPhase3:
         )
 
     def test_embedder_tc_23_raises_format_error_for_empty_vector(self) -> None:
+        """テスト対象: EmbedderPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[[]]])
         batch_input = _make_batch_input(
             chunks=[(0, "Docker Compose でアプリケーションを起動する。")],
@@ -394,6 +430,9 @@ class TestEmbedderPhase3:
         self,
         bad_value: object,
     ) -> None:
+        """テスト対象: EmbedderPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[[0.1, bad_value, 0.3, 0.4]]])
         batch_input = _make_batch_input(
             chunks=[(0, "Docker Compose でアプリケーションを起動する。")],
@@ -413,6 +452,9 @@ class TestEmbedderPhase3:
         )
 
     def test_embedder_tc_25_raises_format_error_for_dimension_mismatch(self) -> None:
+        """テスト対象: EmbedderPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel(
             [
                 [
@@ -439,6 +481,9 @@ class TestEmbedderPhase3:
         )
 
     def test_embedder_tc_26_prioritizes_count_mismatch_over_format_error(self) -> None:
+        """テスト対象: EmbedderPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         embedding_model = _RecordingEmbeddingModel([[[0.1, math.nan, 0.3, 0.4]]])
         batch_input = _make_batch_input(
             chunks=[
@@ -471,6 +516,9 @@ class TestEmbedderPhase4:
         self,
         model_factory: Callable[[object], object],
     ) -> None:
+        """テスト対象: EmbedderPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = [[0.1, 0.2, 0.3, 0.4]]
         embedding_model = cast("_EmbeddingModelWithCalls", model_factory(response))
         batch_input = _make_batch_input(
@@ -492,6 +540,9 @@ class TestEmbedderPhase4:
         ]
 
     def test_embedder_tc_31_wraps_model_failure_and_logs_it(self) -> None:
+        """テスト対象: EmbedderPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         timeout_error = TimeoutError("embedding timed out")
         embedding_model = _RecordingEmbeddingModel(
             [],

@@ -676,6 +676,9 @@ _SCHEMA_INVALID_CASES = [
 
 def test_tc_01_static_contracts_for_public_dto_failure_codes_and_internal_dto() -> None:
     # TypedDict 公開 DTO
+    """テスト対象: request_roadmap_generation 関数・get_roadmap_generation_job 関数・_run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     for td in (RoadmapGenerationAccepted, RoadmapGenerationQueuedStatus, RoadmapGenerationRunningStatus, RoadmapGenerationCompletedStatus, RoadmapGenerationFailedStatus):
         assert is_typeddict(td)
 
@@ -701,6 +704,9 @@ def test_tc_01_static_contracts_for_public_dto_failure_codes_and_internal_dto() 
 
 
 def test_tc_02_request_accepts_topic_preserves_shape_order_and_logs() -> None:
+    """テスト対象: request_roadmap_generation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     operation_log: list[str] = []
     job_id_generator = _RecordingJobIdGenerator([_JOB_ID], operation_log=operation_log)
     scheduler = _RecordingScheduler(operation_log=operation_log)
@@ -785,6 +791,9 @@ def test_tc_03_get_job_returns_each_status_shape_as_is(
     expected_error_code: RoadmapGenerationFailureCode | None,
     expected_error_message: str | None,
 ) -> None:
+    """テスト対象: get_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     job_store = _RecordingJobStore(get_job_result=stored_status)
 
     result = get_roadmap_generation_job(_JOB_ID, job_store=job_store)
@@ -810,6 +819,9 @@ def test_tc_03_get_job_returns_each_status_shape_as_is(
 
 
 def test_tc_04_worker_success_marks_running_persists_and_completes() -> None:
+    """テスト対象: _run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     operation_log: list[str] = []
     payload = _make_tc_04_success_payload(_TOPIC)
     llm_client = _RecordingLlmClient(
@@ -874,6 +886,9 @@ def test_tc_04_worker_success_marks_running_persists_and_completes() -> None:
 
 @pytest.mark.parametrize("topic", ["", " \n\t "], ids=["empty", "whitespace_only"])
 def test_tc_10_request_rejects_blank_topic_before_enqueue_and_logs(topic: str) -> None:
+    """テスト対象: request_roadmap_generation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     job_id_generator = _RecordingJobIdGenerator([_JOB_ID])
     scheduler = _RecordingScheduler()
     job_store = _RecordingJobStore()
@@ -904,6 +919,9 @@ def test_tc_10_request_rejects_blank_topic_before_enqueue_and_logs(topic: str) -
 
 
 def test_tc_11_worker_retries_parse_and_schema_failures_with_shared_budget() -> None:
+    """テスト対象: _run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     operation_log: list[str] = []
     llm_client = _RecordingLlmClient(
         [
@@ -963,6 +981,9 @@ def test_tc_11_worker_retries_parse_and_schema_failures_with_shared_budget() -> 
 def test_tc_12_worker_uses_last_parse_failure_code_after_retry_budget_exhausted() -> (
     None
 ):
+    """テスト対象: _run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     final_parse_failure = '{not-valid-json: "third-attempt"}'
     llm_client = _RecordingLlmClient(
         [
@@ -1026,6 +1047,9 @@ def test_tc_13_all_schema_violation_patterns_retry_and_fail_with_schema_code(
     invalid_payload_builder: Any,
     expected_reason_fragments: tuple[str, ...],
 ) -> None:
+    """テスト対象: _run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     del case_name
     invalid_payload = invalid_payload_builder(_TOPIC)
     llm_client = _RecordingLlmClient(
@@ -1085,6 +1109,9 @@ def test_tc_13_all_schema_violation_patterns_retry_and_fail_with_schema_code(
 def test_tc_14_worker_preserves_topic_hierarchy_required_items_and_empty_branches() -> (
     None
 ):
+    """テスト対象: _run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     payload = _make_branch_preserving_payload(_SECOND_TOPIC)
     llm_client = _RecordingLlmClient(
         [_to_json(payload)],
@@ -1118,6 +1145,9 @@ def test_tc_14_worker_preserves_topic_hierarchy_required_items_and_empty_branche
 
 
 def test_tc_20_create_queued_job_error_is_reraised_without_enqueue() -> None:
+    """テスト対象: request_roadmap_generation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     original_error = RoadmapGenerationJobStoreError("queue record failed")
     operation_log: list[str] = []
     job_id_generator = _RecordingJobIdGenerator([_JOB_ID], operation_log=operation_log)
@@ -1147,6 +1177,9 @@ def test_tc_20_create_queued_job_error_is_reraised_without_enqueue() -> None:
 
 
 def test_tc_21_schedule_failure_marks_failed_then_reraises_original_error() -> None:
+    """テスト対象: request_roadmap_generation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     original_error = RoadmapGenerationScheduleError("queue unavailable")
     operation_log: list[str] = []
     job_id_generator = _RecordingJobIdGenerator([_JOB_ID], operation_log=operation_log)
@@ -1192,6 +1225,9 @@ def test_tc_21_schedule_failure_marks_failed_then_reraises_original_error() -> N
 
 
 def test_tc_22_mark_failed_store_error_overrides_schedule_error() -> None:
+    """テスト対象: request_roadmap_generation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     schedule_error = RoadmapGenerationScheduleError("queue unavailable")
     store_error = RoadmapGenerationJobStoreError("mark_failed write failed")
     job_id_generator = _RecordingJobIdGenerator([_JOB_ID])
@@ -1231,6 +1267,9 @@ def test_tc_22_mark_failed_store_error_overrides_schedule_error() -> None:
 
 
 def test_tc_23_worker_stops_immediately_when_mark_running_fails() -> None:
+    """テスト対象: _run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     original_error = RoadmapGenerationJobStoreError("mark_running failed")
     llm_client = _RecordingLlmClient([_to_json(_make_valid_payload(_TOPIC))])
     persistence = _RecordingPersistence()
@@ -1263,6 +1302,9 @@ def test_tc_23_worker_stops_immediately_when_mark_running_fails() -> None:
 
 
 def test_tc_24_mark_completed_error_is_propagated_without_failed_fallback() -> None:
+    """テスト対象: _run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     original_error = RoadmapGenerationJobStoreError("mark_completed failed")
     llm_client = _RecordingLlmClient([_to_json(_make_valid_payload(_TOPIC))])
     persistence = _RecordingPersistence()
@@ -1300,6 +1342,9 @@ def test_tc_24_mark_completed_error_is_propagated_without_failed_fallback() -> N
 
 
 def test_tc_25_same_topic_can_be_accepted_as_two_distinct_jobs() -> None:
+    """テスト対象: request_roadmap_generation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     job_id_generator = _RecordingJobIdGenerator([_JOB_ID, _SECOND_JOB_ID])
     scheduler = _RecordingScheduler()
     job_store = _RecordingJobStore()
@@ -1348,6 +1393,9 @@ def test_tc_25_same_topic_can_be_accepted_as_two_distinct_jobs() -> None:
 def test_tc_30_get_job_reraises_store_exceptions_without_wrapping(
     original_error: Exception,
 ) -> None:
+    """テスト対象: get_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     job_store = _RecordingJobStore(get_job_error=original_error)
 
     with pytest.raises(type(original_error)) as exc_info:
@@ -1368,6 +1416,9 @@ def test_tc_30_get_job_reraises_store_exceptions_without_wrapping(
 def test_tc_31_worker_marks_llm_request_failures_without_retry(
     mark_failed_error: RoadmapGenerationJobStoreError | None,
 ) -> None:
+    """テスト対象: _run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     llm_error = RoadmapGenerationLlmError("llm timeout")
     llm_client = _RecordingLlmClient([llm_error])
     persistence = _RecordingPersistence()
@@ -1450,6 +1501,9 @@ def test_tc_32_worker_marks_persistence_failures_without_retry(
     persistence_error: Exception,
     mark_failed_error: RoadmapGenerationJobStoreError | None,
 ) -> None:
+    """テスト対象: _run_roadmap_generation_job 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     llm_client = _RecordingLlmClient([_to_json(_make_valid_payload(_TOPIC))])
     persistence = _RecordingPersistence(error=persistence_error)
     job_store = _RecordingJobStore(mark_failed_error=mark_failed_error)

@@ -24,7 +24,9 @@ class TestCallRetry:
         mock_sleep: MagicMock,
         mock_call_once: MagicMock,
     ) -> None:
-        """初回成功ならリトライしない。"""
+        """テスト対象: call_with_retry 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         mock_call_once.return_value = "ok"
         transport = CodexLlmTransport()
         messages = [CodexMessage(role="user", content="hello")]
@@ -44,7 +46,9 @@ class TestCallRetry:
         mock_call_once: MagicMock,
         mock_close_unlocked: MagicMock,
     ) -> None:
-        """CodexTransportHttpError 1 回 → close でリセット → リトライで成功。"""
+        """テスト対象: call_with_retry 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         mock_call_once.side_effect = [
             CodexTransportHttpError("timeout"),
             "ok",
@@ -68,7 +72,9 @@ class TestCallRetry:
         mock_call_once: MagicMock,
         mock_close_unlocked: MagicMock,
     ) -> None:
-        """3 回連続 CodexTransportHttpError → 最終的に raise。"""
+        """テスト対象: call_with_retry 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         error = CodexTransportHttpError("timeout")
         mock_call_once.side_effect = [error, error, error]
         transport = CodexLlmTransport()
@@ -91,7 +97,9 @@ class TestCallRetry:
         mock_call_once: MagicMock,
         mock_close_unlocked: MagicMock,
     ) -> None:
-        """CodexTransportResponseError はリトライしない。"""
+        """テスト対象: call_with_retry 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         error = CodexTransportResponseError("parse error")
         mock_call_once.side_effect = error
         transport = CodexLlmTransport()
@@ -114,7 +122,9 @@ class TestCallRetry:
         mock_call_once: MagicMock,
         mock_close_unlocked: MagicMock,
     ) -> None:
-        """リトライ間のバックオフが 2s, 4s であること。"""
+        """テスト対象: call_with_retry 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         error = CodexTransportHttpError("timeout")
         mock_call_once.side_effect = [error, error, error]
         transport = CodexLlmTransport()
@@ -137,7 +147,9 @@ class TestCallRetry:
         mock_call_once: MagicMock,
         mock_close_unlocked: MagicMock,
     ) -> None:
-        """2 回失敗、3 回目で成功。"""
+        """テスト対象: call_with_retry 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         error = CodexTransportHttpError("timeout")
         mock_call_once.side_effect = [error, error, "ok"]
         transport = CodexLlmTransport()
@@ -155,7 +167,9 @@ class TestSendOsError:
     """_send() が OSError を CodexTransportHttpError に変換することを検証する。"""
 
     def test_broken_pipe_becomes_http_error(self) -> None:
-        """BrokenPipeError → CodexTransportHttpError に変換される。"""
+        """テスト対象: CodexTransport._send 関連処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         transport = CodexLlmTransport()
         mock_stdin = MagicMock()
         mock_stdin.write.side_effect = BrokenPipeError("broken pipe")
@@ -165,7 +179,9 @@ class TestSendOsError:
         with pytest.raises(CodexTransportHttpError, match="Failed to write"):
             transport._send({"test": "data"})
     def test_os_error_becomes_http_error(self) -> None:
-        """一般 OSError → CodexTransportHttpError に変換される。"""
+        """テスト対象: CodexTransport._send 関連処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         transport = CodexLlmTransport()
         mock_stdin = MagicMock()
         mock_stdin.write.side_effect = OSError("I/O error")

@@ -37,6 +37,9 @@ class FakeTransport:
 
 class TestCodexRoadmapGenerationLlm:
     def test_returns_json_string(self) -> None:
+        """テスト対象: CodexRoadmapGenerationLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.codex_roadmap_generation_llm import (
             CodexRoadmapGenerationLlm,
         )
@@ -52,6 +55,9 @@ class TestCodexRoadmapGenerationLlm:
         assert "TypeScript" in transport.last_messages[-1].content
 
     def test_error_raises_llm_error(self) -> None:
+        """テスト対象: CodexRoadmapGenerationLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from roadmap.domain.roadmap_generation_types import (
@@ -79,6 +85,9 @@ class TestCodexRoadmapGenerationLlm:
 
 class TestCodexIngestionFeedbackLlm:
     def test_returns_response(self) -> None:
+        """テスト対象: CodexIngestionFeedbackLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.domain.ingestion_feedback_types import (
             IngestionFeedbackLlmRequest,
             RoadmapCandidate,
@@ -108,6 +117,9 @@ class TestCodexIngestionFeedbackLlm:
         assert result.improvement_suggestions == ["具体例を追加"]
 
     def test_null_roadmap_item_id(self) -> None:
+        """テスト対象: CodexIngestionFeedbackLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.domain.ingestion_feedback_types import (
             IngestionFeedbackLlmRequest,
         )
@@ -135,6 +147,9 @@ class TestCodexIngestionFeedbackLlm:
         assert result.improvement_suggestions == []
 
     def test_invalid_json_raises_response_format_error(self) -> None:
+        """テスト対象: CodexIngestionFeedbackLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from ingestion.domain.ingestion_feedback_types import (
@@ -157,6 +172,9 @@ class TestCodexIngestionFeedbackLlm:
             adapter.analyze(request)
 
     def test_transport_failure_raises_llm_call_error(self) -> None:
+        """テスト対象: CodexIngestionFeedbackLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from ingestion.domain.ingestion_feedback_types import (
@@ -190,6 +208,9 @@ class TestCodexIngestionFeedbackLlm:
 
 class TestCodexLlmTagClassifier:
     def test_returns_tags(self) -> None:
+        """テスト対象: CodexLlmTagClassifier の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.codex_llm_tag_classifier import (
             CodexLlmTagClassifier,
         )
@@ -203,6 +224,9 @@ class TestCodexLlmTagClassifier:
         assert result == ["TypeScript", "Generics"]
 
     def test_invalid_json_raises_response_format_error(self) -> None:
+        """テスト対象: CodexLlmTagClassifier の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from ingestion.application.tagger import TaggingResponseFormatError
@@ -217,6 +241,9 @@ class TestCodexLlmTagClassifier:
             classifier.classify("some text")
 
     def test_transport_failure_raises_llm_call_error(self) -> None:
+        """テスト対象: CodexLlmTagClassifier の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from ingestion.application.tagger import TaggingLlmCallError
@@ -242,6 +269,9 @@ class TestCodexLlmTagClassifier:
 
 class TestMultilingualE5Embedder:
     def test_returns_embeddings(self) -> None:
+        """テスト対象: MultilingualE5Embedder の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.multilingual_e5_embedder import (
             MultilingualE5Embedder,
         )
@@ -276,6 +306,9 @@ class TestMultilingualE5Embedder:
         mock_model.encode.assert_called_once_with(["text1", "text2"])
 
     def test_error_raises_embedding_model_call_error(self) -> None:
+        """テスト対象: MultilingualE5Embedder の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from ingestion.domain.embedder_types import EmbeddingModelCallError

@@ -211,6 +211,9 @@ def _assert_input_error(
 class TestSaveRoadmap:
     def test_tc_01_flattens_example_one_and_saves_all_fields(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_input(
             items=[
                 _major(
@@ -406,6 +409,9 @@ class TestSaveRoadmap:
 
     def test_tc_02_saves_empty_roadmap(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_input(
             topic="Rust",
             items=[],
@@ -433,6 +439,9 @@ class TestSaveRoadmap:
 
     def test_tc_03_saves_minimal_valid_three_record_tree(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_minimal_valid_input()
         id_generator = _SequenceIdGenerator(
             [_MIN_ROADMAP_ID, _MIN_MAJOR_ID, _MIN_MIDDLE_ID, _MIN_DETAIL_ID],
@@ -498,6 +507,9 @@ class TestSaveRoadmap:
 
     def test_tc_10_preserves_dfs_preorder_and_sibling_order(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_input(
             topic="Algorithms",
             items=[
@@ -586,6 +598,9 @@ class TestSaveRoadmap:
 
     def test_tc_11_preserves_whitespace_in_saved_topic_and_titles(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_minimal_valid_input(
             topic="  TypeScript 入門  ",
             major_title="  基礎  ",
@@ -635,6 +650,9 @@ class TestSaveRoadmap:
 
     def test_tc_12_accepts_major_with_empty_children(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_input(
             topic="Rust",
             created_at="2026-05-21T12:30:00+09:00",
@@ -686,6 +704,9 @@ class TestSaveRoadmap:
 
     def test_tc_13_accepts_middle_with_empty_children(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_input(
             topic="Rust",
             created_at="2026-05-21T12:45:00+09:00",
@@ -760,6 +781,9 @@ class TestSaveRoadmap:
     @pytest.mark.parametrize("topic", ["", "   "])
     def test_tc_20_rejects_blank_topic(self, topic: str) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_minimal_valid_input(topic=topic)
 
         # Act / Assert
@@ -787,6 +811,9 @@ class TestSaveRoadmap:
         value: str,
     ) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_minimal_valid_input(
             major_title=major_title,
             middle_title=middle_title,
@@ -818,6 +845,9 @@ class TestSaveRoadmap:
         expected_message: str,
     ) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_minimal_valid_input(created_at=created_at)
 
         # Act / Assert
@@ -829,6 +859,9 @@ class TestSaveRoadmap:
         root_level: Literal["middle", "detail"],
     ) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         invalid_root = RoadmapItemInput(
             title="不正なルート",
             description="root level mismatch",
@@ -885,6 +918,9 @@ class TestSaveRoadmap:
         expected_message: str,
     ) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_input(items=items)
 
         # Act / Assert
@@ -892,6 +928,9 @@ class TestSaveRoadmap:
 
     def test_tc_25_rejects_detail_with_non_empty_children(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_input(
             items=[
                 _major(
@@ -919,6 +958,9 @@ class TestSaveRoadmap:
 
     def test_tc_30_logs_success_and_calls_dependencies_expected_times(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_minimal_valid_input()
         id_generator = _SequenceIdGenerator(
             [_MIN_ROADMAP_ID, _MIN_MAJOR_ID, _MIN_MIDDLE_ID, _MIN_DETAIL_ID],
@@ -953,6 +995,9 @@ class TestSaveRoadmap:
 
     def test_tc_31_wraps_writer_errors_and_logs_failure(self) -> None:
         # Arrange
+        """テスト対象: SaveRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_input = _make_minimal_valid_input()
         original_error = RuntimeError("insert failed")
         id_generator = _SequenceIdGenerator(

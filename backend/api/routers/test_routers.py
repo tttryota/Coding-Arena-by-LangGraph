@@ -250,6 +250,9 @@ class _FakeFeedbackStore:
 
 class TestRoadmapListEndpoint:
     def test_returns_200_with_empty_list(self, client: TestClient) -> None:
+        """テスト対象: RoadmapListEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.get("/roadmaps")
 
         assert response.status_code == 200
@@ -257,6 +260,9 @@ class TestRoadmapListEndpoint:
 
 class TestTopicListEndpoint:
     def test_returns_200_with_empty_candidates(self, client: TestClient) -> None:
+        """テスト対象: TopicListEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.get("/roadmaps/topics")
 
         assert response.status_code == 200
@@ -267,6 +273,9 @@ class TestTopicListEndpoint:
         self,
         client: TestClient,
     ) -> None:
+        """テスト対象: TopicListEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.topic_listing_types import TopicCandidate
 
         candidates = [
@@ -298,6 +307,9 @@ class TestTopicListEndpoint:
 
 class TestTopicRegisterEndpoint:
     def test_returns_201_with_registered_topic(self, client: TestClient) -> None:
+        """テスト対象: TopicRegisterEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.topic_listing_types import TopicCandidate
 
         with patch(
@@ -319,6 +331,9 @@ class TestTopicRegisterEndpoint:
         assert data == {"name": "GraphRAG", "source": "manual", "note_count": 0}
 
     def test_returns_201_for_duplicate_topic(self, client: TestClient) -> None:
+        """テスト対象: TopicRegisterEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.topic_listing_types import TopicCandidate
 
         with patch(
@@ -339,6 +354,9 @@ class TestTopicRegisterEndpoint:
         assert response.json()["source"] == "preset"
 
     def test_returns_422_for_empty_name(self, client: TestClient) -> None:
+        """テスト対象: TopicRegisterEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.topic_listing_types import TopicListingEmptyTopicNameError
 
         with patch(
@@ -354,6 +372,9 @@ class TestTopicRegisterEndpoint:
         assert response.json()["detail"] == "Topic name must not be empty"
 
     def test_returns_422_for_whitespace_only(self, client: TestClient) -> None:
+        """テスト対象: TopicRegisterEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.topic_listing_types import TopicListingEmptyTopicNameError
 
         with patch(
@@ -368,6 +389,9 @@ class TestTopicRegisterEndpoint:
         assert response.status_code == 422
 
     def test_response_has_exactly_three_fields(self, client: TestClient) -> None:
+        """テスト対象: TopicRegisterEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.topic_listing_types import TopicCandidate
 
         with patch(
@@ -389,6 +413,9 @@ class TestTopicRegisterEndpoint:
 
 class TestRoadmapGetEndpoint:
     def test_returns_404_for_missing_roadmap(self, client: TestClient) -> None:
+        """テスト対象: RoadmapGetEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.get(f"/roadmaps/{uuid4()}")
 
         assert response.status_code == 404
@@ -396,6 +423,9 @@ class TestRoadmapGetEndpoint:
 
 class TestRoadmapGenerateEndpoint:
     def test_returns_202_with_job_id(self, client: TestClient) -> None:
+        """テスト対象: RoadmapGenerateEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.post(
             "/roadmaps/generate",
             json={"topic": "TypeScript"},
@@ -407,6 +437,9 @@ class TestRoadmapGenerateEndpoint:
         assert data["status"] == "queued"
 
     def test_returns_422_for_empty_topic(self, client: TestClient) -> None:
+        """テスト対象: RoadmapGenerateEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.post(
             "/roadmaps/generate",
             json={"topic": ""},
@@ -417,6 +450,9 @@ class TestRoadmapGenerateEndpoint:
 
 class TestRoadmapJobStatusEndpoint:
     def test_returns_404_for_unknown_job(self, client: TestClient) -> None:
+        """テスト対象: RoadmapJobStatusEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.get(f"/roadmaps/generate/{uuid4()}")
 
         assert response.status_code == 404
@@ -424,6 +460,9 @@ class TestRoadmapJobStatusEndpoint:
 
 class TestRoadmapItemMoveEndpoint:
     def test_returns_404_for_missing_roadmap(self, client: TestClient) -> None:
+        """テスト対象: RoadmapItemMoveEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.roadmap_item_crud_types import RoadmapItemCrudNotFoundError
 
         with patch(
@@ -439,6 +478,9 @@ class TestRoadmapItemMoveEndpoint:
         assert response.status_code == 404
 
     def test_returns_422_for_invalid_move(self, client: TestClient) -> None:
+        """テスト対象: RoadmapItemMoveEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.roadmap_item_crud_types import RoadmapItemCrudInputError
 
         with patch(
@@ -454,6 +496,9 @@ class TestRoadmapItemMoveEndpoint:
         assert response.status_code == 422
 
     def test_returns_moved_item_on_success(self, client: TestClient) -> None:
+        """テスト対象: RoadmapItemMoveEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.roadmap_item_crud_types import (
             RoadmapItemMoveInput,
             RoadmapItemMoveResult,
@@ -515,6 +560,9 @@ class TestRoadmapItemMoveEndpoint:
 
 class TestRoadmapItemDeleteEndpoint:
     def test_returns_404_for_missing_roadmap(self, client: TestClient) -> None:
+        """テスト対象: RoadmapItemDeleteEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.delete(
             f"/roadmaps/{uuid4()}/items/{uuid4()}",
         )
@@ -532,6 +580,9 @@ class TestQuizSessionInputEndpoint:
         self,
         client_no_graph_runner: TestClient,
     ) -> None:
+        """テスト対象: QuizSessionInputEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client_no_graph_runner.post(
             "/sessions/some-session/input",
             json={"user_input": "test", "input_source": "form"},
@@ -540,6 +591,9 @@ class TestQuizSessionInputEndpoint:
         assert response.status_code == 503
 
     def test_returns_422_for_lifecycle_error(self, client: TestClient) -> None:
+        """テスト対象: QuizSessionInputEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.session_lifecycle_types import (
             QuizSessionLifecycleError,
         )
@@ -560,6 +614,9 @@ class TestQuizSessionInputEndpoint:
         assert response.status_code == 422
 
     def test_returns_422_for_value_error(self, client: TestClient) -> None:
+        """テスト対象: QuizSessionInputEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         with patch(
             "quiz.application.session_lifecycle.resume_session",
             side_effect=ValueError("bad value"),
@@ -573,6 +630,9 @@ class TestQuizSessionInputEndpoint:
         assert response.status_code == 422
 
     def test_returns_session_state_on_success(self, client: TestClient) -> None:
+        """テスト対象: QuizSessionInputEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.session_lifecycle_types import ResumeSessionInput
 
         expected_state = {
@@ -607,6 +667,9 @@ class TestQuizSessionInputEndpoint:
 
 class TestQuizSessionGetEndpoint:
     def test_returns_404_for_missing_session(self, client: TestClient) -> None:
+        """テスト対象: QuizSessionGetEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.get("/sessions/nonexistent")
 
         assert response.status_code == 404
@@ -614,6 +677,9 @@ class TestQuizSessionGetEndpoint:
     def test_returns_session_with_graph_state_when_available(
         self, client: TestClient,
     ) -> None:
+        """テスト対象: QuizSessionGetEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         app = client.app
@@ -636,6 +702,9 @@ class TestQuizSessionGetEndpoint:
     def test_returns_session_without_graph_state_on_lookup_error(
         self, client: TestClient,
     ) -> None:
+        """テスト対象: QuizSessionGetEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         app = client.app
@@ -657,6 +726,9 @@ class TestQuizSessionGetEndpoint:
     def test_returns_session_without_graph_state_when_graph_runner_is_none(
         self, client: TestClient,
     ) -> None:
+        """テスト対象: QuizSessionGetEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         app = client.app
@@ -686,6 +758,9 @@ class TestIngestionTriggerEndpoint:
         self,
         client_no_embedder: TestClient,
     ) -> None:
+        """テスト対象: IngestionTriggerEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client_no_embedder.post(
             "/ingestion/trigger",
             json={"target_path": "/some/path", "trigger": "startup"},
@@ -694,6 +769,9 @@ class TestIngestionTriggerEndpoint:
         assert response.status_code == 503
 
     def test_returns_422_for_config_error(self, client: TestClient) -> None:
+        """テスト対象: IngestionTriggerEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.domain.batch_scheduler_types import BatchSchedulerConfigError
 
         with patch(
@@ -709,6 +787,9 @@ class TestIngestionTriggerEndpoint:
         assert response.status_code == 422
 
     def test_returns_422_for_invalid_trigger(self, client: TestClient) -> None:
+        """テスト対象: IngestionTriggerEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         with patch(
             "ingestion.application.batch_executor.run_once",
         ) as mock_run_once:
@@ -721,6 +802,9 @@ class TestIngestionTriggerEndpoint:
         assert response.status_code == 422
 
     def test_returns_202_with_summary_on_success(self, client: TestClient) -> None:
+        """テスト対象: IngestionTriggerEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.domain.batch_scheduler_types import BatchRunSummary
 
         summary = BatchRunSummary(
@@ -769,6 +853,9 @@ class TestIngestionTriggerEndpoint:
 
 class TestFeedbackListEndpoint:
     def test_returns_200_with_empty_list(self, client: TestClient) -> None:
+        """テスト対象: FeedbackListEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.get("/ingestion/feedbacks")
 
         assert response.status_code == 200
@@ -779,6 +866,9 @@ class TestFeedbackListEndpoint:
 
 class TestFeedbackMarkReadEndpoint:
     def test_returns_404_for_missing_feedback(self, client: TestClient) -> None:
+        """テスト対象: FeedbackMarkReadEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.put(
             f"/ingestion/feedbacks/{uuid4()}/read",
         )

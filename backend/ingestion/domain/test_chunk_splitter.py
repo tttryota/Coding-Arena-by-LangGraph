@@ -63,6 +63,9 @@ def _normalize_results(results: list[ChunkSplitResult]) -> list[dict[str, object
 
 class TestChunkSplitterPhase1:
     def test_splitter_tc_01_returns_single_h1_chunk(self) -> None:
+        """テスト対象: ChunkSplitterPhase1 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = "# Docker\n\n概要"
         token_counter = _MappingTokenCounter({markdown_text: 12})
 
@@ -78,6 +81,9 @@ class TestChunkSplitterPhase1:
         assert token_counter.calls == [markdown_text]
 
     def test_splitter_tc_02_returns_whole_body_when_h1_h2_are_absent(self) -> None:
+        """テスト対象: ChunkSplitterPhase1 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = "本文のみ\n\n[[リンク先]]"
         token_counter = _MappingTokenCounter({markdown_text: 18})
 
@@ -93,6 +99,9 @@ class TestChunkSplitterPhase1:
         assert token_counter.calls == [markdown_text]
 
     def test_splitter_tc_03_returns_empty_list_for_empty_file(self) -> None:
+        """テスト対象: ChunkSplitterPhase1 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         token_counter = _UnusedTokenCounter()
 
         actual = _normalize_results(split("", token_counter))
@@ -103,6 +112,9 @@ class TestChunkSplitterPhase1:
 
 class TestChunkSplitterPhase2:
     def test_splitter_tc_10_excludes_frontmatter_and_splits_by_h1_h2(self) -> None:
+        """テスト対象: ChunkSplitterPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = (
             "---\n"
             "title: TS Notes\n"
@@ -142,6 +154,9 @@ class TestChunkSplitterPhase2:
         assert token_counter.calls == [first_chunk, second_chunk]
 
     def test_splitter_tc_11_secondary_split_preserves_order_and_heading(self) -> None:
+        """テスト対象: ChunkSplitterPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = "# Docker\n\n段落A\n\n段落B\n\n段落C"
         first_chunk = "# Docker\n\n段落A\n\n段落B"
         second_chunk = "# Docker\n\n段落C"
@@ -173,6 +188,9 @@ class TestChunkSplitterPhase2:
         assert second_chunk in token_counter.calls[1:]
 
     def test_splitter_tc_12_keeps_code_block_and_body_horizontal_rule(self) -> None:
+        """テスト対象: ChunkSplitterPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = (
             "# Python\n\n"
             "```python\n"
@@ -219,6 +237,9 @@ class TestChunkSplitterPhase2:
         assert second_chunk in token_counter.calls[1:]
 
     def test_splitter_tc_13_uses_h2_alone_as_heading_path(self) -> None:
+        """テスト対象: ChunkSplitterPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = "## Utility Types\nPick と Omit"
         token_counter = _MappingTokenCounter({markdown_text: 65})
 
@@ -236,6 +257,9 @@ class TestChunkSplitterPhase2:
     def test_splitter_tc_14_keeps_heading_with_following_code_block_during_resplit(
         self,
     ) -> None:
+        """テスト対象: ChunkSplitterPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = '# Python\n\n```python\nprint("a")\n```\n\n説明段落'
         first_chunk = '# Python\n\n```python\nprint("a")\n```'
         second_chunk = "# Python\n\n説明段落"
@@ -266,6 +290,9 @@ class TestChunkSplitterPhase2:
         assert second_chunk in token_counter.calls[1:]
 
     def test_splitter_tc_15_keeps_obsidian_links_unchanged(self) -> None:
+        """テスト対象: ChunkSplitterPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = "# References\n\n[[リンク先]] と [[別ノート|表示名]] を見る"
         token_counter = _MappingTokenCounter({markdown_text: 55})
 
@@ -283,6 +310,9 @@ class TestChunkSplitterPhase2:
 
 class TestChunkSplitterPhase3:
     def test_splitter_tc_20_returns_empty_list_for_whitespace_only_file(self) -> None:
+        """テスト対象: ChunkSplitterPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         token_counter = _UnusedTokenCounter()
 
         actual = _normalize_results(split(" \n\t\n", token_counter))
@@ -293,6 +323,9 @@ class TestChunkSplitterPhase3:
     def test_splitter_tc_21_returns_empty_list_when_only_frontmatter_exists(
         self,
     ) -> None:
+        """テスト対象: ChunkSplitterPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         token_counter = _UnusedTokenCounter()
 
         actual = _normalize_results(
@@ -303,6 +336,9 @@ class TestChunkSplitterPhase3:
         assert token_counter.calls == []
 
     def test_splitter_tc_22_returns_single_chunk_for_h3_and_deeper_only(self) -> None:
+        """テスト対象: ChunkSplitterPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = "### Generics\nT extends U\n\n#### Constraint\nextends を使う"
         token_counter = _MappingTokenCounter({markdown_text: 90})
 
@@ -318,6 +354,9 @@ class TestChunkSplitterPhase3:
         assert token_counter.calls == [markdown_text]
 
     def test_splitter_tc_23_keeps_unclosed_frontmatter_as_body(self) -> None:
+        """テスト対象: ChunkSplitterPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = "---\ntitle: draft\n本文"
         token_counter = _MappingTokenCounter({markdown_text: 30})
 
@@ -335,6 +374,9 @@ class TestChunkSplitterPhase3:
     def test_splitter_tc_24_returns_unsplittable_large_single_paragraph_as_is(
         self,
     ) -> None:
+        """テスト対象: ChunkSplitterPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = "# Docker\n\n段落A 段落B 段落C"
         token_counter = _MappingTokenCounter({markdown_text: 620})
 
@@ -352,6 +394,9 @@ class TestChunkSplitterPhase3:
     def test_splitter_tc_25_treats_unclosed_fence_as_code_block_until_eof(
         self,
     ) -> None:
+        """テスト対象: ChunkSplitterPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         markdown_text = '# Before\n\n```python\n## これは見出しではない\nprint("x")'
         token_counter = _MappingTokenCounter({markdown_text: 160})
 
@@ -369,6 +414,9 @@ class TestChunkSplitterPhase3:
 
 class TestChunkSplitterPhase4:
     def test_splitter_tc_30_raises_input_error_for_non_string_markdown(self) -> None:
+        """テスト対象: ChunkSplitterPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         token_counter = _MappingTokenCounter({"# Docker\n\n概要": 12})
 
         with pytest.raises(ChunkSplitInputError):
@@ -389,10 +437,16 @@ class TestChunkSplitterPhase4:
         self,
         token_counter: object,
     ) -> None:
+        """テスト対象: ChunkSplitterPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         with pytest.raises(ChunkSplitInputError):
             split("# Docker\n\n概要", token_counter)  # type: ignore[arg-type]
 
     def test_splitter_tc_32_raises_token_count_error_when_counter_raises(self) -> None:
+        """テスト対象: ChunkSplitterPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         def count(_: str) -> int:
             msg = "counter failed"
             raise RuntimeError(msg)
@@ -404,6 +458,9 @@ class TestChunkSplitterPhase4:
         assert token_counter.calls == ["# Docker\n\n概要"]
 
     def test_splitter_tc_33_raises_token_count_error_for_negative_count(self) -> None:
+        """テスト対象: ChunkSplitterPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         token_counter = _MappingTokenCounter({"# Docker\n\n概要": -1})
 
         with pytest.raises(TokenCountError):
@@ -413,6 +470,9 @@ class TestChunkSplitterPhase4:
     def test_splitter_tc_34_raises_token_count_error_for_non_integer_count(
         self,
     ) -> None:
+        """テスト対象: ChunkSplitterPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         token_counter = _CallbackTokenCounter(lambda _: "12")
 
         with pytest.raises(TokenCountError):

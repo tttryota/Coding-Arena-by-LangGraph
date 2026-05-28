@@ -54,6 +54,9 @@ def _make_container() -> object:
 
 class TestCreateApp:
     def test_returns_fastapi_instance(self) -> None:
+        """テスト対象: create_app 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from fastapi import FastAPI
 
         from api.app import create_app
@@ -64,6 +67,9 @@ class TestCreateApp:
         assert app.title == "Obsidian RAG Quiz"
 
     def test_app_has_docs_enabled(self) -> None:
+        """テスト対象: create_app 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from api.app import create_app
 
         app = create_app()
@@ -74,6 +80,9 @@ class TestCreateApp:
 
 class TestContainerQuizStores:
     def test_creates_quiz_session_store_with_engine(self) -> None:
+        """テスト対象: クイズ用コンテナ構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
         engine = _setup_db()
@@ -84,6 +93,9 @@ class TestContainerQuizStores:
         assert store._engine is engine
 
     def test_creates_quiz_answer_store_with_engine(self) -> None:
+        """テスト対象: クイズ用コンテナ構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_answer_store import SqlQuizAnswerStore
 
         engine = _setup_db()
@@ -93,6 +105,9 @@ class TestContainerQuizStores:
         assert container.quiz_answer_store._engine is engine
 
     def test_creates_progress_update_store(self) -> None:
+        """テスト対象: クイズ用コンテナ構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_progress_update_store import (
             SqlProgressUpdateStore,
         )
@@ -104,6 +119,9 @@ class TestContainerQuizStores:
         assert container.progress_update_store._engine is engine
 
     def test_creates_summary_test_result_store(self) -> None:
+        """テスト対象: クイズ用コンテナ構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_summary_test_result_store import (
             SqlSummaryTestResultStore,
         )
@@ -117,6 +135,9 @@ class TestContainerQuizStores:
 
 class TestContainerRoadmapStores:
     def test_creates_roadmap_stores_with_engine(self) -> None:
+        """テスト対象: ロードマップ用コンテナ構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_roadmap_item_crud_store import (
             SqlRoadmapItemCrudStore,
         )
@@ -140,6 +161,9 @@ class TestContainerRoadmapStores:
         assert isinstance(container.roadmap_item_crud_store, SqlRoadmapItemCrudStore)
 
     def test_creates_job_status_store(self) -> None:
+        """テスト対象: ロードマップ用コンテナ構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.in_memory_job_status_store import (
             InMemoryJobStatusStore,
         )
@@ -149,6 +173,9 @@ class TestContainerRoadmapStores:
         assert isinstance(container.job_status_store, InMemoryJobStatusStore)
 
     def test_creates_topic_store(self) -> None:
+        """テスト対象: ロードマップ用コンテナ構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_topic_store import SqlTopicStore
 
         container = _make_container()
@@ -158,6 +185,9 @@ class TestContainerRoadmapStores:
 
 class TestContainerIngestionStores:
     def test_creates_ingestion_feedback_store(self) -> None:
+        """テスト対象: 取り込み用コンテナ構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_ingestion_feedback_store import (
             SqlIngestionFeedbackStore,
         )
@@ -169,6 +199,9 @@ class TestContainerIngestionStores:
         )
 
     def test_creates_diff_snapshot_store(self) -> None:
+        """テスト対象: 取り込み用コンテナ構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_file_diff_snapshot_store import (
             SqlFileDiffSnapshotStore,
         )
@@ -180,6 +213,9 @@ class TestContainerIngestionStores:
 
 class TestContainerLlmClients:
     def test_creates_llm_clients_with_shared_transport(self) -> None:
+        """テスト対象: LLM クライアント構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import (
             CodexAnswerEvaluationLlm,
             CodexQuestionSetDesignLlm,
@@ -195,6 +231,9 @@ class TestContainerLlmClients:
         )
 
     def test_creates_roadmap_generation_llm(self) -> None:
+        """テスト対象: LLM クライアント構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.codex_roadmap_generation_llm import (
             CodexRoadmapGenerationLlm,
         )
@@ -213,6 +252,9 @@ class _FakeEmbedder:
 
 class TestContainerChroma:
     def test_creates_chroma_based_instances_with_collection(self) -> None:
+        """テスト対象: Chroma 依存構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.chroma_chunk_store import ChromaChunkStore
         from quiz.infrastructure.chroma_explanation_rag import (
             ChromaExplanationRagClient,
@@ -233,6 +275,9 @@ class TestContainerChroma:
         assert container.note_topic_reader._collection is chroma
 
     def test_rag_client_is_none_without_embedder(self) -> None:
+        """テスト対象: Chroma 依存構築処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         container = _make_container()
 
         assert container.explanation_rag_client is None
@@ -240,6 +285,9 @@ class TestContainerChroma:
 
 class TestContainerLifecycle:
     def test_uuid_generator_produces_uuids(self) -> None:
+        """テスト対象: コンテナのライフサイクル処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from uuid import UUID
 
         container = _make_container()
@@ -247,6 +295,9 @@ class TestContainerLifecycle:
         assert isinstance(container.uuid_generator.generate(), UUID)
 
     def test_shutdown_stops_executor(self) -> None:
+        """テスト対象: コンテナのライフサイクル処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         container = _make_container()
 
         container.shutdown()
@@ -255,12 +306,18 @@ class TestContainerLifecycle:
             container.executor.submit(lambda: None)
 
     def test_executor_is_thread_pool(self) -> None:
+        """テスト対象: コンテナのライフサイクル処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         container = _make_container()
 
         assert isinstance(container.executor, ThreadPoolExecutor)
         container.shutdown()
 
     def test_job_scheduler_shares_container_executor(self) -> None:
+        """テスト対象: コンテナのライフサイクル処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.thread_pool_scheduler import (
             ThreadPoolJobScheduler,
         )

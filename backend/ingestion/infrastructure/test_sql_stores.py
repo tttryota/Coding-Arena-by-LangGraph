@@ -71,6 +71,9 @@ class TestSqlIngestionFeedbackStoreCreate:
     def test_create_persists_and_returns_record(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlIngestionFeedbackStoreCreate の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.domain.ingestion_feedback_types import (
             NewIngestionFeedbackRecord,
         )
@@ -99,6 +102,9 @@ class TestSqlIngestionFeedbackStoreCreate:
     def test_create_with_roadmap_item_id(
         self, engine: Engine, db_session: Session, roadmap_item_row: object,
     ) -> None:
+        """テスト対象: SqlIngestionFeedbackStoreCreate の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.domain.ingestion_feedback_types import (
             NewIngestionFeedbackRecord,
         )
@@ -143,6 +149,9 @@ class TestSqlIngestionFeedbackStoreListing:
             ))
 
     def test_find_feedbacks_all(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlIngestionFeedbackStoreListing の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_ingestion_feedback_store import (
             SqlIngestionFeedbackStore,
         )
@@ -154,6 +163,9 @@ class TestSqlIngestionFeedbackStoreListing:
         assert len(results) == 3
 
     def test_find_feedbacks_unread_only(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlIngestionFeedbackStoreListing の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_ingestion_feedback_store import (
             SqlIngestionFeedbackStore,
         )
@@ -166,6 +178,9 @@ class TestSqlIngestionFeedbackStoreListing:
         assert all(not r.is_read for r in results)
 
     def test_find_feedbacks_with_date_range(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlIngestionFeedbackStoreListing の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_ingestion_feedback_store import (
             SqlIngestionFeedbackStore,
         )
@@ -183,6 +198,9 @@ class TestSqlIngestionFeedbackStoreListing:
 
 class TestSqlIngestionFeedbackStoreReadWriter:
     def test_get_by_id_returns_record(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlIngestionFeedbackStoreReadWriter の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.domain.ingestion_feedback_types import (
             NewIngestionFeedbackRecord,
         )
@@ -201,6 +219,9 @@ class TestSqlIngestionFeedbackStoreReadWriter:
         assert result.title == "T"
 
     def test_get_by_id_returns_none_for_missing(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlIngestionFeedbackStoreReadWriter の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_ingestion_feedback_store import (
             SqlIngestionFeedbackStore,
         )
@@ -211,6 +232,9 @@ class TestSqlIngestionFeedbackStoreReadWriter:
         assert result is None
 
     def test_update_read_status(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlIngestionFeedbackStoreReadWriter の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.domain.ingestion_feedback_types import (
             NewIngestionFeedbackRecord,
         )
@@ -237,6 +261,9 @@ class TestSqlIngestionFeedbackStoreReadWriter:
 
 class TestSqlFileDiffSnapshotStore:
     def test_load_returns_none_when_no_snapshot(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlFileDiffSnapshotStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_file_diff_snapshot_store import (
             SqlFileDiffSnapshotStore,
         )
@@ -247,6 +274,9 @@ class TestSqlFileDiffSnapshotStore:
         assert result is None
 
     def test_replace_and_load_roundtrip(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlFileDiffSnapshotStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_file_diff_snapshot_store import (
             SqlFileDiffSnapshotStore,
         )
@@ -260,6 +290,9 @@ class TestSqlFileDiffSnapshotStore:
         assert result == files
 
     def test_replace_overwrites_existing(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlFileDiffSnapshotStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_file_diff_snapshot_store import (
             SqlFileDiffSnapshotStore,
         )
@@ -273,6 +306,9 @@ class TestSqlFileDiffSnapshotStore:
         assert result == {"new.md": 222}
 
     def test_different_keys_are_independent(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: SqlFileDiffSnapshotStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from ingestion.infrastructure.sql_file_diff_snapshot_store import (
             SqlFileDiffSnapshotStore,
         )

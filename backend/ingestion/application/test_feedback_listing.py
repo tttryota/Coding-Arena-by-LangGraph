@@ -258,6 +258,32 @@ def _make_result(*items: FeedbackListItem) -> FeedbackListingResult:
     return FeedbackListingResult(items=list(items), total_count=len(items))
 
 
+def _query(
+    *,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    read_status: Literal["all", "unread", "read"] = "all",
+) -> FeedbackListingQuery:
+    return FeedbackListingQuery(
+        date_from=date_from,
+        date_to=date_to,
+        read_status=read_status,
+    )
+
+
+def _reader_call(
+    *,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    read_status: Literal["all", "unread", "read"] = "all",
+) -> dict[str, str | None]:
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "read_status": read_status,
+    }
+
+
 def _raise_on_current_time_lookup(*args: object, **kwargs: object) -> object:
     message = "mark_feedback_as_read must use the injected now value"
     raise AssertionError(message)
@@ -405,6 +431,9 @@ def _forbid_internal_current_time_lookup(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_tc_01_lists_all_feedbacks_sorted_and_logs_success() -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     older_item = _make_item(
         feedback_id=_SECOND_ID,
         source_path="study/docker/compose.md",
@@ -424,19 +453,13 @@ def test_tc_01_lists_all_feedbacks_sorted_and_logs_success() -> None:
         read_at=None,
     )
     reader = _RecordingReader(items=[older_item, newer_item])
-    query = FeedbackListingQuery(date_from=None, date_to=None, read_status="all")
+    query = _query()
 
     with capture_logs() as log_output:
         result = list_feedbacks(query, reader=reader)
 
     assert result == _make_result(newer_item, older_item)
-    assert reader.calls == [
-        {
-            "date_from": None,
-            "date_to": None,
-            "read_status": "all",
-        },
-    ]
+    assert reader.calls == [_reader_call()]
     _assert_single_log_event_includes(
         log_output,
         "feedback_listing_queried",
@@ -450,6 +473,9 @@ def test_tc_01_lists_all_feedbacks_sorted_and_logs_success() -> None:
 
 
 def test_tc_02_lists_unread_feedbacks_and_logs_success() -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     unread_item = _make_item(
         feedback_id=_FIRST_ID,
         source_path="study/typescript/generics.md",
@@ -460,19 +486,13 @@ def test_tc_02_lists_unread_feedbacks_and_logs_success() -> None:
         read_at=None,
     )
     reader = _RecordingReader(items=[unread_item])
-    query = FeedbackListingQuery(date_from=None, date_to=None, read_status="unread")
+    query = _query(read_status="unread")
 
     with capture_logs() as log_output:
         result = list_feedbacks(query, reader=reader)
 
     assert result == _make_result(unread_item)
-    assert reader.calls == [
-        {
-            "date_from": None,
-            "date_to": None,
-            "read_status": "unread",
-        },
-    ]
+    assert reader.calls == [_reader_call(read_status="unread")]
     _assert_single_log_event_includes(
         log_output,
         "feedback_listing_queried",
@@ -488,6 +508,9 @@ def test_tc_02_lists_unread_feedbacks_and_logs_success() -> None:
 def test_tc_03_marks_unread_feedback_as_read_and_logs_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """テスト対象: mark_feedback_as_read 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     feedback_id = _FIRST_ID
     now = "2026-05-21T00:00:00Z"
     unread_item = _make_item(
@@ -533,6 +556,9 @@ def test_tc_03_marks_unread_feedback_as_read_and_logs_success(
 
 
 def test_tc_10_delegates_read_status_read_to_reader() -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     read_item = _make_item(
         feedback_id=_SECOND_ID,
         source_path="study/docker/compose.md",
@@ -543,21 +569,18 @@ def test_tc_10_delegates_read_status_read_to_reader() -> None:
         read_at="2026-05-19T12:00:00+09:00",
     )
     reader = _RecordingReader(items=[read_item])
-    query = FeedbackListingQuery(date_from=None, date_to=None, read_status="read")
+    query = _query(read_status="read")
 
     result = list_feedbacks(query, reader=reader)
 
     assert result == _make_result(read_item)
-    assert reader.calls == [
-        {
-            "date_from": None,
-            "date_to": None,
-            "read_status": "read",
-        },
-    ]
+    assert reader.calls == [_reader_call(read_status="read")]
 
 
 def test_tc_11_validates_date_range_by_instant_and_sorts_descending() -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     lexicographically_later_item = _make_item(
         feedback_id=_SECOND_ID,
         source_path="study/python/datetime.md",
@@ -577,7 +600,7 @@ def test_tc_11_validates_date_range_by_instant_and_sorts_descending() -> None:
         read_at=None,
     )
     reader = _RecordingReader(items=[lexicographically_later_item, instant_later_item])
-    query = FeedbackListingQuery(
+    query = _query(
         date_from="2026-05-19T15:00:00Z",
         date_to="2026-05-20T14:59:59.500000Z",
         read_status="all",
@@ -591,15 +614,17 @@ def test_tc_11_validates_date_range_by_instant_and_sorts_descending() -> None:
         lexicographically_later_item.id,
     ]
     assert reader.calls == [
-        {
-            "date_from": "2026-05-19T15:00:00Z",
-            "date_to": "2026-05-20T14:59:59.500000Z",
-            "read_status": "all",
-        },
+        _reader_call(
+            date_from="2026-05-19T15:00:00Z",
+            date_to="2026-05-20T14:59:59.500000Z",
+        ),
     ]
 
 
 def test_tc_12_tie_breaks_same_instant_by_id() -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     later_by_id = _make_item(
         feedback_id=_SECOND_ID,
         source_path="study/docker/compose.md",
@@ -619,7 +644,7 @@ def test_tc_12_tie_breaks_same_instant_by_id() -> None:
         read_at=None,
     )
     reader = _RecordingReader(items=[later_by_id, earlier_by_id])
-    query = FeedbackListingQuery(date_from=None, date_to=None, read_status="all")
+    query = _query()
 
     result = list_feedbacks(query, reader=reader)
 
@@ -627,6 +652,9 @@ def test_tc_12_tie_breaks_same_instant_by_id() -> None:
 
 
 def test_tc_13_delegates_one_sided_boundaries_and_skips_post_filtering() -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     case_a_items = [
         _make_item(
             feedback_id=_THIRD_ID,
@@ -657,7 +685,7 @@ def test_tc_13_delegates_one_sided_boundaries_and_skips_post_filtering() -> None
         ),
     ]
     case_a_reader = _RecordingReader(items=case_a_items)
-    case_a_query = FeedbackListingQuery(
+    case_a_query = _query(
         date_from="2026-05-20T00:00:00Z",
         date_to=None,
         read_status="all",
@@ -671,11 +699,7 @@ def test_tc_13_delegates_one_sided_boundaries_and_skips_post_filtering() -> None
         case_a_items[1],
     )
     assert case_a_reader.calls == [
-        {
-            "date_from": "2026-05-20T00:00:00Z",
-            "date_to": None,
-            "read_status": "all",
-        },
+        _reader_call(date_from="2026-05-20T00:00:00Z"),
     ]
 
     case_b_items = [
@@ -699,7 +723,7 @@ def test_tc_13_delegates_one_sided_boundaries_and_skips_post_filtering() -> None
         ),
     ]
     case_b_reader = _RecordingReader(items=case_b_items)
-    case_b_query = FeedbackListingQuery(
+    case_b_query = _query(
         date_from=None,
         date_to="2026-05-20T23:59:59+09:00",
         read_status="read",
@@ -709,16 +733,18 @@ def test_tc_13_delegates_one_sided_boundaries_and_skips_post_filtering() -> None
 
     assert case_b_result == _make_result(case_b_items[0], case_b_items[1])
     assert case_b_reader.calls == [
-        {
-            "date_from": None,
-            "date_to": "2026-05-20T23:59:59+09:00",
-            "read_status": "read",
-        },
+        _reader_call(
+            date_to="2026-05-20T23:59:59+09:00",
+            read_status="read",
+        ),
     ]
     assert case_b_result.items[0].is_read is False
 
 
 def test_tc_14_mark_feedback_as_read_is_idempotent_for_already_read_item() -> None:
+    """テスト対象: mark_feedback_as_read 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     feedback_id = _SECOND_ID
     existing_item = _make_item(
         feedback_id=feedback_id,
@@ -762,8 +788,11 @@ def test_tc_15_accepts_fractional_seconds_for_listing_filters(
     date_from: str | None,
     date_to: str | None,
 ) -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(items=[])
-    query = FeedbackListingQuery(
+    query = _query(
         date_from=date_from,
         date_to=date_to,
         read_status="all",
@@ -772,16 +801,13 @@ def test_tc_15_accepts_fractional_seconds_for_listing_filters(
     result = list_feedbacks(query, reader=reader)
 
     assert result == FeedbackListingResult(items=[], total_count=0)
-    assert reader.calls == [
-        {
-            "date_from": date_from,
-            "date_to": date_to,
-            "read_status": "all",
-        },
-    ]
+    assert reader.calls == [_reader_call(date_from=date_from, date_to=date_to)]
 
 
 def test_tc_15_accepts_fractional_seconds_for_mark_feedback_as_read() -> None:
+    """テスト対象: mark_feedback_as_read 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     feedback_id = _FIRST_ID
     now = "2026-05-21T09:00:00.12345+09:00"
     unread_item = _make_item(
@@ -817,6 +843,9 @@ def test_tc_15_accepts_fractional_seconds_for_mark_feedback_as_read() -> None:
 
 
 def test_tc_20_returns_empty_result_and_logs_success() -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(items=[])
     query = FeedbackListingQuery(
         date_from="2026-05-22T00:00:00+09:00",
@@ -888,6 +917,9 @@ def test_tc_21_rejects_invalid_listing_input_before_reader_call(
     query: FeedbackListingQuery,
     expected_call_count: int,
 ) -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(items=[])
 
     with capture_logs() as log_output, pytest.raises(FeedbackListingInputError):
@@ -906,6 +938,9 @@ def test_tc_21_rejects_invalid_listing_input_before_reader_call(
     ],
 )
 def test_tc_22_rejects_invalid_now_before_writer_call(now: str) -> None:
+    """テスト対象: mark_feedback_as_read 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     writer = _RecordingWriter(
         current_item=_make_item(
             feedback_id=_FIRST_ID,
@@ -931,6 +966,9 @@ def test_tc_22_rejects_invalid_now_before_writer_call(now: str) -> None:
 def test_tc_23_raises_store_error_for_invalid_reader_created_at_and_logs_failure() -> (
     None
 ):
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     invalid_item = _make_item(
         feedback_id=_FIRST_ID,
         source_path="study/typescript/generics.md",
@@ -967,6 +1005,9 @@ def test_tc_23_raises_store_error_for_invalid_reader_created_at_and_logs_failure
 
 
 def test_tc_24_raises_store_error_for_invalid_writer_get_by_id_created_at() -> None:
+    """テスト対象: mark_feedback_as_read 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     writer = _RecordingWriter(
         current_item=_make_item(
             feedback_id=_FIRST_ID,
@@ -999,6 +1040,9 @@ def test_tc_24_raises_store_error_for_invalid_writer_get_by_id_created_at() -> N
 
 
 def test_tc_25_raises_store_error_for_invalid_writer_update_created_at() -> None:
+    """テスト対象: mark_feedback_as_read 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     unread_item = _make_item(
         feedback_id=_FIRST_ID,
         source_path="study/typescript/generics.md",
@@ -1047,6 +1091,9 @@ def test_tc_25_raises_store_error_for_invalid_writer_update_created_at() -> None
 
 
 def test_tc_30_works_with_protocol_only_stubs() -> None:
+    """テスト対象: list_feedbacks 関数と mark_feedback_as_read 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     listed_item = _make_item(
         feedback_id=_FIRST_ID,
         source_path="study/typescript/generics.md",
@@ -1118,6 +1165,9 @@ def test_tc_30_works_with_protocol_only_stubs() -> None:
 
 
 def test_tc_31_raises_not_found_and_logs_failure_when_feedback_is_missing() -> None:
+    """テスト対象: mark_feedback_as_read 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     writer = _RecordingWriter(current_item=None)
 
     with capture_logs() as log_output, pytest.raises(FeedbackListingNotFoundError):
@@ -1139,6 +1189,9 @@ def test_tc_31_raises_not_found_and_logs_failure_when_feedback_is_missing() -> N
 
 
 def test_tc_32_wraps_reader_failures_and_logs_failure() -> None:
+    """テスト対象: list_feedbacks 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(error=TimeoutError("reader timeout"))
     query = FeedbackListingQuery(date_from=None, date_to=None, read_status="all")
 
@@ -1196,6 +1249,9 @@ def test_tc_33_wraps_writer_failures_and_logs_failure(
     expected_get_calls: list[UUID],
     expected_update_calls: list[dict[str, object]],
 ) -> None:
+    """テスト対象: mark_feedback_as_read 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     with capture_logs() as log_output, pytest.raises(FeedbackListingStoreError):
         mark_feedback_as_read(
             _FIRST_ID,

@@ -80,6 +80,9 @@ class TestSqlRoadmapPersistenceWriter:
     def test_save_items_persists_roadmap_and_items(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlRoadmapPersistenceWriter の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import Roadmap, RoadmapItem
         from roadmap.infrastructure.sql_roadmap_persistence_writer import (
             SqlRoadmapPersistenceWriter,
@@ -111,6 +114,9 @@ class TestSqlRoadmapPersistenceWriter:
     def test_save_items_with_multiple_items(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlRoadmapPersistenceWriter の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import RoadmapItem
         from roadmap.domain.roadmap_persistence_types import FlatRoadmapItem
         from roadmap.infrastructure.sql_roadmap_persistence_writer import (
@@ -150,6 +156,9 @@ class TestSqlRoadmapRetrievalReader:
     def test_find_roadmap_returns_record(
         self, engine: Engine, db_session: Session, roadmap_with_items: object,
     ) -> None:
+        """テスト対象: SqlRoadmapRetrievalReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_roadmap_retrieval_reader import (
             SqlRoadmapRetrievalReader,
         )
@@ -164,6 +173,9 @@ class TestSqlRoadmapRetrievalReader:
     def test_find_roadmap_returns_none_for_missing(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlRoadmapRetrievalReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_roadmap_retrieval_reader import (
             SqlRoadmapRetrievalReader,
         )
@@ -176,6 +188,9 @@ class TestSqlRoadmapRetrievalReader:
     def test_find_all_roadmaps_returns_list(
         self, engine: Engine, db_session: Session, roadmap_with_items: object,
     ) -> None:
+        """テスト対象: SqlRoadmapRetrievalReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_roadmap_retrieval_reader import (
             SqlRoadmapRetrievalReader,
         )
@@ -189,6 +204,9 @@ class TestSqlRoadmapRetrievalReader:
     def test_find_all_roadmaps_returns_empty_when_none(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlRoadmapRetrievalReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_roadmap_retrieval_reader import (
             SqlRoadmapRetrievalReader,
         )
@@ -208,6 +226,9 @@ class TestSqlRoadmapItemCrudStore:
     def test_find_roadmap_returns_record(
         self, engine: Engine, db_session: Session, roadmap_with_items: object,
     ) -> None:
+        """テスト対象: SqlRoadmapItemCrudStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_roadmap_item_crud_store import (
             SqlRoadmapItemCrudStore,
         )
@@ -221,6 +242,9 @@ class TestSqlRoadmapItemCrudStore:
     def test_find_roadmap_returns_none_for_missing(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlRoadmapItemCrudStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_roadmap_item_crud_store import (
             SqlRoadmapItemCrudStore,
         )
@@ -233,6 +257,9 @@ class TestSqlRoadmapItemCrudStore:
     def test_find_item_returns_record(
         self, engine: Engine, db_session: Session, roadmap_with_items: object,
     ) -> None:
+        """テスト対象: SqlRoadmapItemCrudStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import RoadmapItem
         from roadmap.infrastructure.sql_roadmap_item_crud_store import (
             SqlRoadmapItemCrudStore,
@@ -252,6 +279,9 @@ class TestSqlRoadmapItemCrudStore:
     def test_find_item_returns_none_for_missing(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlRoadmapItemCrudStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_roadmap_item_crud_store import (
             SqlRoadmapItemCrudStore,
         )
@@ -264,6 +294,9 @@ class TestSqlRoadmapItemCrudStore:
     def test_replace_items_replaces_all(
         self, engine: Engine, db_session: Session, roadmap_with_items: object,
     ) -> None:
+        """テスト対象: SqlRoadmapItemCrudStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import RoadmapItem
         from roadmap.domain.roadmap_item_crud_types import RoadmapItemCrudItem
         from roadmap.infrastructure.sql_roadmap_item_crud_store import (
@@ -295,6 +328,9 @@ class TestSqlRoadmapItemCrudStore:
 
 class TestInMemoryJobStatusStore:
     def test_create_and_get_queued_job(self) -> None:
+        """テスト対象: InMemoryJobStatusStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.in_memory_job_status_store import (
             InMemoryJobStatusStore,
         )
@@ -307,6 +343,9 @@ class TestInMemoryJobStatusStore:
         assert result["status"] == "queued"
 
     def test_mark_running(self) -> None:
+        """テスト対象: InMemoryJobStatusStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.in_memory_job_status_store import (
             InMemoryJobStatusStore,
         )
@@ -320,6 +359,9 @@ class TestInMemoryJobStatusStore:
         assert result["status"] == "running"
 
     def test_mark_completed(self) -> None:
+        """テスト対象: InMemoryJobStatusStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.in_memory_job_status_store import (
             InMemoryJobStatusStore,
         )
@@ -336,6 +378,9 @@ class TestInMemoryJobStatusStore:
         assert result["roadmap_id"] == roadmap_id  # type: ignore[typeddict-item]
 
     def test_mark_failed(self) -> None:
+        """テスト対象: InMemoryJobStatusStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.in_memory_job_status_store import (
             InMemoryJobStatusStore,
         )
@@ -351,6 +396,9 @@ class TestInMemoryJobStatusStore:
         assert result["error_code"] == "llm_request_failed"  # type: ignore[typeddict-item]
 
     def test_get_job_raises_for_missing(self) -> None:
+        """テスト対象: get_job 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.domain.roadmap_generation_types import (
             RoadmapGenerationJobNotFoundError,
         )
@@ -370,6 +418,9 @@ class TestInMemoryJobStatusStore:
 
 class TestUuidGenerator:
     def test_generates_valid_uuid(self) -> None:
+        """テスト対象: UuidGenerator の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.uuid_generator import UuidGenerator
 
         gen = UuidGenerator()
@@ -378,6 +429,9 @@ class TestUuidGenerator:
         assert isinstance(result, uuid.UUID)
 
     def test_generates_unique_values(self) -> None:
+        """テスト対象: UuidGenerator の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.uuid_generator import UuidGenerator
 
         gen = UuidGenerator()

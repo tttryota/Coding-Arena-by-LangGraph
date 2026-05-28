@@ -49,6 +49,9 @@ class TestF1FeedbackListAndMarkRead:
         client: TestClient,
         integration_container: object,
     ) -> None:
+        """テスト対象: F1FeedbackListAndMarkRead の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         ids = _seed_feedbacks(integration_container)
 
         # Act: 全件取得
@@ -88,6 +91,9 @@ class TestF2DateRangeFilter:
         client: TestClient,
         integration_container: object,
     ) -> None:
+        """テスト対象: F2DateRangeFilter の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         ids = _seed_feedbacks(integration_container)
 
         resp = client.get(
@@ -108,6 +114,9 @@ class TestF2DateRangeFilter:
         client: TestClient,
         integration_container: object,
     ) -> None:
+        """テスト対象: F2DateRangeFilter の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         ids = _seed_feedbacks(integration_container)
 
         resp = client.get(
@@ -125,6 +134,9 @@ class TestF2DateRangeFilter:
         client: TestClient,
         integration_container: object,
     ) -> None:
+        """テスト対象: F2DateRangeFilter の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         _seed_feedbacks(integration_container)
 
         resp = client.get(
@@ -148,6 +160,9 @@ class TestF2DateRangeFilter:
 
 class TestF3NonExistentFeedbackRead:
     def test_returns_404_for_random_uuid(self, client: TestClient) -> None:
+        """テスト対象: F3NonExistentFeedbackRead の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.put(f"/ingestion/feedbacks/{uuid4()}/read")
 
         assert response.status_code == 404

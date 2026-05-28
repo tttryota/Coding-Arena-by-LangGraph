@@ -395,6 +395,9 @@ def _assert_log_contains(
 
 class TestBatchSchedulerRunOnce:
     def test_tc_01_returns_skipped_no_diff_without_calling_a2_to_a5(self) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(new_files=[], updated_files=[], deleted_files=[]),
         )
@@ -417,6 +420,9 @@ class TestBatchSchedulerRunOnce:
     def test_tc_02_aggregates_delete_new_and_updated_failure_as_completed_with_errors(
         self,
     ) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["docker/compose.md"],
@@ -470,6 +476,9 @@ class TestBatchSchedulerRunOnce:
     def test_tc_10_processes_deleted_then_new_then_updated_in_sorted_order(
         self,
     ) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/z.md", "notes/a.md"],
@@ -522,6 +531,9 @@ class TestBatchSchedulerRunOnce:
         ]
 
     def test_tc_11_processes_new_files_in_sorted_pipeline_order(self) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/b.md", "notes/a.md"],
@@ -550,6 +562,9 @@ class TestBatchSchedulerRunOnce:
     def test_tc_12_processes_updated_file_with_delete_after_embed_before_upsert(
         self,
     ) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],
@@ -587,6 +602,9 @@ class TestBatchSchedulerRunOnce:
     def test_tc_13_treats_empty_split_for_new_file_as_success_without_saving(
         self,
     ) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/empty-new.md"],
@@ -621,6 +639,9 @@ class TestBatchSchedulerRunOnce:
     def test_tc_14_treats_empty_split_for_updated_file_as_success_after_delete(
         self,
     ) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],
@@ -656,6 +677,9 @@ class TestBatchSchedulerRunOnce:
     def test_tc_15_collects_single_file_failures_and_continues_other_files(
         self,
     ) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["new/bad.md", "new/good.md"],
@@ -733,6 +757,9 @@ class TestBatchSchedulerRunOnce:
         ]
 
     def test_tc_20_raises_config_error_for_empty_target_path(self) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(new_files=[], updated_files=[], deleted_files=[]),
         )
@@ -750,6 +777,9 @@ class TestBatchSchedulerRunOnce:
         assert dependencies.chunk_store.upsert_calls == []
 
     def test_tc_23_records_load_failure_for_updated_file_and_continues(self) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["new/good.md"],
@@ -792,6 +822,9 @@ class TestBatchSchedulerRunOnce:
         ]
 
     def test_tc_24_records_delete_old_chunks_failure_and_skips_upsert(self) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],
@@ -835,6 +868,9 @@ class TestBatchSchedulerRunOnce:
     def test_tc_25_records_upsert_failure_after_successful_old_chunk_delete(
         self,
     ) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],
@@ -877,6 +913,9 @@ class TestBatchSchedulerRunOnce:
         ]
 
     def test_tc_30_returns_failed_summary_when_diff_detector_fails(self) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         operations: list[tuple[str, str]] = []
         dependencies = _Dependencies(
             diff_detector=_RecordingDiffDetector(error=RuntimeError("scan failed")),
@@ -907,6 +946,9 @@ class TestBatchSchedulerRunOnce:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(new_files=["a.md"], updated_files=[], deleted_files=[]),
         )
@@ -931,6 +973,9 @@ class TestBatchSchedulerRunOnce:
         )
 
     def test_tc_15b_split_failure_records_step_split_and_continues(self) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["new/bad-split.md", "new/good.md"],
@@ -978,6 +1023,9 @@ class TestBatchSchedulerRunOnce:
         ]
 
     def test_tc_15c_tag_failure_records_step_tag_and_continues(self) -> None:
+        """テスト対象: BatchSchedulerRunOnce の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["new/bad-tag.md", "new/good.md"],
@@ -1030,6 +1078,9 @@ class TestBatchSchedulerLogging:
     def test_tc_32_logs_started_file_success_file_failure_and_completed_events(
         self,
     ) -> None:
+        """テスト対象: BatchSchedulerLogging の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["docker/compose.md"],
@@ -1106,6 +1157,9 @@ class TestBatchSchedulerLogging:
         )
 
     def test_tc_33_logs_skipped_no_diff_event_with_required_fields(self) -> None:
+        """テスト対象: BatchSchedulerLogging の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(new_files=[], updated_files=[], deleted_files=[]),
         )
@@ -1176,6 +1230,9 @@ class _RecordingPostIngestionHook:
 
 class TestBatchSchedulerPostIngestionHook:
     def test_hook_called_after_upsert_for_new_file(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/a.md"],
@@ -1202,6 +1259,9 @@ class TestBatchSchedulerPostIngestionHook:
         ]
 
     def test_hook_called_after_upsert_for_updated_file(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],
@@ -1234,6 +1294,9 @@ class TestBatchSchedulerPostIngestionHook:
         ]
 
     def test_hook_not_called_for_deleted_files(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],
@@ -1251,6 +1314,9 @@ class TestBatchSchedulerPostIngestionHook:
         assert ("delete_by_source_path", "notes/old.md") in dependencies.operations
 
     def test_hook_not_called_for_failed_ingestion(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/bad.md"],
@@ -1269,6 +1335,9 @@ class TestBatchSchedulerPostIngestionHook:
         assert result.ingested_success_count == 0
 
     def test_hook_failure_does_not_break_batch_new_files(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/a.md", "notes/b.md"],
@@ -1306,6 +1375,9 @@ class TestBatchSchedulerPostIngestionHook:
         ]
 
     def test_hook_failure_does_not_break_batch_updated_file(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],
@@ -1337,6 +1409,9 @@ class TestBatchSchedulerPostIngestionHook:
         ]
 
     def test_hook_receives_correct_chunk_data(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/multi.md"],
@@ -1360,6 +1435,9 @@ class TestBatchSchedulerPostIngestionHook:
         ]
 
     def test_hook_not_called_when_not_configured(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/a.md"],
@@ -1375,6 +1453,9 @@ class TestBatchSchedulerPostIngestionHook:
         assert ("post_ingestion_hook", "notes/a.md") not in dependencies.operations
 
     def test_hook_called_with_empty_data_for_empty_split(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/empty.md"],
@@ -1394,6 +1475,9 @@ class TestBatchSchedulerPostIngestionHook:
         assert result.failed_file_count == 0
 
     def test_hook_not_called_when_upsert_fails(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/a.md"],
@@ -1412,6 +1496,9 @@ class TestBatchSchedulerPostIngestionHook:
         assert result.failed_file_count == 1
 
     def test_hook_not_called_when_delete_old_chunks_fails_for_updated(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],
@@ -1432,6 +1519,9 @@ class TestBatchSchedulerPostIngestionHook:
         assert result.failed_file_count == 1
 
     def test_hook_called_with_empty_data_for_empty_split_updated_file(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],
@@ -1469,6 +1559,9 @@ class TestBatchSchedulerPostIngestionHook:
         error_kwarg: str,
         error_key: str,
     ) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=["notes/fail.md"],
@@ -1487,6 +1580,9 @@ class TestBatchSchedulerPostIngestionHook:
         assert result.ingested_success_count == 0
 
     def test_hook_not_called_when_updated_file_upsert_fails(self) -> None:
+        """テスト対象: BatchSchedulerPostIngestionHook の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         dependencies = _make_dependencies(
             _make_diff_result(
                 new_files=[],

@@ -104,6 +104,9 @@ def _find_log_events(
 
 class TestTaggerPhase1:
     def test_tagger_tc_01_returns_minimal_single_chunk_result(self) -> None:
+        """テスト対象: TaggerPhase1 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["TypeScript"]])
         batch_input = _make_batch_input(
@@ -125,6 +128,9 @@ class TestTaggerPhase1:
         assert len(llm_client.calls) == 1
 
     def test_tagger_tc_02_returns_empty_tags_for_unclassifiable_chunk(self) -> None:
+        """テスト対象: TaggerPhase1 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([[]])
         batch_input = _make_batch_input(
@@ -141,6 +147,9 @@ class TestTaggerPhase1:
         assert len(llm_client.calls) == 1
 
     def test_tagger_tc_03_returns_empty_list_without_calling_dependencies(self) -> None:
+        """テスト対象: TaggerPhase1 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([])
         batch_input = _make_batch_input(
@@ -161,6 +170,9 @@ class TestTaggerPhase2:
     def test_tagger_tc_10_processes_chunks_independently_and_preserves_input_order(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["Docker"], ["React"]])
         batch_input = _make_batch_input(
@@ -194,6 +206,9 @@ class TestTaggerPhase2:
     def test_tagger_tc_11_uses_existing_tags_only_and_orders_by_existing_tags(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["PostgreSQL", "Docker", "Docker", "MySQL"]])
         batch_input = _make_batch_input(
@@ -215,6 +230,9 @@ class TestTaggerPhase2:
     def test_tagger_tc_12_allows_new_tags_only_when_existing_tags_are_empty(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["tRPC", "TypeScript", "tRPC"]])
         batch_input = _make_batch_input(
@@ -229,6 +247,9 @@ class TestTaggerPhase2:
         assert actual == [{"chunk_index": 3, "tags": ["tRPC", "TypeScript"]}]
 
     def test_tagger_tc_13_keeps_obsidian_links_unchanged_in_prompt_input(self) -> None:
+        """テスト対象: TaggerPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         chunk_text = (
             "TypeScript のジェネリクスを整理した。"
             "[[TypeScript公式ドキュメント]] と [[型システム|型安全]] を参照。"
@@ -255,6 +276,9 @@ class TestTaggerPhase2:
     def test_tagger_tc_14_normalizes_existing_tags_before_building_prompt(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["React"]])
         batch_input = _make_batch_input(
@@ -277,6 +301,9 @@ class TestTaggerPhase2:
     def test_tagger_tc_15_switches_to_new_tag_mode_when_normalized_existing_tags_are_empty(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["SQL"]])
         batch_input = _make_batch_input(
@@ -299,6 +326,9 @@ class TestTaggerPhase2:
     def test_tagger_tc_16_accepts_top_level_tag_for_subconcept_focused_chunk(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase2 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["React"]])
         batch_input = _make_batch_input(
@@ -317,6 +347,9 @@ class TestTaggerPhase3:
     def test_tagger_tc_20_returns_empty_tags_for_candidate_outside_existing_tags(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["TS", "JavaScript"]])
         batch_input = _make_batch_input(
@@ -331,6 +364,9 @@ class TestTaggerPhase3:
         assert actual == [{"chunk_index": 1, "tags": []}]
 
     def test_tagger_tc_21_returns_empty_tags_for_blank_chunk_text(self) -> None:
+        """テスト対象: TaggerPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["Docker"], ["Docker"]])
         batch_input = _make_batch_input(
@@ -350,6 +386,9 @@ class TestTaggerPhase3:
     def test_tagger_tc_22_returns_empty_tags_for_overly_granular_new_tags(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["LEFT JOIN", "ON句"]])
         batch_input = _make_batch_input(
@@ -364,6 +403,9 @@ class TestTaggerPhase3:
         assert actual == [{"chunk_index": 2, "tags": []}]
 
     def test_tagger_tc_23_returns_multiple_related_existing_tags(self) -> None:
+        """テスト対象: TaggerPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["PostgreSQL", "Docker"]])
         batch_input = _make_batch_input(
@@ -385,6 +427,9 @@ class TestTaggerPhase3:
     def test_tagger_tc_24_keeps_existing_tag_mode_when_normalization_still_leaves_candidates(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase3 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["React", "Vue"]])
         batch_input = _make_batch_input(
@@ -411,6 +456,9 @@ class TestTaggerPhase4:
         self,
         prompt_marker: str,
     ) -> None:
+        """テスト対象: TaggerPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         class _StrategyWithMarker:
             def __init__(self, marker: str) -> None:
                 self.marker = marker
@@ -452,6 +500,9 @@ class TestTaggerPhase4:
         ]
 
     def test_tagger_tc_31_raises_prompt_build_error_when_strategy_fails(self) -> None:
+        """テスト対象: TaggerPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy(fail_on_call=1)
         llm_client = _QueueLlmClient([["React"]])
         batch_input = _make_batch_input(
@@ -472,6 +523,9 @@ class TestTaggerPhase4:
         assert llm_client.calls == []
 
     def test_tagger_tc_32_raises_llm_call_error_when_client_fails(self) -> None:
+        """テスト対象: TaggerPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["Docker"]], fail_on_call=1)
         batch_input = _make_batch_input(
@@ -491,6 +545,9 @@ class TestTaggerPhase4:
     def test_tagger_tc_33_raises_response_format_error_for_non_list_response(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([{"tags": ["Docker"]}])
         batch_input = _make_batch_input(
@@ -506,6 +563,9 @@ class TestTaggerPhase4:
     def test_tagger_tc_34_raises_response_format_error_for_non_string_items(
         self,
     ) -> None:
+        """テスト対象: TaggerPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["Docker", 1]])
         batch_input = _make_batch_input(
@@ -519,6 +579,9 @@ class TestTaggerPhase4:
             tag(batch_input)
 
     def test_tagger_tc_35_records_observability_fields(self) -> None:
+        """テスト対象: TaggerPhase4 の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         prompt_strategy = _RecordingPromptStrategy()
         llm_client = _QueueLlmClient([["React"], []])
         batch_input = _make_batch_input(

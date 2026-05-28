@@ -42,6 +42,9 @@ class TestSqlTopicStore:
     def test_create_and_list_manual_topics(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlTopicStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_topic_store import SqlTopicStore
 
         store = SqlTopicStore(engine)
@@ -59,6 +62,9 @@ class TestSqlTopicStore:
     def test_find_topic_by_canonical_name(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlTopicStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_topic_store import SqlTopicStore
 
         store = SqlTopicStore(engine)
@@ -72,6 +78,9 @@ class TestSqlTopicStore:
     def test_find_topic_returns_none_for_missing(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlTopicStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_topic_store import SqlTopicStore
 
         store = SqlTopicStore(engine)
@@ -81,6 +90,9 @@ class TestSqlTopicStore:
     def test_create_returns_record(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlTopicStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.sql_topic_store import SqlTopicStore
 
         store = SqlTopicStore(engine)
@@ -108,6 +120,9 @@ class FakeMetadataCollection:
 
 class TestChromaNoteTopicReader:
     def test_list_note_topics(self) -> None:
+        """テスト対象: ChromaNoteTopicReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.chroma_note_topic_reader import (
             ChromaNoteTopicReader,
         )
@@ -129,6 +144,9 @@ class TestChromaNoteTopicReader:
         assert collection.last_include == ["metadatas"]
 
     def test_list_note_topics_empty(self) -> None:
+        """テスト対象: ChromaNoteTopicReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.chroma_note_topic_reader import (
             ChromaNoteTopicReader,
         )
@@ -139,6 +157,9 @@ class TestChromaNoteTopicReader:
         assert reader.list_note_topics() == []
 
     def test_list_note_counts(self) -> None:
+        """テスト対象: ChromaNoteTopicReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.chroma_note_topic_reader import (
             ChromaNoteTopicReader,
         )
@@ -158,6 +179,9 @@ class TestChromaNoteTopicReader:
         assert counts["react"] == 2
 
     def test_list_note_counts_zero_for_unknown(self) -> None:
+        """テスト対象: ChromaNoteTopicReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from roadmap.infrastructure.chroma_note_topic_reader import (
             ChromaNoteTopicReader,
         )
@@ -178,6 +202,9 @@ class TestChromaNoteTopicReader:
 
 class TestPresetTopicFileReader:
     def test_reads_preset_file(self, tmp_path: object) -> None:
+        """テスト対象: PresetTopicFileReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from pathlib import Path
 
         from roadmap.infrastructure.preset_topic_file_reader import (
@@ -203,6 +230,9 @@ class TestPresetTopicFileReader:
         assert result[1].canonical_name == "react"
 
     def test_returns_empty_for_missing_file(self, tmp_path: object) -> None:
+        """テスト対象: PresetTopicFileReader の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from pathlib import Path
 
         from roadmap.infrastructure.preset_topic_file_reader import (

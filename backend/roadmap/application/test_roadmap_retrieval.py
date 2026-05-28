@@ -377,6 +377,9 @@ def _order_gap_items_unsorted() -> list[RoadmapItemRecord]:
 
 
 def test_tc_01_get_roadmap_builds_minimum_tree_and_logs_success() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         roadmap=_make_record(
             roadmap_id=_RETURNED_ROADMAP_ID,
@@ -474,6 +477,9 @@ def test_tc_01_get_roadmap_builds_minimum_tree_and_logs_success() -> None:
 
 
 def test_tc_10_get_roadmap_reconstructs_unsorted_tree_and_aggregates_scores() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         roadmap=_make_record(
             roadmap_id=_REQUEST_ROADMAP_ID,
@@ -489,6 +495,9 @@ def test_tc_10_get_roadmap_reconstructs_unsorted_tree_and_aggregates_scores() ->
 
 
 def test_tc_11_get_roadmap_floors_scores_at_each_level() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         roadmap=_make_record(
             roadmap_id=_FLOOR_ROADMAP_ID,
@@ -612,6 +621,9 @@ def test_tc_11_get_roadmap_floors_scores_at_each_level() -> None:
 
 
 def test_tc_12_list_roadmaps_preserves_reader_order_and_logs_success() -> None:
+    """テスト対象: list_roadmaps 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     rust_record = _make_record(
         roadmap_id=_EMPTY_ROADMAP_ID,
         topic="Rust",
@@ -652,6 +664,9 @@ def test_tc_12_list_roadmaps_preserves_reader_order_and_logs_success() -> None:
 
 
 def test_tc_13_get_roadmap_builds_tree_when_sibling_order_has_gaps() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         roadmap=_make_record(
             roadmap_id=_ORDER_GAP_ROADMAP_ID,
@@ -725,6 +740,9 @@ def test_tc_13_get_roadmap_builds_tree_when_sibling_order_has_gaps() -> None:
 
 
 def test_tc_14_list_roadmaps_returns_result_when_sibling_order_has_gaps() -> None:
+    """テスト対象: list_roadmaps 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         roadmaps=[
             _make_record(
@@ -750,6 +768,9 @@ def test_tc_14_list_roadmaps_returns_result_when_sibling_order_has_gaps() -> Non
 
 
 def test_tc_20_get_roadmap_returns_empty_roadmap() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         roadmap=_make_record(
             roadmap_id=_EMPTY_ROADMAP_ID,
@@ -769,6 +790,9 @@ def test_tc_20_get_roadmap_returns_empty_roadmap() -> None:
 
 
 def test_tc_21_get_roadmap_uses_zero_for_middle_without_details() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         roadmap=_make_record(
             roadmap_id=_MIDDLE_EMPTY_ROADMAP_ID,
@@ -892,6 +916,9 @@ def test_tc_21_get_roadmap_uses_zero_for_middle_without_details() -> None:
 
 
 def test_tc_22_get_roadmap_uses_zero_for_major_without_middle_children() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         roadmap=_make_record(
             roadmap_id=_MAJOR_EMPTY_ROADMAP_ID,
@@ -995,6 +1022,9 @@ def test_tc_22_get_roadmap_uses_zero_for_major_without_middle_children() -> None
 
 
 def test_tc_23_get_roadmap_keeps_all_zero_scores_zero() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         roadmap=_make_record(
             roadmap_id=_ALL_ZERO_ROADMAP_ID,
@@ -1139,6 +1169,9 @@ def test_tc_23_get_roadmap_keeps_all_zero_scores_zero() -> None:
 
 
 def test_tc_24_list_roadmaps_returns_empty_result_and_logs_success() -> None:
+    """テスト対象: list_roadmaps 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(roadmaps=[])
 
     with capture_logs() as log_output:
@@ -1155,6 +1188,9 @@ def test_tc_24_list_roadmaps_returns_empty_result_and_logs_success() -> None:
 
 
 def test_tc_30_get_roadmap_raises_not_found_and_logs_warning() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(roadmap=None)
 
     with capture_logs() as log_output, pytest.raises(RoadmapRetrievalNotFoundError):
@@ -1171,6 +1207,9 @@ def test_tc_30_get_roadmap_raises_not_found_and_logs_warning() -> None:
 
 
 def test_tc_31_get_roadmap_wraps_reader_error_and_logs_error() -> None:
+    """テスト対象: get_roadmap 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(find_roadmap_error=TimeoutError("reader timeout"))
 
     with capture_logs() as log_output, pytest.raises(RoadmapRetrievalStoreError):
@@ -1190,6 +1229,9 @@ def test_tc_31_get_roadmap_wraps_reader_error_and_logs_error() -> None:
 
 
 def test_tc_32_list_roadmaps_wraps_reader_error_and_logs_error() -> None:
+    """テスト対象: list_roadmaps 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     reader = _RecordingReader(
         find_all_roadmaps_error=ConnectionError("db unavailable"),
     )

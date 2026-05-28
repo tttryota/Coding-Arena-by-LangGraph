@@ -12,6 +12,9 @@ if TYPE_CHECKING:
 
 class TestInfraSmoke:
     def test_client_can_reach_list_roadmaps(self, client: TestClient) -> None:
+        """テスト対象: InfraSmoke の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.get("/roadmaps")
 
         assert response.status_code == 200
@@ -21,6 +24,9 @@ class TestInfraSmoke:
         integration_container: object,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
+        """テスト対象: InfraSmoke の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         assert integration_container.transport is scenario_transport  # type: ignore[attr-defined]
 
     def test_llm_clients_use_scenario_transport(
@@ -28,5 +34,8 @@ class TestInfraSmoke:
         integration_container: object,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
+        """テスト対象: InfraSmoke の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         llm = integration_container.roadmap_generation_llm  # type: ignore[attr-defined]
         assert llm._transport is scenario_transport

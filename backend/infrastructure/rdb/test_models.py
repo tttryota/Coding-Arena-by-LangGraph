@@ -37,6 +37,9 @@ def _create_in_memory_engine() -> Engine:
 
 class TestTableCreation:
     def test_all_tables_created(self) -> None:
+        """テスト対象: TableCreation の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
@@ -45,6 +48,9 @@ class TestTableCreation:
 
 class TestRoadmap:
     def test_insert_and_read(self) -> None:
+        """テスト対象: Roadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         roadmap = Roadmap(
@@ -61,6 +67,9 @@ class TestRoadmap:
         assert result.topic == "TypeScript"
 
     def test_roadmap_has_items_relationship(self) -> None:
+        """テスト対象: Roadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         roadmap = Roadmap(id=uuid.uuid4(), topic="React", created_at=now)
@@ -86,6 +95,9 @@ class TestRoadmap:
 
 class TestRoadmapItem:
     def test_insert_and_read(self) -> None:
+        """テスト対象: RoadmapItem の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         roadmap = Roadmap(id=uuid.uuid4(), topic="TS", created_at=now)
@@ -112,6 +124,9 @@ class TestRoadmapItem:
         assert result.level == "major"
 
     def test_self_referential_parent_child(self) -> None:
+        """テスト対象: RoadmapItem の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         roadmap = Roadmap(id=uuid.uuid4(), topic="TS", created_at=now)
@@ -150,6 +165,9 @@ class TestRoadmapItem:
 
 class TestQuizSession:
     def test_insert_with_roadmap_item(self) -> None:
+        """テスト対象: QuizSession の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         roadmap = Roadmap(id=uuid.uuid4(), topic="TS", created_at=now)
@@ -182,6 +200,9 @@ class TestQuizSession:
 
 class TestQuizAnswer:
     def test_insert_and_read(self) -> None:
+        """テスト対象: QuizAnswer の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         roadmap = Roadmap(id=uuid.uuid4(), topic="TS", created_at=now)
@@ -228,6 +249,9 @@ class TestQuizAnswer:
 
 class TestIngestionFeedback:
     def test_insert_without_roadmap_item(self) -> None:
+        """テスト対象: IngestionFeedback の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         feedback = IngestionFeedback(
@@ -252,6 +276,9 @@ class TestIngestionFeedback:
 
 class TestSummaryTestResult:
     def test_insert_and_read(self) -> None:
+        """テスト対象: SummaryTestResult の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         roadmap = Roadmap(id=uuid.uuid4(), topic="TS", created_at=now)
@@ -292,6 +319,9 @@ class TestSummaryTestResult:
 
 class TestTopic:
     def test_insert_and_read(self) -> None:
+        """テスト対象: Topic の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         topic = Topic(
@@ -312,6 +342,9 @@ class TestTopic:
         assert result.source == "manual"
 
     def test_canonical_name_is_unique(self) -> None:
+        """テスト対象: Topic の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         t1 = Topic(
@@ -342,6 +375,9 @@ class TestTopic:
 
 class TestDiffSnapshot:
     def test_insert_and_read(self) -> None:
+        """テスト対象: DiffSnapshot の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         engine = _create_in_memory_engine()
         now = datetime.now(tz=UTC)
         snapshot = DiffSnapshot(

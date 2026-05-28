@@ -7,6 +7,9 @@ from infrastructure.logging.setup import get_logger, setup_logging
 
 class TestLoggingSetup:
     def test_json_output(self) -> None:
+        """テスト対象: setup_logging 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         setup_logging()
         output = StringIO()
         with patch("sys.stdout", output):
@@ -18,6 +21,9 @@ class TestLoggingSetup:
         assert parsed["event"] == "test_event"
 
     def test_timestamp_present(self) -> None:
+        """テスト対象: setup_logging 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         setup_logging()
         output = StringIO()
         with patch("sys.stdout", output):
@@ -28,6 +34,9 @@ class TestLoggingSetup:
         assert "timestamp" in parsed
 
     def test_log_level_present(self) -> None:
+        """テスト対象: setup_logging 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         setup_logging()
         output = StringIO()
         with patch("sys.stdout", output):
@@ -38,6 +47,9 @@ class TestLoggingSetup:
         assert parsed["level"] == "warning"
 
     def test_context_info_included(self) -> None:
+        """テスト対象: setup_logging 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         setup_logging()
         output = StringIO()
         with patch("sys.stdout", output):
@@ -49,6 +61,9 @@ class TestLoggingSetup:
         assert parsed["chunks"] == 3
 
     def test_error_traceback_included(self) -> None:
+        """テスト対象: setup_logging 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         setup_logging()
         output = StringIO()
         with patch("sys.stdout", output):

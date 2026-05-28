@@ -110,6 +110,9 @@ def _generate_roadmap(
 
 class TestR5EmptyTopicRejection:
     def test_returns_422_for_empty_topic(self, client: TestClient) -> None:
+        """テスト対象: R5EmptyTopicRejection の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.post("/roadmaps/generate", json={"topic": ""})
 
         assert response.status_code == 422
@@ -122,6 +125,9 @@ class TestR5EmptyTopicRejection:
 
 class TestR6NonExistentRoadmap:
     def test_returns_404_for_random_uuid(self, client: TestClient) -> None:
+        """テスト対象: R6NonExistentRoadmap の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         response = client.get(f"/roadmaps/{uuid4()}")
 
         assert response.status_code == 404
@@ -139,6 +145,9 @@ class TestR1RoadmapGenerationE2E:
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
         # Arrange
+        """テスト対象: R1RoadmapGenerationE2E の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         scenario_transport.set_sequential_responses([VALID_ROADMAP_JSON])
 
         # Act: POST /generate
@@ -185,6 +194,9 @@ class TestR1RoadmapGenerationE2E:
         client: TestClient,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
+        """テスト対象: R1RoadmapGenerationE2E の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_id = _generate_roadmap(client, scenario_transport)
 
         list_resp = client.get("/roadmaps")
@@ -206,6 +218,9 @@ class TestR2ItemAddAndDelete:
         client: TestClient,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
+        """テスト対象: R2ItemAddAndDelete の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_id = _generate_roadmap(client, scenario_transport)
 
         # 既存ツリーから major の id を取得
@@ -275,6 +290,9 @@ class TestR3ItemMove:
         client: TestClient,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
+        """テスト対象: R3ItemMove の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         roadmap_id = _generate_roadmap(client, scenario_transport)
 
         tree = client.get(f"/roadmaps/{roadmap_id}").json()
@@ -321,7 +339,9 @@ class TestR4LlmRetryAndFailure:
         client: TestClient,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
-        """1回目 invalid JSON → 2回目成功。"""
+        """テスト対象: R4LlmRetryAndFailure の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         scenario_transport.set_sequential_responses(
             [
                 "this is not valid json",
@@ -347,7 +367,9 @@ class TestR4LlmRetryAndFailure:
         client: TestClient,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
-        """3回全失敗 → failed ジョブ。"""
+        """テスト対象: R4LlmRetryAndFailure の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         scenario_transport.set_sequential_responses(
             [
                 "invalid 1",

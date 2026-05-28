@@ -233,6 +233,9 @@ class TestFileDiffDetectorInitialScans:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorInitialScans の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(
@@ -273,6 +276,9 @@ class TestFileDiffDetectorInitialScans:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorInitialScans の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore(
@@ -320,6 +326,9 @@ class TestFileDiffDetectorInitialScans:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """テスト対象: FileDiffDetectorInitialScans の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "vault" / "study"
         target_path.mkdir(parents=True)
         _write_markdown_file(
@@ -344,6 +353,9 @@ class TestFileDiffDetectorInitialScans:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorInitialScans の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(
@@ -366,6 +378,9 @@ class TestFileDiffDetectorInitialScans:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorInitialScans の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(
@@ -384,6 +399,9 @@ class TestFileDiffDetectorInitialScans:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorInitialScans の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(target_path, "topic.md", mtime_ns=1716113000000000000)
@@ -406,6 +424,9 @@ class TestFileDiffDetectorInitialScans:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorInitialScans の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(target_path, "real/keep.md", mtime_ns=10)
@@ -435,6 +456,9 @@ class TestFileDiffDetectorInitialScans:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorInitialScans の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore(
@@ -469,6 +493,9 @@ class TestFileDiffDetectorInitialScans:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorInitialScans の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         mtime_ns = 1716115000000000000
@@ -506,6 +533,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore(
@@ -557,6 +587,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(
@@ -585,6 +618,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore(
@@ -610,6 +646,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         left_target_path = tmp_path / "left"
         right_target_path = tmp_path / "right"
         left_target_path.mkdir()
@@ -641,6 +680,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "empty"
         target_path.mkdir()
         _write_plain_file(target_path, "assets/image.png")
@@ -665,6 +707,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_plain_file(target_path, "assets/logo.png")
@@ -694,6 +739,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "empty"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore(
@@ -716,6 +764,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         real_file = tmp_path / "shared.md"
@@ -735,6 +786,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(
@@ -759,6 +813,9 @@ class TestFileDiffDetectorDiffClassification:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorDiffClassification の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(target_path, "a.md", mtime_ns=1716120000000000000)
@@ -797,6 +854,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore()
@@ -809,6 +869,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore()
@@ -821,6 +884,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         snapshot_store = _RecordingSnapshotStore()
 
         with pytest.raises(TargetPathNotFoundError):
@@ -832,6 +898,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "note.md"
         target_path.write_text("# note\n", encoding="utf-8")
         snapshot_store = _RecordingSnapshotStore()
@@ -845,6 +914,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         actual_target = tmp_path / "actual"
         actual_target.mkdir()
         symlink_target = tmp_path / "linked"
@@ -861,6 +933,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore()
@@ -874,6 +949,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         nested_path = target_path / "python"
         nested_path.mkdir(parents=True)
@@ -893,6 +971,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         failing_path = target_path / "python" / "basics.md"
@@ -911,6 +992,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore(load_error=RuntimeError("load failed"))
@@ -924,6 +1008,9 @@ class TestFileDiffDetectorPathValidationAndPersistenceErrors:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorPathValidationAndPersistenceErrors の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(
@@ -952,6 +1039,9 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """テスト対象: FileDiffDetectorObservabilityAndSnapshotPersistence の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         nested_path = target_path / "private"
         target_path.mkdir()
@@ -974,6 +1064,9 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """テスト対象: FileDiffDetectorObservabilityAndSnapshotPersistence の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         nested_path = target_path / "python"
         nested_path.mkdir(parents=True)
@@ -995,6 +1088,9 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        """テスト対象: FileDiffDetectorObservabilityAndSnapshotPersistence の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         failing_path = target_path / "python" / "basics.md"
@@ -1015,6 +1111,9 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorObservabilityAndSnapshotPersistence の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(
@@ -1045,6 +1144,9 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorObservabilityAndSnapshotPersistence の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         snapshot_store = _RecordingSnapshotStore(
@@ -1085,6 +1187,9 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorObservabilityAndSnapshotPersistence の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from structlog.testing import capture_logs
 
         target_path = tmp_path / "study"
@@ -1135,6 +1240,9 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorObservabilityAndSnapshotPersistence の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(
@@ -1175,6 +1283,9 @@ class TestFileDiffDetectorObservabilityAndSnapshotPersistence:
         self,
         tmp_path: Path,
     ) -> None:
+        """テスト対象: FileDiffDetectorObservabilityAndSnapshotPersistence の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         target_path = tmp_path / "study"
         target_path.mkdir()
         _write_markdown_file(target_path, "zeta.md", mtime_ns=100)

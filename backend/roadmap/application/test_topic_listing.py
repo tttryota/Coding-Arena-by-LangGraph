@@ -145,6 +145,9 @@ def _candidate(
 
 
 def test_tc_01_public_contracts_match_spec() -> None:
+    """テスト対象: list_topic_candidates 関数と register_manual_topic 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     for cls in (TopicCandidate, PresetTopicRecord, NoteTopicRecord, StoredTopicRecord, TopicNoteCountRecord):
         assert is_dataclass(cls)
         assert cls.__dataclass_params__.frozen is True  # type: ignore[attr-defined]
@@ -166,6 +169,9 @@ def test_tc_01_public_contracts_match_spec() -> None:
 
 
 def test_tc_02_returns_presets_with_missing_counts_defaulting_to_zero() -> None:
+    """テスト対象: list_topic_candidates 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     result = list_topic_candidates(
         preset_reader=_RecordingPresetReader(
             records=[_preset("Docker", "docker"), _preset("TypeScript", "typescript")],
@@ -181,6 +187,9 @@ def test_tc_02_returns_presets_with_missing_counts_defaulting_to_zero() -> None:
 
 
 def test_tc_10_merges_three_sources_with_priority_counts_and_sorting() -> None:
+    """テスト対象: list_topic_candidates 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     note_count_reader = _RecordingNoteCountReader(
         counts=[_count("typescript", 12), _count("docker", 3), _count("langgraph", 5)],
     )
@@ -220,6 +229,9 @@ def test_tc_10_merges_three_sources_with_priority_counts_and_sorting() -> None:
 
 
 def test_tc_11_prefers_manual_over_note_when_preset_absent() -> None:
+    """テスト対象: list_topic_candidates 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     result = list_topic_candidates(
         preset_reader=_RecordingPresetReader(records=[]),
         note_topic_reader=_RecordingNoteTopicReader(
@@ -234,6 +246,9 @@ def test_tc_11_prefers_manual_over_note_when_preset_absent() -> None:
 
 
 def test_tc_20_returns_empty_when_all_sources_empty() -> None:
+    """テスト対象: list_topic_candidates 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     ncr = _RecordingNoteCountReader(counts=[])
     result = list_topic_candidates(
         preset_reader=_RecordingPresetReader(records=[]),
@@ -246,6 +261,9 @@ def test_tc_20_returns_empty_when_all_sources_empty() -> None:
 
 
 def test_tc_30_calls_listing_dependencies_once_each() -> None:
+    """テスト対象: list_topic_candidates 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     pr = _RecordingPresetReader(records=[_preset("Docker", "docker")])
     ntr = _RecordingNoteTopicReader(records=[_note("terraform", "terraform")])
     ts = _RecordingTopicStore(manual_records=[_stored("GraphRAG", "graphrag")])
@@ -272,6 +290,9 @@ def test_tc_30_calls_listing_dependencies_once_each() -> None:
 
 
 def test_tc_03_registers_new_topic_and_returns_candidate() -> None:
+    """テスト対象: register_manual_topic 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     ts = _RecordingTopicStore(
         find_result=None,
         create_result=_stored("GraphRAG", "graphrag"),
@@ -287,6 +308,9 @@ def test_tc_03_registers_new_topic_and_returns_candidate() -> None:
 
 
 def test_tc_12_detects_duplicate_via_nfkc_casefold() -> None:
+    """テスト対象: register_manual_topic 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     ts = _RecordingTopicStore(
         find_result=_stored("Terraform", "terraform", source="preset"),
     )
@@ -305,6 +329,9 @@ def test_tc_12_detects_duplicate_via_nfkc_casefold() -> None:
 
 
 def test_tc_13_limits_duplicate_detection_to_exact_canonical_match() -> None:
+    """テスト対象: register_manual_topic 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     ts = _RecordingTopicStore(find_result=None)
     ncr = _RecordingNoteCountReader(counts=[])
 
@@ -316,6 +343,9 @@ def test_tc_13_limits_duplicate_detection_to_exact_canonical_match() -> None:
 
 
 def test_tc_21_raises_for_blank_input_without_calling_dependencies() -> None:
+    """テスト対象: register_manual_topic 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     ts = _RecordingTopicStore()
     ncr = _RecordingNoteCountReader(counts=[])
 
@@ -330,6 +360,9 @@ def test_tc_21_raises_for_blank_input_without_calling_dependencies() -> None:
 def test_tc_22_preserves_internal_whitespace_applies_nfkc_casefold_to_canonical() -> (
     None
 ):
+    """テスト対象: register_manual_topic 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     normalized = "AI\u3000Agent"
     canonical = unicodedata.normalize("NFKC", normalized).casefold()
     ts = _RecordingTopicStore(
@@ -352,6 +385,9 @@ def test_tc_22_preserves_internal_whitespace_applies_nfkc_casefold_to_canonical(
 
 
 def test_tc_31_uses_find_only_for_existing_duplicate_skips_create() -> None:
+    """テスト対象: register_manual_topic 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     ts = _RecordingTopicStore(
         find_result=_stored("Terraform", "terraform", source="manual"),
     )
@@ -366,6 +402,9 @@ def test_tc_31_uses_find_only_for_existing_duplicate_skips_create() -> None:
 
 
 def test_tc_32_creates_new_topic_once_and_reads_note_count() -> None:
+    """テスト対象: register_manual_topic 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     ts = _RecordingTopicStore(
         find_result=None,
         create_result=_stored("GraphRAG", "graphrag"),

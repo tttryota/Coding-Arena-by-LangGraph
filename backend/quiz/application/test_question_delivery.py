@@ -140,6 +140,9 @@ def _question_delivery_error(
 
 def test_tc_01_deliver_question_public_return_contract_and_llm_mapping() -> None:
     # Arrange
+    """テスト対象: deliver_question 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points("knowledge", "knowledge_and_practice")
     state = _state(confirmation_points=confirmation_points)
     llm_client = _RecordingQuestionDeliveryLlm(
@@ -173,6 +176,9 @@ def test_tc_02_second_confirmation_point_returns_llm_output_and_increments_total
     None
 ):
     # Arrange
+    """テスト対象: deliver_question 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "knowledge",
         "knowledge_and_practice",
@@ -211,6 +217,9 @@ def test_tc_02_second_confirmation_point_returns_llm_output_and_increments_total
 
 def test_tc_10_knowledge_confirmation_point_returns_textarea() -> None:
     # Arrange
+    """テスト対象: deliver_question 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     past_answers = _answers()
     state = _state(
         confirmation_points=_confirmation_points("knowledge"),
@@ -243,6 +252,9 @@ def test_tc_10_knowledge_confirmation_point_returns_textarea() -> None:
 
 def test_tc_11_knowledge_and_practice_returns_code_and_passes_past_answers() -> None:
     # Arrange
+    """テスト対象: deliver_question 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "knowledge",
         "knowledge_and_practice",
@@ -283,6 +295,9 @@ def test_tc_11_knowledge_and_practice_returns_code_and_passes_past_answers() -> 
 
 def test_tc_12_resumed_session_continues_from_current_point_index() -> None:
     # Arrange
+    """テスト対象: deliver_question 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "knowledge",
         "knowledge_and_practice",
@@ -325,6 +340,9 @@ def test_tc_12_resumed_session_continues_from_current_point_index() -> None:
 
 def test_tc_20_returns_empty_update_without_llm_when_all_points_are_consumed() -> None:
     # Arrange
+    """テスト対象: deliver_question 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points("knowledge", "knowledge_and_practice")
     state = _state(
         confirmation_points=confirmation_points,
@@ -349,6 +367,9 @@ def test_tc_20_returns_empty_update_without_llm_when_all_points_are_consumed() -
 
 def test_tc_21_appended_deepdive_confirmation_point_is_delivered() -> None:
     # Arrange
+    """テスト対象: deliver_question 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points: list[ConfirmationPoint] = [
         {
             "id": "cp_001",
@@ -393,6 +414,9 @@ def test_tc_21_appended_deepdive_confirmation_point_is_delivered() -> None:
 
 def test_tc_30_llm_request_failure_is_reraised_as_is() -> None:
     # Arrange
+    """テスト対象: deliver_question 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = RuntimeError("request failed")
     error = _question_delivery_error(
         error_code="llm_request_failed",
@@ -421,6 +445,9 @@ def test_tc_30_llm_request_failure_is_reraised_as_is() -> None:
 
 def test_tc_31_llm_response_parse_failure_is_reraised_as_is() -> None:
     # Arrange
+    """テスト対象: deliver_question 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = ValueError("parse failed")
     error = _question_delivery_error(
         error_code="llm_response_parse_failed",

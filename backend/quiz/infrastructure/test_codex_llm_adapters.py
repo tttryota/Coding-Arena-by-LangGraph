@@ -45,6 +45,9 @@ class FakeTransport:
 
 class TestCodexQuestionSetDesignLlm:
     def test_returns_confirmation_points(self) -> None:
+        """テスト対象: CodexQuestionSetDesignLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexQuestionSetDesignLlm
 
         canned = json.dumps({
@@ -69,6 +72,9 @@ class TestCodexQuestionSetDesignLlm:
         assert result.confirmation_points[1]["format"] == "knowledge_and_practice"
 
     def test_empty_topic_overview_raises(self) -> None:
+        """テスト対象: CodexQuestionSetDesignLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from quiz.application.question_set_design_types import QuestionSetDesignError
@@ -87,6 +93,9 @@ class TestCodexQuestionSetDesignLlm:
             adapter.generate_confirmation_points("Test", "test", "detail")
 
     def test_prompt_contains_title_and_level(self) -> None:
+        """テスト対象: CodexQuestionSetDesignLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexQuestionSetDesignLlm
 
         transport = FakeTransport(json.dumps({
@@ -108,6 +117,9 @@ class TestCodexQuestionSetDesignLlm:
 
 class TestCodexQuestionDeliveryLlm:
     def test_returns_question_output(self) -> None:
+        """テスト対象: CodexQuestionDeliveryLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexQuestionDeliveryLlm
 
         canned = json.dumps({
@@ -125,6 +137,9 @@ class TestCodexQuestionDeliveryLlm:
         assert result.answer_type == "textarea"
 
     def test_returns_code_type_for_knowledge_and_practice(self) -> None:
+        """テスト対象: CodexQuestionDeliveryLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexQuestionDeliveryLlm
 
         canned = json.dumps({
@@ -149,6 +164,9 @@ class TestCodexQuestionDeliveryLlm:
 
 class TestCodexInputClassificationLlm:
     def test_returns_input_type(self) -> None:
+        """テスト対象: CodexInputClassificationLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexInputClassificationLlm
 
         canned = json.dumps({"input_type": "answer"})
@@ -160,6 +178,9 @@ class TestCodexInputClassificationLlm:
         assert result == "answer"
 
     def test_classifies_as_question(self) -> None:
+        """テスト対象: CodexInputClassificationLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexInputClassificationLlm
 
         canned = json.dumps({"input_type": "question"})
@@ -171,6 +192,9 @@ class TestCodexInputClassificationLlm:
         assert result == "question"
 
     def test_classifies_as_explanation_request(self) -> None:
+        """テスト対象: CodexInputClassificationLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexInputClassificationLlm
 
         canned = json.dumps({"input_type": "explanation_request"})
@@ -189,6 +213,9 @@ class TestCodexInputClassificationLlm:
 
 class TestCodexChatResponseLlm:
     def test_returns_response_text(self) -> None:
+        """テスト対象: CodexChatResponseLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexChatResponseLlm
 
         transport = FakeTransport("useStateは状態管理のためのHookです。")
@@ -206,6 +233,9 @@ class TestCodexChatResponseLlm:
 
 class TestCodexAnswerEvaluationLlm:
     def test_returns_evaluation_output(self) -> None:
+        """テスト対象: CodexAnswerEvaluationLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexAnswerEvaluationLlm
 
         canned = json.dumps({
@@ -227,6 +257,9 @@ class TestCodexAnswerEvaluationLlm:
         assert result.deepdive_points == []
 
     def test_returns_deepdive_points(self) -> None:
+        """テスト対象: CodexAnswerEvaluationLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexAnswerEvaluationLlm
 
         canned = json.dumps({
@@ -253,6 +286,9 @@ class TestCodexAnswerEvaluationLlm:
         assert "id" not in result.deepdive_points[0]
 
     def test_returns_complete_action(self) -> None:
+        """テスト対象: CodexAnswerEvaluationLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexAnswerEvaluationLlm
 
         canned = json.dumps({
@@ -281,6 +317,9 @@ class TestCodexAnswerEvaluationLlm:
 
 class TestCodexExplanationLlm:
     def test_returns_explanation(self) -> None:
+        """テスト対象: CodexExplanationLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexExplanationLlm
 
         transport = FakeTransport("型推論とは、コンパイラが型を自動判別する仕組みです。")
@@ -298,6 +337,9 @@ class TestCodexExplanationLlm:
 
 class TestCodexProgressUpdateLlm:
     def test_returns_progress_output(self) -> None:
+        """テスト対象: CodexProgressUpdateLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexProgressUpdateLlm
 
         canned = json.dumps({"score": 75, "comment": "全体的に良好"})
@@ -317,6 +359,9 @@ class TestCodexProgressUpdateLlm:
 
 class TestCodexSummaryTestLlm:
     def test_returns_summary_analysis(self) -> None:
+        """テスト対象: CodexSummaryTestLlm の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import CodexSummaryTestLlm
 
         canned = json.dumps({"score": 80, "analysis": "型システムの理解は良好"})
@@ -336,6 +381,9 @@ class TestCodexSummaryTestLlm:
 
 class TestCodexLlmTransport:
     def test_parse_json_with_code_fence(self) -> None:
+        """テスト対象: CodexLlmTransport の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import _parse_json
 
         text = '```json\n{"key": "value"}\n```'
@@ -344,6 +392,9 @@ class TestCodexLlmTransport:
         assert result == {"key": "value"}
 
     def test_parse_json_plain(self) -> None:
+        """テスト対象: CodexLlmTransport の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.codex_llm_adapters import _parse_json
 
         text = '{"key": "value"}'
@@ -359,6 +410,9 @@ class TestCodexLlmTransport:
 
 class TestDeepdiveEmptyRaises:
     def test_deepdive_with_empty_points_raises(self) -> None:
+        """テスト対象: DeepdiveEmptyRaises の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from quiz.application.answer_evaluation_types import AnswerEvaluationError
@@ -381,6 +435,9 @@ class TestDeepdiveEmptyRaises:
 
 class TestInputTypeValidation:
     def test_invalid_input_type_raises(self) -> None:
+        """テスト対象: InputTypeValidation の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from quiz.application.input_classification_types import (
@@ -398,6 +455,9 @@ class TestInputTypeValidation:
 
 class TestAnswerTypeValidation:
     def test_format_knowledge_with_wrong_answer_type_raises(self) -> None:
+        """テスト対象: AnswerTypeValidation の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from quiz.application.question_delivery_types import QuestionDeliveryError
@@ -418,6 +478,9 @@ class TestAnswerTypeValidation:
 
 class TestErrorWrapping:
     def test_transport_error_wrapped_in_protocol_error(self) -> None:
+        """テスト対象: ErrorWrapping の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         import pytest
 
         from quiz.application.question_set_design_types import QuestionSetDesignError

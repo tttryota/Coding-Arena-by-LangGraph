@@ -25,6 +25,9 @@ def _assert_frozen_dataclass(candidate: type[object]) -> None:
 
 def test_resume_contract_stays_session_id_only_without_expiry_inputs() -> None:
     # Arrange / Act
+    """テスト対象: resume_session 関数と StartSessionInput・ResumeSessionInput・StartSessionResult 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     start_input_hints = get_type_hints(StartSessionInput)
     resume_input_hints = get_type_hints(ResumeSessionInput)
     result_hints = get_type_hints(StartSessionResult)
@@ -67,6 +70,9 @@ def test_resume_contract_stays_session_id_only_without_expiry_inputs() -> None:
 
 def test_protocol_surfaces_stay_minimal() -> None:
     # Arrange / Act
+    """テスト対象: QuizSessionStore・QuizAnswerStore・RoadmapItemReader・GraphRunner プロトコル。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session_store_methods = {
         name
         for name, value in QuizSessionStore.__dict__.items()

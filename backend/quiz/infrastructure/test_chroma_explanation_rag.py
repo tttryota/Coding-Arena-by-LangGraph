@@ -26,6 +26,9 @@ class FakeCollection:
 
 class TestChromaExplanationRagClient:
     def test_returns_documents(self) -> None:
+        """テスト対象: ChromaExplanationRagClient の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.chroma_explanation_rag import (
             ChromaExplanationRagClient,
         )
@@ -40,6 +43,9 @@ class TestChromaExplanationRagClient:
         assert collection.last_query_embeddings[0] == [0.1, 0.2, 0.3]
 
     def test_returns_empty_for_no_results(self) -> None:
+        """テスト対象: ChromaExplanationRagClient の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.chroma_explanation_rag import (
             ChromaExplanationRagClient,
         )
@@ -52,6 +58,9 @@ class TestChromaExplanationRagClient:
         assert result == []
 
     def test_custom_n_results(self) -> None:
+        """テスト対象: ChromaExplanationRagClient の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.chroma_explanation_rag import (
             ChromaExplanationRagClient,
         )

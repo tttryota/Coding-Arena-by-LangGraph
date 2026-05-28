@@ -35,6 +35,9 @@ def test_tc_02_question_set_design_public_contract_uses_confirmation_point_dto()
     None
 ):
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points: list[ConfirmationPoint] = [
         {
             "id": "cp_001",

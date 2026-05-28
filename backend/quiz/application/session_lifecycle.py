@@ -73,12 +73,23 @@ class _RoadmapItemSourceLike(Protocol):
     description: str
 
 
+class _SessionSourceLike(Protocol):
+    id: str
+    roadmap_item_id: str
+
+
 @dataclass(frozen=True)
 class _RoadmapItemStateSource:
     id: str
     level: RoadmapItemLevel
     title: str
     description: str
+
+
+@dataclass(frozen=True)
+class _ResumeSessionContext:
+    session: _SessionSourceLike
+    roadmap_item: _RoadmapItemStateSource
 
 
 def start_session(
@@ -171,45 +182,17 @@ def resume_session(
         graph_runner=dependency_arguments["graph_runner"],
     )
 
-    session = dependencies.session_store.find_session(input.session_id)
-    roadmap_item: _RoadmapItemStateSource = _to_roadmap_item_state_source(
-        dependencies.item_reader.find_item(session.roadmap_item_id),
-    )
+    context = _load_resume_session_context(input.session_id, dependencies)
+    _load_answer_history_or_raise(context, dependencies.answer_store)
 
-    try:
-        _ = [
-            _to_answer_record(answer)
-            for answer in dependencies.answer_store.find_by_session(session.id)
-        ]
-    except Exception as exception:
-        logger.exception(
-            _RESUME_HISTORY_LOAD_FAILED_EVENT,
-            session_id=session.id,
-            roadmap_item_id=roadmap_item.id,
-            error_code=_RESUME_HISTORY_LOAD_FAILED_ERROR_CODE,
-            error_type=type(exception).__name__,
-        )
-        raise QuizSessionLifecycleError(
-            error_code=_RESUME_HISTORY_LOAD_FAILED_ERROR_CODE,
-            message=_format_lifecycle_error_message(
-                "quiz session resume history load failed",
-                session_id=session.id,
-                roadmap_item_id=roadmap_item.id,
-            ),
-        ) from exception
-
-    user_input_dict: dict[str, object] = {
-        "user_input": input.user_input,
-        "input_source": input.input_source,
-    }
     _resume_graph_or_raise(
         dependencies.graph_runner,
-        user_input_dict,
-        session_id=session.id,
-        roadmap_item_id=roadmap_item.id,
+        _build_resume_graph_input(input),
+        session_id=context.session.id,
+        roadmap_item_id=context.roadmap_item.id,
     )
 
-    return dependencies.graph_runner.get_state(thread_id=session.id)
+    return dependencies.graph_runner.get_state(thread_id=context.session.id)
 
 
 cast("Any", start_session).__signature__ = Signature(
@@ -331,6 +314,58 @@ def _to_roadmap_item_state_source(roadmap_item: object) -> _RoadmapItemStateSour
     )
 
 
+def _to_session_source(session: object) -> _SessionSourceLike:
+    return cast("_SessionSourceLike", session)
+
+
+def _load_resume_session_context(
+    session_id: str,
+    dependencies: _ResumeSessionDependencies,
+) -> _ResumeSessionContext:
+    session = _to_session_source(
+        dependencies.session_store.find_session(session_id),
+    )
+    roadmap_item = _to_roadmap_item_state_source(
+        dependencies.item_reader.find_item(session.roadmap_item_id),
+    )
+    return _ResumeSessionContext(session=session, roadmap_item=roadmap_item)
+
+
+def _load_answer_history_or_raise(
+    context: _ResumeSessionContext,
+    answer_store: QuizAnswerStore,
+) -> list[QuizAnswerRecord]:
+    try:
+        return [
+            _to_answer_record(answer)
+            for answer in answer_store.find_by_session(context.session.id)
+        ]
+    except Exception as exception:
+        logger.exception(
+            _RESUME_HISTORY_LOAD_FAILED_EVENT,
+            session_id=context.session.id,
+            roadmap_item_id=context.roadmap_item.id,
+            error_code=_RESUME_HISTORY_LOAD_FAILED_ERROR_CODE,
+            error_type=type(exception).__name__,
+        )
+        raise QuizSessionLifecycleError(
+            error_code=_RESUME_HISTORY_LOAD_FAILED_ERROR_CODE,
+            message=_format_lifecycle_error_message(
+                "quiz session resume history load failed",
+                session_id=context.session.id,
+                roadmap_item_id=context.roadmap_item.id,
+            ),
+        ) from exception
+
+
+def _build_resume_graph_input(input: ResumeSessionInput) -> dict[str, object]:  # noqa: A002
+    return {
+        "user_input": input.user_input,
+        "input_source": input.input_source,
+        "is_resumed": True,
+    }
+
+
 def _start_session_graph_or_raise(
     *,
     session: object,
@@ -338,24 +373,24 @@ def _start_session_graph_or_raise(
     item_reader: RoadmapItemReader,
     dependencies: _StartGraphDependencies,
 ) -> None:
+    session_source = _to_session_source(session)
     try:
-        source = cast("Any", session)
         roadmap_item = _to_roadmap_item_state_source(
-            item_reader.find_item(source.roadmap_item_id),
+            item_reader.find_item(session_source.roadmap_item_id),
         )
         state = _build_session_state(
-            session_id=source.id,
+            session_id=session_source.id,
             roadmap_item=roadmap_item,
             is_resumed=False,
         )
-        dependencies.graph_runner.start_graph(state, thread_id=source.id)
+        dependencies.graph_runner.start_graph(state, thread_id=session_source.id)
     except Exception as exception:
         try:
-            dependencies.session_store.discard_session(cast("Any", session).id)
+            dependencies.session_store.discard_session(session_source.id)
         except Exception as cleanup_exception:
             logger.exception(
                 _START_GRAPH_CLEANUP_FAILED_EVENT,
-                session_id=cast("Any", session).id,
+                session_id=session_source.id,
                 roadmap_item_id=roadmap_item_id,
                 error_code=_START_CLEANUP_FAILED_ERROR_CODE,
                 start_error_type=type(exception).__name__,
@@ -366,7 +401,7 @@ def _start_session_graph_or_raise(
                 error_code=_START_CLEANUP_FAILED_ERROR_CODE,
                 message=_format_lifecycle_error_message(
                     "quiz session start cleanup failed",
-                    session_id=cast("Any", session).id,
+                    session_id=session_source.id,
                     roadmap_item_id=roadmap_item_id,
                 ),
             ) from cleanup_exception
@@ -379,7 +414,7 @@ def _start_session_graph_or_raise(
             error_code=_START_GRAPH_FAILED_ERROR_CODE,
             message=_format_lifecycle_error_message(
                 "quiz session start graph failed",
-                session_id=cast("Any", session).id,
+                session_id=session_source.id,
                 roadmap_item_id=roadmap_item_id,
             ),
         ) from exception
@@ -396,42 +431,23 @@ def _resume_graph_or_raise(
     try:
         graph_runner.resume_graph(user_input, thread_id=session_id)
     except TransientLlmNodeError as exc:
-        logger.warning(
-            _RESUME_TRANSIENT_LLM_EVENT,
+        _raise_transient_resume_error(
+            exc,
             session_id=session_id,
             roadmap_item_id=roadmap_item_id,
-            error_type=type(exc.node_error).__name__,
         )
-        raise QuizSessionLifecycleError(
-            error_code=_RESUME_TRANSIENT_LLM_ERROR_CODE,
-            message=_format_lifecycle_error_message(
-                "quiz session resume transient llm error",
-                session_id=session_id,
-                roadmap_item_id=roadmap_item_id,
-            ),
-        ) from exc
     except InvalidUpdateError:
         _retry_graph_or_raise(
             graph_runner,
             session_id=session_id,
             roadmap_item_id=roadmap_item_id,
         )
-    except Exception as exception:
-        logger.exception(
-            _RESUME_LLM_START_FAILED_EVENT,
+    except Exception as exception:  # noqa: BLE001
+        _raise_resume_llm_start_error(
+            exception,
             session_id=session_id,
             roadmap_item_id=roadmap_item_id,
-            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
-            error_type=type(exception).__name__,
         )
-        raise QuizSessionLifecycleError(
-            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
-            message=_format_lifecycle_error_message(
-                "quiz session resume llm start failed",
-                session_id=session_id,
-                roadmap_item_id=roadmap_item_id,
-            ),
-        ) from exception
 
 
 def _retry_graph_or_raise(
@@ -444,36 +460,62 @@ def _retry_graph_or_raise(
     try:
         graph_runner.retry_graph(thread_id=session_id)
     except TransientLlmNodeError as exc:
-        logger.warning(
-            _RESUME_TRANSIENT_LLM_EVENT,
+        _raise_transient_resume_error(
+            exc,
             session_id=session_id,
             roadmap_item_id=roadmap_item_id,
-            error_type=type(exc.node_error).__name__,
         )
-        raise QuizSessionLifecycleError(
-            error_code=_RESUME_TRANSIENT_LLM_ERROR_CODE,
-            message=_format_lifecycle_error_message(
-                "quiz session resume transient llm error",
-                session_id=session_id,
-                roadmap_item_id=roadmap_item_id,
-            ),
-        ) from exc
-    except Exception as exception:
-        logger.exception(
-            _RESUME_LLM_START_FAILED_EVENT,
+    except Exception as exception:  # noqa: BLE001
+        _raise_resume_llm_start_error(
+            exception,
             session_id=session_id,
             roadmap_item_id=roadmap_item_id,
-            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
-            error_type=type(exception).__name__,
         )
-        raise QuizSessionLifecycleError(
-            error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
-            message=_format_lifecycle_error_message(
-                "quiz session resume llm start failed",
-                session_id=session_id,
-                roadmap_item_id=roadmap_item_id,
-            ),
-        ) from exception
+
+
+def _raise_transient_resume_error(
+    exception: TransientLlmNodeError,
+    *,
+    session_id: str,
+    roadmap_item_id: str,
+) -> None:
+    logger.warning(
+        _RESUME_TRANSIENT_LLM_EVENT,
+        session_id=session_id,
+        roadmap_item_id=roadmap_item_id,
+        error_type=type(exception.node_error).__name__,
+    )
+    raise QuizSessionLifecycleError(
+        error_code=_RESUME_TRANSIENT_LLM_ERROR_CODE,
+        message=_format_lifecycle_error_message(
+            "quiz session resume transient llm error",
+            session_id=session_id,
+            roadmap_item_id=roadmap_item_id,
+        ),
+    ) from exception
+
+
+def _raise_resume_llm_start_error(
+    exception: Exception,
+    *,
+    session_id: str,
+    roadmap_item_id: str,
+) -> None:
+    logger.exception(
+        _RESUME_LLM_START_FAILED_EVENT,
+        session_id=session_id,
+        roadmap_item_id=roadmap_item_id,
+        error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
+        error_type=type(exception).__name__,
+    )
+    raise QuizSessionLifecycleError(
+        error_code=_RESUME_LLM_START_FAILED_ERROR_CODE,
+        message=_format_lifecycle_error_message(
+            "quiz session resume llm start failed",
+            session_id=session_id,
+            roadmap_item_id=roadmap_item_id,
+        ),
+    ) from exception
 
 
 def _log_start_failure(

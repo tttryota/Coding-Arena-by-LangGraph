@@ -134,6 +134,9 @@ class TestSqlQuizSessionStore:
     def test_create_session_returns_record_with_id(
         self, engine: Engine, db_session: Session, roadmap_item: object,
     ) -> None:
+        """テスト対象: SqlQuizSessionStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
         store = SqlQuizSessionStore(engine)
@@ -145,6 +148,9 @@ class TestSqlQuizSessionStore:
     def test_create_session_persists_row(
         self, engine: Engine, db_session: Session, roadmap_item: object,
     ) -> None:
+        """テスト対象: SqlQuizSessionStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import QuizSession
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
@@ -159,6 +165,9 @@ class TestSqlQuizSessionStore:
     def test_find_in_progress_by_item_returns_session(
         self, engine: Engine, db_session: Session, roadmap_item: object, quiz_session: object,
     ) -> None:
+        """テスト対象: SqlQuizSessionStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
         store = SqlQuizSessionStore(engine)
@@ -170,6 +179,9 @@ class TestSqlQuizSessionStore:
     def test_find_in_progress_by_item_returns_none_when_no_match(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlQuizSessionStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
         store = SqlQuizSessionStore(engine)
@@ -180,6 +192,9 @@ class TestSqlQuizSessionStore:
     def test_find_session_returns_record(
         self, engine: Engine, db_session: Session, quiz_session: object,
     ) -> None:
+        """テスト対象: SqlQuizSessionStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
         store = SqlQuizSessionStore(engine)
@@ -190,6 +205,9 @@ class TestSqlQuizSessionStore:
     def test_complete_session_updates_status(
         self, engine: Engine, db_session: Session, roadmap_item: object, quiz_session: object,
     ) -> None:
+        """テスト対象: complete_session 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import QuizSession as QS
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
@@ -208,6 +226,9 @@ class TestSqlQuizSessionStore:
     def test_discard_session_sets_status_discarded(
         self, engine: Engine, db_session: Session, quiz_session: object,
     ) -> None:
+        """テスト対象: SqlQuizSessionStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import QuizSession as QS
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
@@ -229,6 +250,9 @@ class TestSqlQuizAnswerStore:
     def test_save_answer_persists_row(
         self, engine: Engine, db_session: Session, quiz_session: object, roadmap_item: object,
     ) -> None:
+        """テスト対象: SqlQuizAnswerStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import QuizAnswer
         from quiz.infrastructure.sql_quiz_answer_store import SqlQuizAnswerStore
 
@@ -253,6 +277,9 @@ class TestSqlQuizAnswerStore:
     def test_find_by_session_returns_ordered_answers(
         self, engine: Engine, db_session: Session, quiz_session: object, roadmap_item: object,
     ) -> None:
+        """テスト対象: SqlQuizAnswerStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_answer_store import SqlQuizAnswerStore
 
         store = SqlQuizAnswerStore(engine)
@@ -280,6 +307,9 @@ class TestSqlQuizAnswerStore:
     def test_find_by_session_returns_empty_for_no_answers(
         self, engine: Engine, db_session: Session, quiz_session: object,
     ) -> None:
+        """テスト対象: SqlQuizAnswerStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_answer_store import SqlQuizAnswerStore
 
         store = SqlQuizAnswerStore(engine)
@@ -297,6 +327,9 @@ class TestSqlRoadmapItemReadStore:
     def test_find_item_returns_record(
         self, engine: Engine, db_session: Session, roadmap_item: object,
     ) -> None:
+        """テスト対象: SqlRoadmapItemReadStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_roadmap_item_read_store import (
             SqlRoadmapItemReadStore,
         )
@@ -313,6 +346,9 @@ class TestSqlRoadmapItemReadStore:
     def test_find_item_returns_none_for_missing(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlRoadmapItemReadStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_roadmap_item_read_store import (
             SqlRoadmapItemReadStore,
         )
@@ -325,6 +361,9 @@ class TestSqlRoadmapItemReadStore:
     def test_item_exists_returns_true(
         self, engine: Engine, db_session: Session, roadmap_item: object,
     ) -> None:
+        """テスト対象: SqlRoadmapItemReadStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_roadmap_item_read_store import (
             SqlRoadmapItemReadStore,
         )
@@ -336,6 +375,9 @@ class TestSqlRoadmapItemReadStore:
     def test_item_exists_returns_false(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlRoadmapItemReadStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_roadmap_item_read_store import (
             SqlRoadmapItemReadStore,
         )
@@ -354,6 +396,9 @@ class TestSqlProgressUpdateStore:
     def test_update_roadmap_item_progress(
         self, engine: Engine, db_session: Session, roadmap_item: object,
     ) -> None:
+        """テスト対象: SqlProgressUpdateStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import RoadmapItem
         from quiz.infrastructure.sql_progress_update_store import SqlProgressUpdateStore
 
@@ -370,6 +415,9 @@ class TestSqlProgressUpdateStore:
     def test_save_summary_test_result(
         self, engine: Engine, db_session: Session, quiz_session: object, roadmap_item: object,
     ) -> None:
+        """テスト対象: save_summary_test_result 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import SummaryTestResult
         from quiz.infrastructure.sql_progress_update_store import SqlProgressUpdateStore
 
@@ -386,6 +434,9 @@ class TestSqlProgressUpdateStore:
     def test_complete_session(
         self, engine: Engine, db_session: Session, quiz_session: object,
     ) -> None:
+        """テスト対象: complete_session 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import QuizSession as QS
         from quiz.infrastructure.sql_progress_update_store import SqlProgressUpdateStore
 
@@ -408,6 +459,9 @@ class TestSqlSummaryTestResultStore:
     def test_save_result(
         self, engine: Engine, db_session: Session, quiz_session: object, roadmap_item: object,
     ) -> None:
+        """テスト対象: SqlSummaryTestResultStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from infrastructure.rdb.models import SummaryTestResult
         from quiz.infrastructure.sql_summary_test_result_store import (
             SqlSummaryTestResultStore,
@@ -426,6 +480,9 @@ class TestSqlSummaryTestResultStore:
     def test_find_by_roadmap_item_returns_records(
         self, engine: Engine, db_session: Session, roadmap: object, roadmap_item: object,
     ) -> None:
+        """テスト対象: SqlSummaryTestResultStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_summary_test_result_store import (
             SqlSummaryTestResultStore,
         )
@@ -445,6 +502,9 @@ class TestSqlSummaryTestResultStore:
     def test_find_by_roadmap_item_returns_empty_for_no_match(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: SqlSummaryTestResultStore の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_summary_test_result_store import (
             SqlSummaryTestResultStore,
         )
@@ -462,6 +522,9 @@ class TestSqlSummaryTestResultStore:
 
 class TestStoreErrorPaths:
     def test_find_session_raises_for_missing_id(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: StoreErrorPaths の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
         store = SqlQuizSessionStore(engine)
@@ -469,6 +532,9 @@ class TestStoreErrorPaths:
             store.find_session(str(uuid.uuid4()))
 
     def test_complete_session_raises_for_missing_id(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: complete_session 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
         store = SqlQuizSessionStore(engine)
@@ -476,6 +542,9 @@ class TestStoreErrorPaths:
             store.complete_session(str(uuid.uuid4()), str(uuid.uuid4()), 0, "2026-01-01T00:00:00")
 
     def test_discard_session_raises_for_missing_id(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: StoreErrorPaths の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_session_store import SqlQuizSessionStore
 
         store = SqlQuizSessionStore(engine)
@@ -483,6 +552,9 @@ class TestStoreErrorPaths:
             store.discard_session(str(uuid.uuid4()))
 
     def test_save_answer_raises_for_missing_session(self, engine: Engine, db_session: Session) -> None:
+        """テスト対象: StoreErrorPaths の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_quiz_answer_store import SqlQuizAnswerStore
 
         store = SqlQuizAnswerStore(engine)
@@ -497,6 +569,9 @@ class TestStoreErrorPaths:
     def test_update_roadmap_item_progress_raises_for_missing_item(
         self, engine: Engine, db_session: Session,
     ) -> None:
+        """テスト対象: StoreErrorPaths の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.infrastructure.sql_progress_update_store import SqlProgressUpdateStore
 
         store = SqlProgressUpdateStore(engine)

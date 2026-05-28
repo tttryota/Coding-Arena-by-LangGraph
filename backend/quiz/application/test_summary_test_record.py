@@ -115,6 +115,9 @@ def _summary_test_record_error(
 
 def test_tc_01_middle_level_saves_summary_test_result() -> None:
     # Arrange
+    """テスト対象: record_summary_test 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     answers: list[QuizAnswerRecord] = [
         {
             "question_number": 1,
@@ -170,6 +173,9 @@ def test_tc_01_middle_level_saves_summary_test_result() -> None:
 
 def test_tc_10_major_level_passes_title_description_and_all_answers_to_llm() -> None:
     # Arrange
+    """テスト対象: record_summary_test 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     answers: list[QuizAnswerRecord] = [
         {
             "question_number": 1,
@@ -234,6 +240,9 @@ def test_tc_10_major_level_passes_title_description_and_all_answers_to_llm() -> 
 
 def test_tc_20_detail_level_early_returns_without_calling_llm_or_store() -> None:
     # Arrange
+    """テスト対象: record_summary_test 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         session_id="sess_detail_001",
         roadmap_item_id="rm_ts_generics_detail",
@@ -261,6 +270,9 @@ def test_tc_21_multiple_sessions_for_same_item_produce_separate_save_requests() 
     None
 ):
     # Arrange
+    """テスト対象: record_summary_test 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     llm_1 = _RecordingSummaryTestLlm(
         output=SummaryAnalysis(score=55, analysis="1回目の分析結果"),
     )
@@ -297,6 +309,9 @@ def test_tc_21_multiple_sessions_for_same_item_produce_separate_save_requests() 
 
 def test_tc_22_boundary_scores_zero_and_hundred_are_passed_through() -> None:
     # Arrange — score=0
+    """テスト対象: record_summary_test 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     llm_zero = _RecordingSummaryTestLlm(
         output=SummaryAnalysis(
             score=0,
@@ -335,6 +350,9 @@ def test_tc_30_success_path_calls_llm_and_store_once_each_without_failure_log() 
     None
 ):
     # Arrange
+    """テスト対象: record_summary_test 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     llm = _RecordingSummaryTestLlm(
         output=SummaryAnalysis(score=70, analysis="全体的に安定した理解を示しています。"),
     )
@@ -353,6 +371,9 @@ def test_tc_30_success_path_calls_llm_and_store_once_each_without_failure_log() 
 
 def test_tc_31_llm_request_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: record_summary_test 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = RuntimeError("llm request failed")
     error = _summary_test_record_error(
         error_code="llm_request_failed",
@@ -383,6 +404,9 @@ def test_tc_31_llm_request_failure_is_logged_once_and_reraised() -> None:
 
 def test_tc_32_llm_response_parse_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: record_summary_test 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = ValueError("parse failed")
     error = _summary_test_record_error(
         error_code="llm_response_parse_failed",
@@ -413,6 +437,9 @@ def test_tc_32_llm_response_parse_failure_is_logged_once_and_reraised() -> None:
 
 def test_tc_33_persistence_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: record_summary_test 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = RuntimeError("db write failed")
     error = _summary_test_record_error(
         error_code="persistence_failed",

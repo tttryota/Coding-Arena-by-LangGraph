@@ -68,6 +68,9 @@ def _record(
 
 def test_tc_01_returns_single_result_with_all_fields() -> None:
     # Arrange
+    """テスト対象: get_summary_test_results 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     record = _record(
         record_id="str_001",
         session_id="sess_001",
@@ -100,6 +103,9 @@ def test_tc_02_summary_test_result_record_is_frozen_dataclass_with_five_fields()
     None
 ):
     # Arrange / Act
+    """テスト対象: SummaryTestResultRecord 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     record = SummaryTestResultRecord(
         id="str_002",
         session_id="sess_002",
@@ -121,6 +127,9 @@ def test_tc_02_summary_test_result_record_is_frozen_dataclass_with_five_fields()
 
 def test_tc_10_delegates_roadmap_item_id_to_store_and_returns_results() -> None:
     # Arrange
+    """テスト対象: get_summary_test_results 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     records = [
         _record(
             record_id="str_010",
@@ -158,6 +167,9 @@ def test_tc_10_delegates_roadmap_item_id_to_store_and_returns_results() -> None:
 
 def test_tc_11_results_are_returned_in_created_at_descending_order() -> None:
     # Arrange
+    """テスト対象: get_summary_test_results 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     records = [
         _record(
             record_id="str_newer",
@@ -188,6 +200,9 @@ def test_tc_11_results_are_returned_in_created_at_descending_order() -> None:
 
 def test_tc_20_existing_item_with_no_results_returns_empty_list() -> None:
     # Arrange
+    """テスト対象: get_summary_test_results 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     checker = _StubExistenceChecker(existing_ids={"rm_mid_002"})
     store = _StubSummaryTestResultsStore(results_by_item={})
 
@@ -204,6 +219,9 @@ def test_tc_20_existing_item_with_no_results_returns_empty_list() -> None:
 
 def test_tc_30_nonexistent_item_raises_not_found_error() -> None:
     # Arrange
+    """テスト対象: get_summary_test_results 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     checker = _StubExistenceChecker(existing_ids=set())
     store = _StubSummaryTestResultsStore()
 
@@ -221,6 +239,9 @@ def test_tc_30_nonexistent_item_raises_not_found_error() -> None:
 
 def test_tc_31_existence_check_db_failure_raises_persistence_error() -> None:
     # Arrange
+    """テスト対象: get_summary_test_results 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     db_error = RuntimeError("db read failed")
     checker = _StubExistenceChecker(error=db_error)
     store = _StubSummaryTestResultsStore()
@@ -240,6 +261,9 @@ def test_tc_31_existence_check_db_failure_raises_persistence_error() -> None:
 
 def test_tc_32_store_find_db_failure_raises_persistence_error() -> None:
     # Arrange
+    """テスト対象: get_summary_test_results 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     db_error = RuntimeError("db read failed")
     checker = _StubExistenceChecker(existing_ids={"rm_mid_004"})
     store = _StubSummaryTestResultsStore(error=db_error)

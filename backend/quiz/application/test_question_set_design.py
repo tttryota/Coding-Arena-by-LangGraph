@@ -148,6 +148,9 @@ def test_tc_01_design_question_set_reads_required_state_and_returns_base_shape()
     None
 ):
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state()
     confirmation_points = _confirmation_points(
         "knowledge",
@@ -178,6 +181,9 @@ def test_tc_01_design_question_set_reads_required_state_and_returns_base_shape()
 
 def test_tc_02_confirmation_points_are_returned_as_confirmation_point_dtos() -> None:
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "knowledge",
         "knowledge_and_practice",
@@ -209,6 +215,9 @@ def test_tc_02_confirmation_points_are_returned_as_confirmation_point_dtos() -> 
 
 def test_tc_10_detail_items_keep_3_to_5_confirmation_points_without_warning() -> None:
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "knowledge",
         "knowledge_and_practice",
@@ -236,6 +245,9 @@ def test_tc_10_detail_items_keep_3_to_5_confirmation_points_without_warning() ->
 
 def test_tc_11_formats_are_preserved_as_public_contract_values() -> None:
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "knowledge_and_practice",
         "knowledge",
@@ -261,6 +273,9 @@ def test_tc_11_formats_are_preserved_as_public_contract_values() -> None:
 
 def test_tc_12_middle_summary_uses_only_title_description_and_level_inputs() -> None:
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = cast(
         "SessionState",
         {
@@ -325,6 +340,9 @@ def test_tc_20_empty_description_is_passed_through_and_title_only_can_drive_desi
     None
 ):
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         title="再帰関数の基本",
         description="",
@@ -349,6 +367,9 @@ def test_tc_20_empty_description_is_passed_through_and_title_only_can_drive_desi
 
 def test_tc_21_conceptual_items_can_return_knowledge_only_confirmation_points() -> None:
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         title="プログラミングパラダイムの比較",
         description="手続き型、オブジェクト指向、関数型の違いを理解する",
@@ -396,6 +417,9 @@ def test_tc_22_out_of_range_confirmation_point_count_logs_warning_and_continues(
     formats: tuple[ConfirmationPointFormat, ...],
 ) -> None:
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(*formats)
     llm_client = _RecordingQuestionSetDesignLlm(
         confirmation_points=confirmation_points,
@@ -420,6 +444,9 @@ def test_tc_22_out_of_range_confirmation_point_count_logs_warning_and_continues(
 
 def test_tc_30_llm_request_failure_error_is_logged_once_and_re_raised() -> None:
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = RuntimeError("upstream timeout")
     error = _question_set_design_error(
         error_code="llm_request_failed",
@@ -454,6 +481,9 @@ def test_tc_30_llm_request_failure_error_is_logged_once_and_re_raised() -> None:
 
 def test_tc_31_llm_response_parse_failure_error_is_logged_once_and_re_raised() -> None:
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = ValueError("invalid json")
     error = _question_set_design_error(
         error_code="llm_response_parse_failed",
@@ -482,6 +512,9 @@ def test_tc_31_llm_response_parse_failure_error_is_logged_once_and_re_raised() -
 
 def test_tc_32_llm_response_schema_failure_error_is_logged_once_and_re_raised() -> None:
     # Arrange
+    """テスト対象: design_question_set 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = TypeError("invalid confirmation point schema")
     error = _question_set_design_error(
         error_code="llm_response_parse_failed",

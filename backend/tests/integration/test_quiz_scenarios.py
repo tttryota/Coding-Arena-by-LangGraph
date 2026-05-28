@@ -120,7 +120,9 @@ class TestQ4NonExistentItemId:
         client: TestClient,
         integration_container: object,
     ) -> None:
-        """存在しない roadmap_item_id でセッション開始 → エラー。"""
+        """テスト対象: Q4NonExistentItemId の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         # graph_runner を NoOp に差替え (item 検索で失敗するため graph は到達しないが安全のため)
         integration_container.graph_runner = _NoOpGraphRunner()  # type: ignore[attr-defined]
 
@@ -145,7 +147,9 @@ class TestQ1SessionStartAndGet:
         integration_container: object,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
-        """POST /sessions → 201 → GET /sessions/{id} で DB 行確認。"""
+        """テスト対象: start_session 関数。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         # Arrange: ロードマップを作成して detail item_id を取得
         detail_item_id = _create_roadmap_and_get_detail_item_id(
             client,
@@ -187,7 +191,9 @@ class TestQ3ExistingSessionDetection:
         integration_container: object,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
-        """同一 item_id で 2 回 POST → resume_required=True。"""
+        """テスト対象: Q3ExistingSessionDetection の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         detail_item_id = _create_roadmap_and_get_detail_item_id(
             client,
             scenario_transport,
@@ -266,7 +272,9 @@ class TestQ2UserInputSubmission:
         integration_container: object,
         scenario_transport: ScenarioLlmTransport,
     ) -> None:
-        """POST /sessions → interrupt → POST /sessions/{id}/input → グラフ完走。"""
+        """テスト対象: Q2UserInputSubmission の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         # Arrange: ロードマップを作成して detail item_id を取得
         detail_item_id = _create_roadmap_and_get_detail_item_id(
             client,
@@ -341,7 +349,9 @@ class TestQ2UserInputSubmission:
         client: TestClient,
         integration_container: object,
     ) -> None:
-        """存在しない session_id への入力送信 → エラー。"""
+        """テスト対象: Q2UserInputSubmission の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         # graph_runner の None チェック (503) を通過させるため NoOp を設定
         integration_container.graph_runner = _NoOpGraphRunner()  # type: ignore[attr-defined]
 

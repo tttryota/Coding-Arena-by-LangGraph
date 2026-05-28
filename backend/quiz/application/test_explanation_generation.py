@@ -123,6 +123,9 @@ def test_tc_01_generate_explanation_public_return_contract_and_dependency_mappin
     None
 ):
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state()
     note_chunks = [
         "TypeScript入門.md: 型パラメータは関数に型の柔軟性を持たせる",
@@ -166,6 +169,9 @@ def test_tc_02_generate_explanation_keeps_current_confirmation_point_unchanged()
     None
 ):
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "ジェネリクスの型パラメータの役割を説明できる",
         "型引数を明示する利点を説明できる",
@@ -203,6 +209,9 @@ def test_tc_10_note_chunks_are_passed_in_order_and_explanation_text_is_returned(
     None
 ):
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     note_chunks = [
         "TypeScript入門.md: 型パラメータは関数に型の柔軟性を持たせる",
         "TypeScript入門.md: any ではなく具体型を保ったまま再利用できる",
@@ -233,6 +242,9 @@ def test_tc_10_note_chunks_are_passed_in_order_and_explanation_text_is_returned(
 
 def test_tc_11_generate_explanation_succeeds_with_empty_note_chunks() -> None:
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     rag_client = _RecordingExplanationRagClient(chunks=[])
     llm_client = _RecordingExplanationLlmClient(
         explanation_text="型パラメータは処理の形を保ったまま具体型だけ差し替えるために使います。",
@@ -260,6 +272,9 @@ def test_tc_11_generate_explanation_succeeds_with_empty_note_chunks() -> None:
 
 def test_tc_20_same_confirmation_point_can_be_explained_multiple_times() -> None:
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(include_optional_fields=True)
     original_state = deepcopy(state)
     rag_client = _RecordingExplanationRagClient(
@@ -287,6 +302,9 @@ def test_tc_21_alternate_question_text_can_be_explained_without_advancing_state(
     None
 ):
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     question_text = (
         "では、<T>を使わずにany型で書いた場合と比べて、"
         "型パラメータを使うメリットは何でしょうか?"
@@ -321,6 +339,9 @@ def test_tc_21_alternate_question_text_can_be_explained_without_advancing_state(
 
 def test_tc_30_success_path_calls_dependencies_once_each_and_logs_no_failure() -> None:
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     rag_client = _RecordingExplanationRagClient(
         chunks=["TypeScript入門.md: 型パラメータは型の対応関係を保つ"],
     )
@@ -343,6 +364,9 @@ def test_tc_30_success_path_calls_dependencies_once_each_and_logs_no_failure() -
 
 def test_tc_31_rag_search_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = RuntimeError("rag request failed")
     error = _explanation_generation_error(
         error_code="rag_search_failed",
@@ -374,6 +398,9 @@ def test_tc_31_rag_search_failure_is_logged_once_and_reraised() -> None:
 
 def test_tc_32_llm_request_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = RuntimeError("llm request failed")
     error = _explanation_generation_error(
         error_code="llm_request_failed",
@@ -405,6 +432,9 @@ def test_tc_32_llm_request_failure_is_logged_once_and_reraised() -> None:
 
 def test_tc_33_llm_response_parse_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: generate_explanation 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = ValueError("parse failed")
     error = _explanation_generation_error(
         error_code="llm_response_parse_failed",

@@ -399,6 +399,39 @@ def _expected_answer_state(
     }
 
 
+def _resume_input(
+    session_id: str,
+    *,
+    user_input: str = "test answer",
+) -> ResumeSessionInput:
+    return ResumeSessionInput(
+        session_id=session_id,
+        user_input=user_input,
+        input_source="form",
+    )
+
+
+def _resume_graph_call(
+    *,
+    user_input: str = "test answer",
+) -> dict[str, object]:
+    return {
+        "user_input": user_input,
+        "input_source": "form",
+        "is_resumed": True,
+    }
+
+
+def _assert_in_progress_session(
+    session_store: _RecordingSessionStore,
+    session_id: str,
+) -> None:
+    persisted_session = session_store.persisted_session(session_id)
+    assert persisted_session is not None
+    assert persisted_session.status == "in_progress"
+    assert persisted_session.completed_at is None
+
+
 def _assert_single_failure_log(
     log_output: list[MutableMapping[str, Any]],
     *,
@@ -411,6 +444,9 @@ def _assert_single_failure_log(
 
 def test_tc_01_start_session_creates_session_and_starts_graph_with_c1_state() -> None:
     # Arrange
+    """テスト対象: start_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     requested_roadmap_item_id = "item-requested"
     created_session = _session(
         session_id="session-created",
@@ -467,6 +503,9 @@ def test_tc_01_start_session_creates_session_and_starts_graph_with_c1_state() ->
 
 def test_tc_11_existing_in_progress_returns_resume_target_without_new_session() -> None:
     # Arrange
+    """テスト対象: start_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     existing_session = _session(session_id="session-keep")
     session_store = _RecordingSessionStore(
         existing_in_progress={existing_session.roadmap_item_id: existing_session},
@@ -497,6 +536,9 @@ def test_tc_11_existing_in_progress_returns_resume_target_without_new_session() 
 
 def test_tc_02_record_answer_persists_raw_answer_before_returning() -> None:
     # Arrange
+    """テスト対象: record_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     raw_answer = _answer(
         question_number=1,
         question_text="型制約は何のために使いますか。",
@@ -524,6 +566,9 @@ def test_tc_02_record_answer_persists_raw_answer_before_returning() -> None:
 
 def test_tc_03_complete_session_marks_completed_and_updates_score() -> None:
     # Arrange
+    """テスト対象: complete_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session()
     session_store = _RecordingSessionStore(sessions={session.id: session})
 
@@ -550,6 +595,9 @@ def test_tc_03_complete_session_marks_completed_and_updates_score() -> None:
 
 def test_tc_04_complete_session_failure_keeps_session_and_score_consistent() -> None:
     # Arrange
+    """テスト対象: complete_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session(session_id="session-complete-failed")
     original_error = RuntimeError("completion persistence failed")
     session_store = _RecordingSessionStore(
@@ -581,6 +629,9 @@ def test_tc_10_resume_session_rehydrates_ordered_pairs_and_continues_from_questi
     None
 ):
     # Arrange
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session()
     roadmap_item = _item()
     persisted_answers = [
@@ -655,7 +706,7 @@ def test_tc_10_resume_session_rehydrates_ordered_pairs_and_continues_from_questi
         "input_type": "answer",
     }
     graph_runner = _RecordingGraphRunner(get_state_result=post_run_state)
-    resume_input = ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form")
+    resume_input = _resume_input(session.id)
 
     # Act
     state = resume_session(
@@ -670,9 +721,7 @@ def test_tc_10_resume_session_rehydrates_ordered_pairs_and_continues_from_questi
     assert state == post_run_state
     assert state["current_question_text"] == "型消去とは何ですか。"
     assert state["total_questions_asked"] == 4
-    assert graph_runner.resume_graph_calls == [
-        {"user_input": "test answer", "input_source": "form"},
-    ]
+    assert graph_runner.resume_graph_calls == [_resume_graph_call()]
     assert graph_runner.get_state_calls == [session.id]
     resumed_question_numbers = [
         answer["question_number"] for answer in state["answers"]
@@ -687,6 +736,9 @@ def test_tc_30_resume_session_loads_all_persisted_answers_and_passes_them_to_gra
     None
 ):
     # Arrange
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session(session_id="session-db-history")
     roadmap_item = _item()
     persisted_answers = [
@@ -759,7 +811,7 @@ def test_tc_30_resume_session_loads_all_persisted_answers_and_passes_them_to_gra
 
     # Act
     state = resume_session(
-        ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form"),
+        _resume_input(session.id),
         session_store=session_store,
         answer_store=answer_store,
         item_reader=item_reader,
@@ -771,9 +823,7 @@ def test_tc_30_resume_session_loads_all_persisted_answers_and_passes_them_to_gra
     assert state == post_run_state
     assert session.id in answer_store.find_by_session_calls
     assert len(answer_store.histories[session.id]) == persisted_count
-    assert graph_runner.resume_graph_calls == [
-        {"user_input": "test answer", "input_source": "form"},
-    ]
+    assert graph_runner.resume_graph_calls == [_resume_graph_call()]
     assert graph_runner.get_state_calls == [session.id]
     assert session_store.create_session_calls == []
     assert session_store.complete_session_calls == []
@@ -782,6 +832,9 @@ def test_tc_30_resume_session_loads_all_persisted_answers_and_passes_them_to_gra
 
 def test_tc_12_resume_session_with_zero_answers_uses_empty_history() -> None:
     # Arrange
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session(session_id="session-empty")
     roadmap_item = _item()
     session_store = _RecordingSessionStore(sessions={session.id: session})
@@ -806,7 +859,7 @@ def test_tc_12_resume_session_with_zero_answers_uses_empty_history() -> None:
     )
     fresh_session_store = _RecordingSessionStore(created_session=fresh_session)
     fresh_graph_runner = _RecordingGraphRunner()
-    resume_input = ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form")
+    resume_input = _resume_input(session.id)
 
     # Act
     state = resume_session(
@@ -834,9 +887,7 @@ def test_tc_12_resume_session_with_zero_answers_uses_empty_history() -> None:
     }
     assert fresh_result.resume_required is False
     assert state == post_run_state
-    assert graph_runner.resume_graph_calls == [
-        {"user_input": "test answer", "input_source": "form"},
-    ]
+    assert graph_runner.resume_graph_calls == [_resume_graph_call()]
     assert graph_runner.get_state_calls == [session.id]
     assert fresh_graph_runner.start_graph_calls == [expected_fresh_graph_state]
     assert session_store.create_session_calls == []
@@ -846,6 +897,9 @@ def test_tc_12_resume_session_with_zero_answers_uses_empty_history() -> None:
 
 def test_tc_20_interrupted_in_progress_session_keeps_persisted_state() -> None:
     # Arrange
+    """テスト対象: record_answer 関数と resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session(session_id="session-interrupted")
     roadmap_item = _item(item_id=session.roadmap_item_id)
     session_store = _RecordingSessionStore(
@@ -893,7 +947,7 @@ def test_tc_20_interrupted_in_progress_session_keeps_persisted_state() -> None:
     record_answer(session.id, second_answer, answer_store=answer_store)
     persisted_answers = answer_store.find_by_session(session.id)
     resumed_state = resume_session(
-        ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form"),
+        _resume_input(session.id),
         session_store=session_store,
         answer_store=answer_store,
         item_reader=item_reader,
@@ -901,16 +955,11 @@ def test_tc_20_interrupted_in_progress_session_keeps_persisted_state() -> None:
     )
 
     # Assert
-    persisted_session = session_store.persisted_session(session.id)
-    assert persisted_session is not None
-    assert persisted_session.status == "in_progress"
-    assert persisted_session.completed_at is None
+    _assert_in_progress_session(session_store, session.id)
     assert persisted_answers == [first_answer, second_answer]
     assert resumed_state == post_run_state
     assert resumed_state["session_id"] == session.id
-    assert graph_runner.resume_graph_calls == [
-        {"user_input": "test answer", "input_source": "form"},
-    ]
+    assert graph_runner.resume_graph_calls == [_resume_graph_call()]
     assert graph_runner.get_state_calls == [session.id]
     assert answer_store.save_answer_calls == [
         (session.id, first_answer),
@@ -927,6 +976,9 @@ def test_tc_21_browser_close_then_explicit_resume_preserves_history_and_continue
     None
 ):
     # Arrange
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session(session_id="session-browser-close")
     roadmap_item = _item()
     answers = [
@@ -979,7 +1031,7 @@ def test_tc_21_browser_close_then_explicit_resume_preserves_history_and_continue
         graph_runner=_RecordingGraphRunner(),
     )
     state = resume_session(
-        ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form"),
+        _resume_input(session.id),
         session_store=session_store,
         answer_store=answer_store,
         item_reader=item_reader,
@@ -987,7 +1039,6 @@ def test_tc_21_browser_close_then_explicit_resume_preserves_history_and_continue
     )
 
     # Assert
-    persisted_session = session_store.persisted_session(session.id)
     resumed_question_numbers = [
         answer["question_number"] for answer in state["answers"]
     ]
@@ -999,13 +1050,9 @@ def test_tc_21_browser_close_then_explicit_resume_preserves_history_and_continue
     assert state["answers"] == expected_resumed_answers
     assert resumed_question_numbers == [1, 2, 3]
     assert resumed_question_numbers[-1] + 1 == expected_next_question_number
-    assert graph_runner.resume_graph_calls == [
-        {"user_input": "test answer", "input_source": "form"},
-    ]
+    assert graph_runner.resume_graph_calls == [_resume_graph_call()]
     assert graph_runner.get_state_calls == [session.id]
-    assert persisted_session is not None
-    assert persisted_session.status == "in_progress"
-    assert persisted_session.completed_at is None
+    _assert_in_progress_session(session_store, session.id)
     assert answer_store.histories[session.id] == answers
     assert session_store.create_session_calls == []
     assert session_store.complete_session_calls == []
@@ -1014,6 +1061,9 @@ def test_tc_21_browser_close_then_explicit_resume_preserves_history_and_continue
 
 def test_tc_22_long_idle_in_progress_session_resumes_without_expiry_rejection() -> None:
     # Arrange
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session(
         session_id="session-long-idle",
         started_at="2024-01-01T00:00:00+00:00",
@@ -1051,7 +1101,7 @@ def test_tc_22_long_idle_in_progress_session_resumes_without_expiry_rejection() 
 
     # Act
     state = resume_session(
-        ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form"),
+        _resume_input(session.id),
         session_store=session_store,
         answer_store=answer_store,
         item_reader=item_reader,
@@ -1059,7 +1109,6 @@ def test_tc_22_long_idle_in_progress_session_resumes_without_expiry_rejection() 
     )
 
     # Assert
-    persisted_session = session_store.persisted_session(session.id)
     assert state == post_run_state
     assert state["session_id"] == session.id
     assert state["answers"] == post_run_state["answers"]
@@ -1068,13 +1117,9 @@ def test_tc_22_long_idle_in_progress_session_resumes_without_expiry_rejection() 
     ]
     assert resumed_question_numbers == [1]
     assert resumed_question_numbers[-1] + 1 == 2
-    assert graph_runner.resume_graph_calls == [
-        {"user_input": "test answer", "input_source": "form"},
-    ]
+    assert graph_runner.resume_graph_calls == [_resume_graph_call()]
     assert graph_runner.get_state_calls == [session.id]
-    assert persisted_session is not None
-    assert persisted_session.status == "in_progress"
-    assert persisted_session.completed_at is None
+    _assert_in_progress_session(session_store, session.id)
     assert session_store.create_session_calls == []
     assert session_store.complete_session_calls == []
     assert session_store.discard_session_calls == []
@@ -1084,6 +1129,9 @@ def test_tc_31_start_session_create_failure_preserves_atomicity_and_error_contra
     None
 ):
     # Arrange
+    """テスト対象: start_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     attempted_session = _session(session_id="session-create-failed")
     original_error = RuntimeError("db unavailable")
     session_store = _RecordingSessionStore(
@@ -1135,6 +1183,9 @@ def test_tc_31_start_session_graph_failure_rolls_back_and_raises_contract_error(
     None
 ):
     # Arrange
+    """テスト対象: start_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     created_session = _session()
     roadmap_item = _item()
     original_error = RuntimeError("graph start failed")
@@ -1181,6 +1232,9 @@ def test_tc_31_start_session_item_load_failure_rolls_back_and_does_not_leave_res
     None
 ):
     # Arrange
+    """テスト対象: start_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     created_session = _session(session_id="session-item-load-failed")
     original_error = RuntimeError("roadmap item lookup failed")
     session_store = _RecordingSessionStore(created_session=created_session)
@@ -1229,6 +1283,9 @@ def test_tc_31_start_session_graph_failure_keeps_orphan_non_resumable_when_disca
     None
 ):
     # Arrange
+    """テスト対象: start_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     created_session = _session(session_id="session-discarded-record")
     roadmap_item = _item(item_id=created_session.roadmap_item_id)
     original_error = RuntimeError("graph start failed")
@@ -1274,6 +1331,9 @@ def test_tc_31_start_session_graph_failure_keeps_orphan_non_resumable_when_disca
 
 def test_tc_31_start_session_cleanup_failure_raises_dedicated_error_contract() -> None:
     # Arrange
+    """テスト対象: start_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     created_session = _session(session_id="session-cleanup-failed")
     roadmap_item = _item(item_id=created_session.roadmap_item_id)
     start_error = RuntimeError("graph start failed")
@@ -1326,6 +1386,9 @@ def test_tc_32_resume_session_history_load_failure_keeps_state_unchanged_and_log
     None
 ):
     # Arrange
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session()
     roadmap_item = _item()
     existing_answers = [
@@ -1343,7 +1406,7 @@ def test_tc_32_resume_session_history_load_failure_keeps_state_unchanged_and_log
     )
     item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
     graph_runner = _RecordingGraphRunner()
-    resume_input = ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form")
+    resume_input = _resume_input(session.id)
 
     # Act / Assert
     with (
@@ -1392,6 +1455,9 @@ def test_tc_32_resume_session_invalid_answer_type_uses_history_failure_contract_
     None
 ):
     # Arrange
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session(session_id="session-invalid-answer-type")
     roadmap_item = _item()
     persisted_answers = [
@@ -1406,7 +1472,7 @@ def test_tc_32_resume_session_invalid_answer_type_uses_history_failure_contract_
     answer_store = _RecordingAnswerStore(histories={session.id: persisted_answers})
     item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
     graph_runner = _RecordingGraphRunner()
-    resume_input = ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form")
+    resume_input = _resume_input(session.id)
 
     # Act / Assert
     with (
@@ -1455,6 +1521,9 @@ def test_tc_32_resume_session_graph_failure_keeps_state_unchanged_and_logs_once(
     None
 ):
     # Arrange
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session = _session(session_id="session-resume-fail")
     roadmap_item = _item()
     existing_answers = [
@@ -1471,7 +1540,7 @@ def test_tc_32_resume_session_graph_failure_keeps_state_unchanged_and_logs_once(
     answer_store = _RecordingAnswerStore(histories={session.id: existing_answers})
     item_reader = _RecordingItemReader(items={roadmap_item.id: roadmap_item})
     graph_runner = _RecordingGraphRunner(resume_error=original_error)
-    resume_input = ResumeSessionInput(session_id=session.id, user_input="test answer", input_source="form")
+    resume_input = _resume_input(session.id)
 
     # Act / Assert
     with (
@@ -1523,7 +1592,9 @@ _RESUME_TRANSIENT_LLM_EVENT = "quiz_session_resume_transient_llm_error"
 
 
 def test_tc_40_resume_transient_error_raises_specific_code_and_keeps_session() -> None:
-    """一過性 LLM エラーで session_resume_transient_llm_error を返し、セッションを破棄しない。"""
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     from quiz.application.graph import TransientLlmNodeError
 
     session = _session(session_id="session-transient")
@@ -1569,7 +1640,9 @@ def test_tc_40_resume_transient_error_raises_specific_code_and_keeps_session() -
 
 
 def test_tc_41_resume_after_transient_error_retries_via_retry_graph() -> None:
-    """前回一過性エラー後のリトライで resume_graph が InvalidUpdateError → retry_graph にフォールバック。"""
+    """テスト対象: resume_session 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     from langgraph.errors import InvalidUpdateError
 
     session = _session(session_id="session-retry")

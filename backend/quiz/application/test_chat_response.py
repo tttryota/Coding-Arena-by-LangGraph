@@ -50,6 +50,9 @@ def _state(
 
 
 def test_tc_01_respond_to_chat_returns_response_text_and_calls_llm_once() -> None:
+    """テスト対象: respond_to_chat 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     llm = _RecordingChatResponseLlm(response="型パラメータとは...")
     state = _state()
 
@@ -66,6 +69,9 @@ def test_tc_01_respond_to_chat_returns_response_text_and_calls_llm_once() -> Non
 
 
 def test_tc_02_respond_to_chat_does_not_modify_question_context() -> None:
+    """テスト対象: respond_to_chat 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     llm = _RecordingChatResponseLlm()
     state = _state()
 
@@ -80,6 +86,9 @@ def test_tc_02_respond_to_chat_does_not_modify_question_context() -> None:
 
 
 def test_tc_10_empty_user_input_is_passed_through() -> None:
+    """テスト対象: respond_to_chat 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     llm = _RecordingChatResponseLlm(response="何か質問があればどうぞ")
     state = _state(user_input="")
 
@@ -90,6 +99,9 @@ def test_tc_10_empty_user_input_is_passed_through() -> None:
 
 
 def test_tc_30_llm_request_failure_is_logged_once_and_reraised() -> None:
+    """テスト対象: respond_to_chat 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = ConnectionError("LLM unreachable")
     error = ChatResponseError(
         error_code="llm_request_failed",
@@ -110,6 +122,9 @@ def test_tc_30_llm_request_failure_is_logged_once_and_reraised() -> None:
 
 
 def test_tc_31_llm_response_parse_failure_is_logged_once_and_reraised() -> None:
+    """テスト対象: respond_to_chat 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = ValueError("cannot parse response")
     error = ChatResponseError(
         error_code="llm_response_parse_failed",

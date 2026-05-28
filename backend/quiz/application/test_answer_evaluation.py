@@ -140,6 +140,9 @@ def test_tc_01_evaluate_answer_public_return_contract_and_llm_argument_mapping()
     None
 ):
     # Arrange
+    """テスト対象: evaluate_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(confirmation_points=_confirmation_points("knowledge"))
     llm_client = _RecordingAnswerEvaluationLlm(
         output=EvaluationOutput(
@@ -195,6 +198,9 @@ def test_tc_02_appends_one_quiz_answer_record_without_reordering_existing_answer
     None
 ):
     # Arrange
+    """テスト対象: evaluate_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     existing_answers = _answers()
     state = _state(
         confirmation_points=_confirmation_points("knowledge", "knowledge_and_practice"),
@@ -226,6 +232,9 @@ def test_tc_02_appends_one_quiz_answer_record_without_reordering_existing_answer
 
 def test_tc_10_next_action_next_increments_current_point_index_by_one() -> None:
     # Arrange
+    """テスト対象: evaluate_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "knowledge",
         "knowledge_and_practice",
@@ -255,6 +264,9 @@ def test_tc_10_next_action_next_increments_current_point_index_by_one() -> None:
 
 def test_tc_11_deepdive_appends_points_to_tail_and_increments_index() -> None:
     # Arrange
+    """テスト対象: evaluate_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "knowledge",
         "knowledge_and_practice",
@@ -295,6 +307,9 @@ def test_tc_11_deepdive_appends_points_to_tail_and_increments_index() -> None:
 
 def test_tc_12_complete_sets_current_point_index_to_completion_boundary() -> None:
     # Arrange
+    """テスト対象: evaluate_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_points = _confirmation_points(
         "knowledge",
         "knowledge_and_practice",
@@ -323,6 +338,9 @@ def test_tc_12_complete_sets_current_point_index_to_completion_boundary() -> Non
 
 def test_tc_13_form_input_is_normalized_to_answer_input_type() -> None:
     # Arrange
+    """テスト対象: evaluate_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         confirmation_points=_confirmation_points("knowledge"),
         input_source="form",
@@ -347,6 +365,9 @@ def test_tc_13_form_input_is_normalized_to_answer_input_type() -> None:
 
 def test_tc_20_passes_total_questions_asked_convergence_signal_to_llm() -> None:
     # Arrange
+    """テスト対象: evaluate_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         confirmation_points=_confirmation_points("knowledge"),
         total_questions_asked=20,
@@ -380,6 +401,9 @@ def test_tc_20_passes_total_questions_asked_convergence_signal_to_llm() -> None:
 
 def test_tc_30_llm_request_failure_propagates_answer_evaluation_error() -> None:
     # Arrange
+    """テスト対象: evaluate_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = RuntimeError("request failed")
     error = _answer_evaluation_error(
         error_code="llm_request_failed",
@@ -408,6 +432,9 @@ def test_tc_30_llm_request_failure_propagates_answer_evaluation_error() -> None:
 
 def test_tc_31_llm_response_parse_failure_propagates_answer_evaluation_error() -> None:
     # Arrange
+    """テスト対象: evaluate_answer 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = ValueError("parse failed")
     error = _answer_evaluation_error(
         error_code="llm_response_parse_failed",

@@ -157,6 +157,9 @@ def _progress_update_error(
 
 def test_tc_01_detail_session_updates_roadmap_item_score_and_last_quiz_at() -> None:
     # Arrange
+    """テスト対象: update_progress 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         roadmap_item_level="detail",
         roadmap_item_id="detail_001",
@@ -192,6 +195,9 @@ def test_tc_02_summary_test_saves_result_without_updating_roadmap_item(
     level: RoadmapItemLevel,
 ) -> None:
     # Arrange
+    """テスト対象: update_progress 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         session_id="sess_summary_001",
         roadmap_item_id="item_summary_001",
@@ -227,6 +233,9 @@ def test_tc_02_summary_test_saves_result_without_updating_roadmap_item(
 
 def test_tc_10_llm_receives_full_context_including_checkpoints_and_answers() -> None:
     # Arrange
+    """テスト対象: update_progress 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cps = _confirmation_points("型ガードの使い方", "narrowingの仕組み", "判別共用体の利点")
     answers: list[QuizAnswerRecord] = [
         {
@@ -295,6 +304,9 @@ def test_tc_10_llm_receives_full_context_including_checkpoints_and_answers() -> 
 
 def test_tc_11_lower_score_overwrites_previous_higher_score() -> None:
     # Arrange
+    """テスト対象: update_progress 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         roadmap_item_level="detail",
         roadmap_item_id="detail_002",
@@ -321,6 +333,9 @@ def test_tc_11_lower_score_overwrites_previous_higher_score() -> None:
 
 def test_tc_20_zero_answers_skips_llm_and_only_completes_session() -> None:
     # Arrange
+    """テスト対象: update_progress 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         session_id="sess_zero",
         roadmap_item_level="detail",
@@ -344,6 +359,9 @@ def test_tc_20_zero_answers_skips_llm_and_only_completes_session() -> None:
 
 def test_tc_30_success_path_calls_dependencies_once_each_and_logs_no_failure() -> None:
     # Arrange
+    """テスト対象: update_progress 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         roadmap_item_level="detail",
         answers=_answers(2),
@@ -367,6 +385,9 @@ def test_tc_30_success_path_calls_dependencies_once_each_and_logs_no_failure() -
 
 def test_tc_31_llm_request_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: update_progress 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = RuntimeError("request failed")
     error = _progress_update_error(
         error_code="llm_request_failed",
@@ -401,6 +422,9 @@ def test_tc_31_llm_request_failure_is_logged_once_and_reraised() -> None:
 
 def test_tc_32_llm_response_parse_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: update_progress 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = ValueError("parse failed")
     error = _progress_update_error(
         error_code="llm_response_parse_failed",

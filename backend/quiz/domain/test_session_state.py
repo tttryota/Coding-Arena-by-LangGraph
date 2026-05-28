@@ -72,6 +72,9 @@ def _example_answer_record() -> QuizAnswerRecord:
 
 def test_tc_01_session_state_public_contract_and_field_names() -> None:
     # Arrange / Act
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     annotations = SessionState.__annotations__
 
     # Assert
@@ -83,6 +86,9 @@ def test_tc_01_session_state_public_contract_and_field_names() -> None:
 
 def test_tc_02_subrecord_field_names_and_types() -> None:
     # Arrange / Act
+    """テスト対象: ConfirmationPoint 型と QuizAnswerRecord 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     confirmation_point_annotations = ConfirmationPoint.__annotations__
     quiz_answer_record_annotations = QuizAnswerRecord.__annotations__
     confirmation_point_hints = get_type_hints(ConfirmationPoint)
@@ -115,6 +121,9 @@ def test_tc_02_subrecord_field_names_and_types() -> None:
 
 def test_tc_03_literal_value_sets_match_specification_exactly() -> None:
     # Arrange
+    """テスト対象: SessionState・ConfirmationPoint・QuizAnswerRecord 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     session_state_hints = get_type_hints(SessionState)
     confirmation_point_hints = get_type_hints(ConfirmationPoint)
     quiz_answer_record_hints = get_type_hints(QuizAnswerRecord)
@@ -155,6 +164,9 @@ def test_tc_03_literal_value_sets_match_specification_exactly() -> None:
 
 def test_tc_10_session_state_is_partial_typeddict() -> None:
     # Arrange / Act
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     required_keys = SessionState.__required_keys__
     optional_keys = SessionState.__optional_keys__
 
@@ -166,6 +178,9 @@ def test_tc_10_session_state_is_partial_typeddict() -> None:
 
 def test_tc_11_c2_partial_state_is_a_valid_session_state() -> None:
     # Arrange
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state: SessionState = {
         "session_id": "sess_001",
         "roadmap_item_id": "ri_generics_01",
@@ -200,6 +215,9 @@ def test_tc_11_c2_partial_state_is_a_valid_session_state() -> None:
 
 def test_tc_12_confirmation_point_is_complete_record() -> None:
     # Arrange / Act
+    """テスト対象: ConfirmationPoint 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     required_keys = ConfirmationPoint.__required_keys__
     optional_keys = ConfirmationPoint.__optional_keys__
 
@@ -210,6 +228,9 @@ def test_tc_12_confirmation_point_is_complete_record() -> None:
 
 def test_tc_13_quiz_answer_record_is_complete_record() -> None:
     # Arrange / Act
+    """テスト対象: QuizAnswerRecord 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     required_keys = QuizAnswerRecord.__required_keys__
     optional_keys = QuizAnswerRecord.__optional_keys__
 
@@ -219,16 +240,25 @@ def test_tc_13_quiz_answer_record_is_complete_record() -> None:
 
 
 def test_explanation_text_type_is_str() -> None:
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     hints = get_type_hints(SessionState)
     assert hints["explanation_text"] is str
 
 
 def test_chat_response_text_type_is_str() -> None:
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     hints = get_type_hints(SessionState)
     assert hints["chat_response_text"] is str
 
 
 def test_explanation_text_only_partial_state() -> None:
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state: SessionState = {
         "session_id": "sess_001",
         "explanation_text": "解説テキスト",
@@ -238,6 +268,9 @@ def test_explanation_text_only_partial_state() -> None:
 
 
 def test_chat_response_text_only_partial_state() -> None:
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state: SessionState = {
         "session_id": "sess_001",
         "chat_response_text": "チャット応答",
@@ -248,6 +281,9 @@ def test_chat_response_text_only_partial_state() -> None:
 
 def test_tc_20_answers_empty_state_before_first_question_is_valid() -> None:
     # Arrange
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state: SessionState = {
         "session_id": "sess_001",
         "roadmap_item_id": "ri_generics_01",
@@ -268,6 +304,9 @@ def test_tc_20_answers_empty_state_before_first_question_is_valid() -> None:
 
 def test_tc_21_completion_boundary_can_be_represented() -> None:
     # Arrange
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state: SessionState = {
         "confirmation_points": _example_confirmation_points(),
         "current_point_index": 2,
@@ -280,6 +319,9 @@ def test_tc_21_completion_boundary_can_be_represented() -> None:
 
 def test_tc_22_question_delivery_boundary_can_be_represented() -> None:
     # Arrange
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state: SessionState = {
         "answers": [_example_answer_record()],
         "total_questions_asked": 2,
@@ -296,6 +338,9 @@ def test_tc_22_question_delivery_boundary_can_be_represented() -> None:
 
 def test_tc_23_all_keys_set_state_after_c4_completion_is_valid() -> None:
     # Arrange
+    """テスト対象: SessionState 型。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state: SessionState = {
         "session_id": "sess_001",
         "roadmap_item_id": "ri_generics_01",

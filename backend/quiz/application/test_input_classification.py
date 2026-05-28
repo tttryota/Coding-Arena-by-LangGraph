@@ -83,6 +83,9 @@ def _input_classification_error(
 
 def test_tc_01_classify_input_returns_answer_and_calls_llm_once() -> None:
     # Arrange
+    """テスト対象: classify_input 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         current_question_text="TypeScript のジェネリクスが必要な理由を説明してください",
         user_input="型安全を保ったまま共通化できるからです",
@@ -107,6 +110,9 @@ def test_tc_10_tc_30_chat_question_classification_returns_question_in_one_llm_ca
     None
 ):
     # Arrange
+    """テスト対象: classify_input 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         current_question_text="ジェネリクスが必要な理由を説明してください",
         user_input="ここでいう型安全って何を指していますか?",
@@ -129,6 +135,9 @@ def test_tc_10_tc_30_chat_question_classification_returns_question_in_one_llm_ca
 
 def test_tc_11_chat_explanation_request_returns_explanation_request() -> None:
     # Arrange
+    """テスト対象: classify_input 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         current_question_text="ジェネリクスが必要な理由を説明してください",
         user_input="わからないので解説してください",
@@ -151,6 +160,9 @@ def test_tc_11_chat_explanation_request_returns_explanation_request() -> None:
 
 def test_tc_12_ambiguous_chat_input_is_classified_as_answer() -> None:
     # Arrange
+    """テスト対象: classify_input 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         current_question_text="ジェネリクスが必要な理由を説明してください",
         user_input="たぶん型のため",
@@ -167,6 +179,9 @@ def test_tc_12_ambiguous_chat_input_is_classified_as_answer() -> None:
 
 def test_tc_20_empty_chat_input_is_classified_as_answer() -> None:
     # Arrange
+    """テスト対象: classify_input 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         current_question_text="ジェネリクスが必要な理由を説明してください",
         user_input="",
@@ -183,6 +198,9 @@ def test_tc_20_empty_chat_input_is_classified_as_answer() -> None:
 
 def test_tc_21_single_character_input_is_classified_as_answer() -> None:
     # Arrange
+    """テスト対象: classify_input 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         current_question_text="ジェネリクスが必要な理由を説明してください",
         user_input="?",
@@ -199,6 +217,9 @@ def test_tc_21_single_character_input_is_classified_as_answer() -> None:
 
 def test_tc_21_two_character_input_is_classified_as_answer() -> None:
     # Arrange
+    """テスト対象: classify_input 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     state = _state(
         current_question_text="ジェネリクスが必要な理由を説明してください",
         user_input="うー",
@@ -215,6 +236,9 @@ def test_tc_21_two_character_input_is_classified_as_answer() -> None:
 
 def test_tc_31_llm_request_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: classify_input 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = RuntimeError("request failed")
     error = _input_classification_error(
         error_code="llm_request_failed",
@@ -243,6 +267,9 @@ def test_tc_31_llm_request_failure_is_logged_once_and_reraised() -> None:
 
 def test_tc_32_llm_response_parse_failure_is_logged_once_and_reraised() -> None:
     # Arrange
+    """テスト対象: classify_input 関数。
+    テストケース: 個別条件での処理を検証する。
+    期待結果: 想定どおりの処理結果が得られる。"""
     cause = ValueError("parse failed")
     error = _input_classification_error(
         error_code="llm_response_parse_failed",

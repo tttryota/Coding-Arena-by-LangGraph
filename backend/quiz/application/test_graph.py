@@ -96,6 +96,9 @@ class TestRouteByInputSource:
     def test_routes_correctly(
         self, input_source: InputSource, expected: str,
     ) -> None:
+        """テスト対象: RouteByInputSource の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import _route_by_input_source
 
         assert _route_by_input_source(_routing_state(input_source=input_source)) == expected
@@ -113,6 +116,9 @@ class TestRouteByInputType:
     def test_routes_correctly(
         self, input_type: InputType, expected: str,
     ) -> None:
+        """テスト対象: RouteByInputType の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import _route_by_input_type
 
         assert _route_by_input_type(_routing_state(input_type=input_type)) == expected
@@ -130,6 +136,9 @@ class TestRouteByNextAction:
     def test_routes_correctly(
         self, next_action: NextAction, expected: str,
     ) -> None:
+        """テスト対象: RouteByNextAction の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import _route_by_next_action
 
         assert _route_by_next_action(_routing_state(next_action=next_action)) == expected
@@ -147,6 +156,9 @@ class TestRouteByRoadmapItemLevel:
     def test_routes_correctly(
         self, level: RoadmapItemLevel, expected: str,
     ) -> None:
+        """テスト対象: RouteByRoadmapItemLevel の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import _route_by_roadmap_item_level
 
         assert _route_by_roadmap_item_level(_routing_state(roadmap_item_level=level)) == expected
@@ -172,6 +184,9 @@ _EXPECTED_NODES = frozenset({
 
 class TestGraphNodes:
     def test_all_required_nodes_are_registered(self, compiled_graph: object) -> None:
+        """テスト対象: GraphNodes の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         node_names = set(compiled_graph.get_graph().nodes) - {"__start__", "__end__"}  # type: ignore[union-attr]
         assert node_names == _EXPECTED_NODES
 
@@ -192,6 +207,9 @@ class TestGraphLinearEdges:
     def test_linear_edge_exists(
         self, compiled_graph: object, source: str, target: str,
     ) -> None:
+        """テスト対象: GraphLinearEdges の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         targets = _graph_edge_targets(compiled_graph, source)
         assert target in targets, f"Expected edge {source} -> {target}, got {targets}"
 
@@ -200,27 +218,42 @@ class TestGraphConditionalEdges:
     """Verify conditional edge attachment points and their possible targets."""
 
     def test_await_input_has_conditional_targets(self, compiled_graph: object) -> None:
+        """テスト対象: GraphConditionalEdges の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         targets = _graph_edge_targets(compiled_graph, "await_input")
         assert "answer_evaluation" in targets
         assert "input_classification" in targets
 
     def test_input_classification_has_conditional_targets(self, compiled_graph: object) -> None:
+        """テスト対象: GraphConditionalEdges の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         targets = _graph_edge_targets(compiled_graph, "input_classification")
         assert "answer_evaluation" in targets
         assert "chat_response" in targets
         assert "explanation_generation" in targets
 
     def test_answer_evaluation_has_conditional_targets(self, compiled_graph: object) -> None:
+        """テスト対象: GraphConditionalEdges の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         targets = _graph_edge_targets(compiled_graph, "answer_evaluation")
         assert "question_delivery" in targets
         assert "progress_update" in targets
 
     def test_progress_update_has_conditional_targets(self, compiled_graph: object) -> None:
+        """テスト対象: GraphConditionalEdges の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         targets = _graph_edge_targets(compiled_graph, "progress_update")
         assert "summary_test_record" in targets
         assert "__end__" in targets
 
     def test_entry_point_is_question_set_design(self, compiled_graph: object) -> None:
+        """テスト対象: GraphConditionalEdges の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         targets = _graph_edge_targets(compiled_graph, "__start__")
         assert "question_set_design" in targets
 
@@ -232,6 +265,9 @@ class TestGraphConditionalEdges:
 
 class TestQuizGraphRunnerProtocol:
     def test_satisfies_graph_runner_protocol_via_assignment(self) -> None:
+        """テスト対象: QuizGraphRunnerProtocol の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import QuizGraphRunner
         from quiz.application.session_lifecycle_types import GraphRunner  # noqa: TC001
 
@@ -245,6 +281,9 @@ class TestQuizGraphRunnerProtocol:
 
 class TestQuizGraphRunnerGetState:
     def test_get_state_returns_state_from_checkpointer(self) -> None:
+        """テスト対象: QuizGraphRunnerGetState の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         from quiz.application.graph import QuizGraphRunner
@@ -267,6 +306,9 @@ class TestQuizGraphRunnerGetState:
         )
 
     def test_get_state_with_explanation_text(self) -> None:
+        """テスト対象: QuizGraphRunnerGetState の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         from quiz.application.graph import QuizGraphRunner
@@ -285,6 +327,9 @@ class TestQuizGraphRunnerGetState:
         assert result["explanation_text"] == "解説テキスト"
 
     def test_get_state_with_chat_response_text(self) -> None:
+        """テスト対象: QuizGraphRunnerGetState の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         from quiz.application.graph import QuizGraphRunner
@@ -303,6 +348,9 @@ class TestQuizGraphRunnerGetState:
         assert result["chat_response_text"] == "チャット応答テキスト"
 
     def test_get_state_raises_value_error_for_empty_thread_id(self) -> None:
+        """テスト対象: QuizGraphRunnerGetState の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         from quiz.application.graph import QuizGraphRunner
@@ -313,6 +361,9 @@ class TestQuizGraphRunnerGetState:
             runner.get_state(thread_id="")
 
     def test_get_state_raises_lookup_error_for_missing_checkpoint(self) -> None:
+        """テスト対象: QuizGraphRunnerGetState の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         from quiz.application.graph import QuizGraphRunner
@@ -329,6 +380,9 @@ class TestQuizGraphRunnerGetState:
             runner.get_state(thread_id="nonexistent")
 
     def test_get_state_raises_runtime_error_on_checkpointer_failure(self) -> None:
+        """テスト対象: QuizGraphRunnerGetState の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         from quiz.application.graph import QuizGraphRunner
@@ -342,6 +396,9 @@ class TestQuizGraphRunnerGetState:
             runner.get_state(thread_id="sess_004")
 
     def test_get_state_raises_runtime_error_for_non_mapping_values(self) -> None:
+        """テスト対象: QuizGraphRunnerGetState の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from unittest.mock import MagicMock
 
         from quiz.application.graph import QuizGraphRunner
@@ -370,21 +427,33 @@ class _ErrorWithCode(Exception):
 
 class TestIsTransientLlmError:
     def test_llm_request_failed_is_transient(self) -> None:
+        """テスト対象: IsTransientLlmError の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import _is_transient_llm_error
 
         assert _is_transient_llm_error(_ErrorWithCode("llm_request_failed")) is True
 
     def test_llm_response_parse_failed_is_not_transient(self) -> None:
+        """テスト対象: IsTransientLlmError の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import _is_transient_llm_error
 
         assert _is_transient_llm_error(_ErrorWithCode("llm_response_parse_failed")) is False
 
     def test_no_error_code_is_not_transient(self) -> None:
+        """テスト対象: IsTransientLlmError の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import _is_transient_llm_error
 
         assert _is_transient_llm_error(RuntimeError("no code")) is False
 
     def test_empty_error_code_is_not_transient(self) -> None:
+        """テスト対象: IsTransientLlmError の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import _is_transient_llm_error
 
         assert _is_transient_llm_error(_ErrorWithCode("")) is False
@@ -405,6 +474,9 @@ def _make_mock_runner(
 
 class TestQuizGraphRunnerStartGraphWrapping:
     def test_transient_error_wrapped(self) -> None:
+        """テスト対象: QuizGraphRunnerStartGraphWrapping の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import TransientLlmNodeError
 
         error = _ErrorWithCode("llm_request_failed")
@@ -418,6 +490,9 @@ class TestQuizGraphRunnerStartGraphWrapping:
         assert exc_info.value.__cause__ is error
 
     def test_permanent_error_passthrough(self) -> None:
+        """テスト対象: QuizGraphRunnerStartGraphWrapping の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         error = _ErrorWithCode("llm_response_parse_failed")
         runner, _ = _make_mock_runner(invoke_side_effect=error)
 
@@ -427,6 +502,9 @@ class TestQuizGraphRunnerStartGraphWrapping:
         assert exc_info.value is error
 
     def test_non_llm_error_passthrough(self) -> None:
+        """テスト対象: QuizGraphRunnerStartGraphWrapping の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         error = RuntimeError("unexpected")
         runner, _ = _make_mock_runner(invoke_side_effect=error)
 
@@ -438,6 +516,9 @@ class TestQuizGraphRunnerStartGraphWrapping:
 
 class TestQuizGraphRunnerResumeGraphWrapping:
     def test_transient_error_wrapped(self) -> None:
+        """テスト対象: QuizGraphRunnerResumeGraphWrapping の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import TransientLlmNodeError
 
         error = _ErrorWithCode("llm_request_failed")
@@ -450,6 +531,9 @@ class TestQuizGraphRunnerResumeGraphWrapping:
         assert exc_info.value.thread_id == "t2"
 
     def test_permanent_error_passthrough(self) -> None:
+        """テスト対象: QuizGraphRunnerResumeGraphWrapping の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         error = _ErrorWithCode("llm_response_parse_failed")
         runner, _ = _make_mock_runner(invoke_side_effect=error)
 
@@ -461,6 +545,9 @@ class TestQuizGraphRunnerResumeGraphWrapping:
 
 class TestQuizGraphRunnerRetryGraph:
     def test_transient_error_wrapped(self) -> None:
+        """テスト対象: QuizGraphRunnerRetryGraph の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         from quiz.application.graph import TransientLlmNodeError
 
         error = _ErrorWithCode("llm_request_failed")
@@ -473,6 +560,9 @@ class TestQuizGraphRunnerRetryGraph:
         assert exc_info.value.thread_id == "t3"
 
     def test_permanent_error_passthrough(self) -> None:
+        """テスト対象: QuizGraphRunnerRetryGraph の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         error = _ErrorWithCode("llm_response_parse_failed")
         runner, _ = _make_mock_runner(invoke_side_effect=error)
 
@@ -482,6 +572,9 @@ class TestQuizGraphRunnerRetryGraph:
         assert exc_info.value is error
 
     def test_invoke_called_with_none(self) -> None:
+        """テスト対象: QuizGraphRunnerRetryGraph の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
         runner, mock_graph = _make_mock_runner()
 
         runner.retry_graph(thread_id="t4")

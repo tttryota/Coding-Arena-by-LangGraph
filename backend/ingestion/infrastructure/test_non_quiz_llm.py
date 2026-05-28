@@ -54,6 +54,26 @@ class TestCodexRoadmapGenerationLlm:
         assert len(transport.last_messages) == 2
         assert "TypeScript" in transport.last_messages[-1].content
 
+    def test_system_prompt_uses_coding_practice_orientation(self) -> None:
+        """テスト対象: CodexRoadmapGenerationLlm の処理。
+        テストケース: システムプロンプトがコーディング実践指向であることを検証する。
+        期待結果: 「コーディング実践ロードマップ設計AI」と演習分解制約が含まれる。"""
+        from roadmap.infrastructure.codex_roadmap_generation_llm import (
+            CodexRoadmapGenerationLlm,
+        )
+
+        canned = '{"items": []}'
+        transport = FakeTransport(canned)
+        adapter = CodexRoadmapGenerationLlm(transport)
+
+        adapter.generate_roadmap_json("Python")
+
+        system_msg = transport.last_messages[0]
+        assert "コーディング実践ロードマップ設計AI" in system_msg.content
+        assert "何を実装できるようになるか" in system_msg.content
+        for stage in ("rewrite", "fill_blank", "bug_fix", "extend", "implement"):
+            assert stage in system_msg.content, f"{stage} not found in system prompt"
+
     def test_error_raises_llm_error(self) -> None:
         """テスト対象: CodexRoadmapGenerationLlm の処理。
         テストケース: 個別条件での処理を検証する。

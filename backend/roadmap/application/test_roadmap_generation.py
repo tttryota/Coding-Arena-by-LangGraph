@@ -383,19 +383,19 @@ def _make_valid_payload(topic: str = _TOPIC) -> dict[str, object]:
         "items": [
             _major_payload(
                 title="基礎",
-                description="初学者が押さえるべき基本事項",
+                description="基本的なコーディングスキルを身につける",
                 children=[
                     _middle_payload(
                         title="変数と型",
-                        description="基本的な型注釈",
+                        description="型注釈を使った実装パターン",
                         children=[
                             _detail_payload(
                                 title="プリミティブ型",
-                                description="string と number の基礎",
+                                description="string と number を使った変数宣言を書けるようになる",
                             ),
                             _detail_payload(
                                 title="配列とタプル",
-                                description="配列型とタプル型の使い分け",
+                                description="配列型とタプル型を使い分けた実装を書けるようになる",
                             ),
                         ],
                     ),
@@ -403,7 +403,7 @@ def _make_valid_payload(topic: str = _TOPIC) -> dict[str, object]:
             ),
             _major_payload(
                 title="応用",
-                description="中上級者へのステップアップ",
+                description="実践的なコーディングパターンを習得する",
                 children=[],
             ),
         ],
@@ -416,33 +416,33 @@ def _make_tc_04_success_payload(topic: str = _TOPIC) -> dict[str, object]:
         "items": [
             _major_payload(
                 title="基礎",
-                description="初学者が押さえるべきTypeScriptの基本事項",
+                description="TypeScriptの基本的な実装スキルを身につける",
                 children=[
                     _middle_payload(
                         title="関数",
-                        description="関数宣言と型注釈を学ぶ",
+                        description="関数宣言と型注釈の実装パターン",
                         children=[
                             _detail_payload(
                                 title="関数の型注釈",
-                                description="引数と返り値の型を書く",
+                                description="引数と返り値に型注釈を付けた関数を書けるようになる",
                             ),
                             _detail_payload(
                                 title="オーバーロード",
-                                description="複数シグネチャを定義する",
+                                description="オーバーロードを使った関数を実装できるようになる",
                             ),
                         ],
                     ),
                     _middle_payload(
                         title="型システム",
-                        description="値に対する型の表現を学ぶ",
+                        description="型システムを活用した実装パターン",
                         children=[
                             _detail_payload(
                                 title="ユニオン型",
-                                description="複数候補の型を扱う",
+                                description="ユニオン型を使った分岐処理を書けるようになる",
                             ),
                             _detail_payload(
                                 title="型推論",
-                                description="注釈なしで推論される型を理解する",
+                                description="型推論を活用したコードを書けるようになる",
                             ),
                         ],
                     ),
@@ -450,19 +450,19 @@ def _make_tc_04_success_payload(topic: str = _TOPIC) -> dict[str, object]:
             ),
             _major_payload(
                 title="応用",
-                description="中上級者へのステップアップに必要な知識",
+                description="実践的なTypeScriptパターンを実装する",
                 children=[
                     _middle_payload(
                         title="型レベルプログラミング",
-                        description="高度な型操作を学ぶ",
+                        description="高度な型操作の実装パターン",
                         children=[
                             _detail_payload(
                                 title="条件型",
-                                description="条件に応じて型を分岐させる",
+                                description="条件型を使った型レベル分岐を実装できるようになる",
                             ),
                             _detail_payload(
                                 title="mapped types",
-                                description="既存型から新しい型を導く",
+                                description="mapped typesで既存型から派生型を実装できるようになる",
                             ),
                         ],
                     ),
@@ -478,36 +478,36 @@ def _make_branch_preserving_payload(topic: str = _TOPIC) -> dict[str, object]:
         "items": [
             _major_payload(
                 title="基礎",
-                description="TypeScript学習の土台を固める",
+                description="TypeScriptの基本的な実装スキルを身につける",
                 children=[
                     _middle_payload(
                         title="関数",
-                        description="関数定義と型付けの基礎を学ぶ",
+                        description="関数定義と型付けの実装パターン",
                         children=[
                             _detail_payload(
                                 title="関数宣言",
-                                description="function 構文で関数を定義する",
+                                description="function構文で関数を定義できるようになる",
                             ),
                             _detail_payload(
                                 title="引数の型注釈",
-                                description="引数へ明示的に型を書く",
+                                description="引数への型注釈を書けるようになる",
                             ),
                             _detail_payload(
                                 title="戻り値の型注釈",
-                                description="戻り値へ明示的に型を書く",
+                                description="戻り値の型注釈を書けるようになる",
                             ),
                         ],
                     ),
                     _middle_payload(
                         title="実行環境",
-                        description="TypeScriptコードを動かす準備を整える",
+                        description="TypeScriptの実行環境をセットアップできるようになる",
                         children=[],
                     ),
                 ],
             ),
             _major_payload(
                 title="応用",
-                description="発展的な内容へ進む前提を整える",
+                description="発展的な実装パターンを習得する",
                 children=[],
             ),
         ],

@@ -2,16 +2,31 @@ import { describe, it, expect } from "vitest";
 import { toIso } from "./use-feedbacks";
 
 describe("toIso", () => {
+  /*
+   * テスト対象: toIso 関数。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("produces start-of-day with timezone offset for from dates", () => {
     const result = toIso("2026-05-20", false);
     expect(result).toMatch(/^2026-05-20T00:00:00[+-]\d{2}:\d{2}$/);
   });
 
+  /*
+   * テスト対象: toIso 関数。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("produces end-of-day with milliseconds for to dates (inclusive)", () => {
     const result = toIso("2026-05-20", true);
     expect(result).toMatch(/^2026-05-20T23:59:59\.999[+-]\d{2}:\d{2}$/);
   });
 
+  /*
+   * テスト対象: toIso 関数。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("includes the correct timezone offset for the actual time point", () => {
     const result = toIso("2026-05-20", false);
     // Extract offset from result
@@ -31,6 +46,11 @@ describe("toIso", () => {
     expect(offsetMatch![3]).toBe(expectedMinutes);
   });
 
+  /*
+   * テスト対象: toIso 関数。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("uses the correct offset at each time point (DST-safe)", () => {
     const from = toIso("2026-05-20", false);
     const to = toIso("2026-05-20", true);

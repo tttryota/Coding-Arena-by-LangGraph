@@ -48,6 +48,12 @@ const feedbackList: FeedbackListResponse = {
 
 const emptyFeedbacks: FeedbackListResponse = { items: [], total_count: 0 };
 
+function renderPage() {
+  return renderWithProviders(<FeedbackListPage />, {
+    initialEntries: ["/feedbacks"],
+  });
+}
+
 function mockSuccess(data: FeedbackListResponse = feedbackList) {
   vi.mocked(apiFetch).mockImplementation(async (path: string) => {
     if (path.includes("/ingestion/feedbacks"))
@@ -66,20 +72,26 @@ beforeEach(() => {
 });
 
 describe("FeedbackListPage", () => {
+  /*
+   * テスト対象: FeedbackListPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("ローディング中はスケルトンを表示する", () => {
     vi.mocked(apiFetch).mockImplementation(() => new Promise(() => {}));
-    renderWithProviders(<FeedbackListPage />, {
-      initialEntries: ["/feedbacks"],
-    });
+    renderPage();
 
     expect(screen.getByText("読み込み中…")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: FeedbackListPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("データがあればフィードバックカードを表示する", async () => {
     mockSuccess();
-    renderWithProviders(<FeedbackListPage />, {
-      initialEntries: ["/feedbacks"],
-    });
+    renderPage();
 
     expect(
       await screen.findByText("型システムの説明が不正確"),
@@ -92,23 +104,29 @@ describe("FeedbackListPage", () => {
     expect(screen.getByText("すべて既読にする")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: FeedbackListPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("データが空（フィルタなし）なら空状態を表示する", async () => {
     mockSuccess(emptyFeedbacks);
-    renderWithProviders(<FeedbackListPage />, {
-      initialEntries: ["/feedbacks"],
-    });
+    renderPage();
 
     expect(
       await screen.findByText("フィードバックはまだありません"),
     ).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: FeedbackListPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("フィルタ適用で結果0件なら「条件に一致しない」を表示する", async () => {
     useFeedbackFilters.setState({ readStatus: "unread" });
     mockSuccess(emptyFeedbacks);
-    renderWithProviders(<FeedbackListPage />, {
-      initialEntries: ["/feedbacks"],
-    });
+    renderPage();
 
     expect(
       await screen.findByText("条件に一致するフィードバックはありません"),
@@ -117,13 +135,16 @@ describe("FeedbackListPage", () => {
     expect(resetButtons.length).toBeGreaterThanOrEqual(1);
   });
 
+  /*
+   * テスト対象: FeedbackListPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("エラー時はToastを表示する", async () => {
     vi.mocked(apiFetch).mockImplementation(async () => {
       throw new ApiError(500, "server error");
     });
-    renderWithProviders(<FeedbackListPage />, {
-      initialEntries: ["/feedbacks"],
-    });
+    renderPage();
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(

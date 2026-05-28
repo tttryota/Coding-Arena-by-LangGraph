@@ -13,6 +13,8 @@ export function RoadmapListPage() {
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useRoadmaps();
   const roadmaps = data?.items ?? [];
+  const hasRoadmaps = roadmaps.length > 0;
+  const isLoaded = !isLoading && !isError;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogKey, setDialogKey] = useState(0);
 
@@ -29,7 +31,14 @@ export function RoadmapListPage() {
     [closeDialog, navigate],
   );
 
-  const showCreateButton = !isLoading && !isError && roadmaps.length > 0;
+  const showCreateButton = isLoaded && hasRoadmaps;
+  const summaryText = isLoading
+    ? "読み込み中…"
+    : isError
+      ? "読み込みエラー"
+      : hasRoadmaps
+        ? `${roadmaps.length} 件のロードマップ・作成順`
+        : "学習を始めるには、まずロードマップを作成してください";
 
   return (
     <>
@@ -47,22 +56,11 @@ export function RoadmapListPage() {
         {/* Page header */}
         <div className="mb-6">
           <h1 className="text-xl font-semibold tracking-tight">ロードマップ</h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {isLoading && "読み込み中…"}
-            {isError && "読み込みエラー"}
-            {!isLoading &&
-              !isError &&
-              roadmaps.length > 0 &&
-              `${roadmaps.length} 件のロードマップ・作成順`}
-            {!isLoading &&
-              !isError &&
-              roadmaps.length === 0 &&
-              "学習を始めるには、まずロードマップを作成してください"}
-          </p>
+          <p className="mt-1.5 text-sm text-muted-foreground">{summaryText}</p>
         </div>
 
         {/* Card grid */}
-        {!isLoading && !isError && roadmaps.length > 0 && (
+        {isLoaded && hasRoadmaps && (
           <div className="grid grid-cols-3 gap-4 max-[1180px]:grid-cols-2">
             {roadmaps.map((r) => (
               <RoadmapCard
@@ -84,9 +82,7 @@ export function RoadmapListPage() {
         )}
 
         {/* Empty state */}
-        {!isLoading && !isError && roadmaps.length === 0 && (
-          <EmptyState onCreate={openDialog} />
-        )}
+        {isLoaded && !hasRoadmaps && <EmptyState onCreate={openDialog} />}
 
         {/* Error state */}
         {isError && (

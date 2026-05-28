@@ -109,6 +109,11 @@ beforeEach(() => {
 });
 
 describe("DashboardPage", () => {
+  /*
+   * テスト対象: DashboardPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("ローディング中はスケルトンを表示する", () => {
     vi.mocked(apiFetch).mockImplementation(() => new Promise(() => {}));
     renderWithProviders(<DashboardPage />);
@@ -116,6 +121,11 @@ describe("DashboardPage", () => {
     expect(screen.getByText("読み込み中…")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: DashboardPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("データがあればスタッツとロードマップを表示する", async () => {
     mockSuccess();
     renderWithProviders(<DashboardPage />);
@@ -132,6 +142,11 @@ describe("DashboardPage", () => {
     expect(screen.getByText("未読フィードバック")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: DashboardPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("ロードマップが空なら Welcome を表示する", async () => {
     mockSuccess(emptyRoadmapList, emptyFeedbacks);
     renderWithProviders(<DashboardPage />);
@@ -144,6 +159,11 @@ describe("DashboardPage", () => {
     ).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: DashboardPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("エラー時はToastを表示する", async () => {
     vi.mocked(apiFetch).mockImplementation(async () => {
       throw new ApiError(500, "server error");

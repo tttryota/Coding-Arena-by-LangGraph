@@ -22,6 +22,12 @@ const emptyRoadmapList: RoadmapListResponse = { items: [], total_count: 0 };
 
 const emptyFeedbacks: FeedbackListResponse = { items: [], total_count: 0 };
 
+function renderPage() {
+  return renderWithProviders(<RoadmapListPage />, {
+    initialEntries: ["/roadmaps"],
+  });
+}
+
 function mockSuccess(roadmaps: RoadmapListResponse = roadmapList) {
   vi.mocked(apiFetch).mockImplementation(async (path: string) => {
     if (path === "/roadmaps") return mockJsonResponse(roadmaps);
@@ -36,20 +42,26 @@ beforeEach(() => {
 });
 
 describe("RoadmapListPage", () => {
+  /*
+   * テスト対象: RoadmapListPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("ローディング中はスケルトンを表示する", () => {
     vi.mocked(apiFetch).mockImplementation(() => new Promise(() => {}));
-    renderWithProviders(<RoadmapListPage />, {
-      initialEntries: ["/roadmaps"],
-    });
+    renderPage();
 
     expect(screen.getByText("読み込み中…")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: RoadmapListPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("データがあればロードマップカードを表示する", async () => {
     mockSuccess();
-    renderWithProviders(<RoadmapListPage />, {
-      initialEntries: ["/roadmaps"],
-    });
+    renderPage();
 
     expect(await screen.findByText("TypeScript基礎")).toBeInTheDocument();
     expect(screen.getByText("React設計パターン")).toBeInTheDocument();
@@ -60,26 +72,32 @@ describe("RoadmapListPage", () => {
     expect(screen.getByText("新規作成")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: RoadmapListPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("データが空なら空状態を表示する", async () => {
     mockSuccess(emptyRoadmapList);
-    renderWithProviders(<RoadmapListPage />, {
-      initialEntries: ["/roadmaps"],
-    });
+    renderPage();
 
     expect(
       await screen.findByText("ロードマップがまだありません"),
     ).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: RoadmapListPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("エラー時はエラーメッセージと再読み込みボタンを表示する", async () => {
     vi.mocked(apiFetch).mockImplementation(async (path: string) => {
       if (path.includes("/ingestion/feedbacks"))
         return mockJsonResponse(emptyFeedbacks);
       throw new ApiError(500, "server error");
     });
-    renderWithProviders(<RoadmapListPage />, {
-      initialEntries: ["/roadmaps"],
-    });
+    renderPage();
 
     expect(
       await screen.findByText("ロードマップの読み込みに失敗しました"),

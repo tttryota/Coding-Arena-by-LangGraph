@@ -3,6 +3,11 @@ import { parseFeedbackBody } from "./feedback-body";
 
 describe("parseFeedbackBody", () => {
   describe("frontend spec format (bracket, inline)", () => {
+    /*
+     * テスト対象: frontend spec format (bracket, inline) の処理。
+     * テストケース: 個別条件での処理を検証する。
+     * 期待結果: 想定どおりの処理結果が得られる。
+     */
     it("parses all three sections", () => {
       const body = [
         "[反映先ロードマップ: TypeScript / 型システム / ジェネリクス]",
@@ -23,6 +28,11 @@ describe("parseFeedbackBody", () => {
   });
 
   describe("backend format (no bracket, heading/body separated)", () => {
+    /*
+     * テスト対象: backend format (no bracket, heading/body separated) の処理。
+     * テストケース: 個別条件での処理を検証する。
+     * 期待結果: 想定どおりの処理結果が得られる。
+     */
     it("parses all three sections", () => {
       const body = [
         "反映先ロードマップ: TypeScript > 基礎 > ジェネリクス",
@@ -46,6 +56,11 @@ describe("parseFeedbackBody", () => {
       ]);
     });
 
+    /*
+     * テスト対象: backend format (no bracket, heading/body separated) の処理。
+     * テストケース: 個別条件での処理を検証する。
+     * 期待結果: 想定どおりの処理結果が得られる。
+     */
     it("parses body without roadmap section", () => {
       const body = [
         "正確性チェック:",
@@ -66,6 +81,11 @@ describe("parseFeedbackBody", () => {
     });
   });
 
+  /*
+   * テスト対象: backend format (no bracket, heading/body separated) の処理。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("handles empty body", () => {
     const result = parseFeedbackBody("");
     expect(result.roadmap).toBeNull();
@@ -73,12 +93,22 @@ describe("parseFeedbackBody", () => {
     expect(result.suggestions).toEqual([]);
   });
 
+  /*
+   * テスト対象: backend format (no bracket, heading/body separated) の処理。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("handles full-width colon in suggestions header", () => {
     const body = "改善提案：\n- 項目A\n- 項目B";
     const result = parseFeedbackBody(body);
     expect(result.suggestions).toEqual(["項目A", "項目B"]);
   });
 
+  /*
+   * テスト対象: backend format (no bracket, heading/body separated) の処理。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("handles accuracy only (inline format)", () => {
     const body = "正確性チェック: 正確に記述されています。";
     const result = parseFeedbackBody(body);

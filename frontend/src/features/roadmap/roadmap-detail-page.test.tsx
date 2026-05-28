@@ -87,6 +87,11 @@ beforeEach(() => {
 });
 
 describe("RoadmapDetailPage", () => {
+  /*
+   * テスト対象: RoadmapDetailPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("ローディング中はスケルトンを表示する", () => {
     vi.mocked(apiFetch).mockImplementation(() => new Promise(() => {}));
     renderPage();
@@ -95,6 +100,11 @@ describe("RoadmapDetailPage", () => {
     expect(document.querySelector(".animate-pulse")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: RoadmapDetailPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("データがあればツリーを表示する", async () => {
     mockSuccess();
     renderPage();
@@ -109,6 +119,11 @@ describe("RoadmapDetailPage", () => {
     expect(screen.getByText("大枠を追加")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: RoadmapDetailPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("ツリーが空ならDetailEmptyStateを表示する", async () => {
     mockSuccess(emptyTree);
     renderPage();
@@ -118,6 +133,11 @@ describe("RoadmapDetailPage", () => {
     ).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: RoadmapDetailPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("404エラー時は「見つかりません」を表示する", async () => {
     vi.mocked(apiFetch).mockImplementation(async (path: string) => {
       if (path.includes("/ingestion/feedbacks"))
@@ -132,6 +152,11 @@ describe("RoadmapDetailPage", () => {
     expect(screen.getByText("ロードマップ一覧へ")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: RoadmapDetailPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("汎用エラー時は再読み込みを表示する", async () => {
     vi.mocked(apiFetch).mockImplementation(async (path: string) => {
       if (path.includes("/ingestion/feedbacks"))

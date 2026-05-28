@@ -225,6 +225,19 @@ export function QuizSessionPage() {
 
   const is404 =
     isError && error instanceof ApiError && error.status === 404;
+  const hasRecoverableData = !isLoading && !isError && !!data;
+  const showRestoreError = hasRecoverableData && !data.graph_state;
+  const showLoadedContent = !isLoading && !isError && !!sessionState;
+  const isInteractivePhase = phase !== "learning" && phase !== "summary";
+  const isQuestionPhase = phase === "question" || phase === "chat_response";
+  const isQuestionPending =
+    isQuestionPhase && !sessionState?.current_question_text;
+  const showQuestionPhase =
+    isQuestionPhase && !!sessionState?.current_question_text;
+  const explanationQuestionText =
+    questionSnapshot?.text ?? sessionState?.current_question_text ?? "";
+  const explanationQuestionNumber =
+    questionSnapshot?.number ?? sessionState?.total_questions_asked ?? 1;
 
   // Breadcrumbs
   const crumbs = [
@@ -266,7 +279,7 @@ export function QuizSessionPage() {
         )}
 
         {/* graph_state 欠落 — 復旧不能 */}
-        {!isLoading && !isError && data && !data.graph_state && (
+        {showRestoreError && (
           <div className="mx-auto flex max-w-[480px] flex-col items-center px-6 pb-24 pt-14 text-center">
             <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-[rgb(244_63_94/0.25)] bg-[rgb(244_63_94/0.1)]">
               <AlertTriangle className="h-8 w-8 text-[#fb7185]" />
@@ -285,7 +298,7 @@ export function QuizSessionPage() {
         )}
 
         {/* Loaded */}
-        {!isLoading && !isError && sessionState && (
+        {showLoadedContent && (
           <>
             {/* Learning phase — 1カラム、SessionHeader なし */}
             {phase === "learning" && (
@@ -304,20 +317,18 @@ export function QuizSessionPage() {
             )}
 
             {/* Question/Feedback/Explanation phases — 2カラム + SessionHeader */}
-            {phase !== "learning" && phase !== "summary" && (
+            {isInteractivePhase && (
               <>
                 <SessionHeader sessionState={sessionState} />
                 <div className="grid items-start gap-6 grid-cols-1 min-[1180px]:grid-cols-[1fr_288px]">
                   <div className="min-w-0 rounded-lg border border-border bg-card p-6">
-                    {(phase === "question" || phase === "chat_response") &&
-                      !sessionState.current_question_text && (
+                    {isQuestionPending && (
                       <div className="flex flex-col items-center gap-4 py-12 text-muted-foreground">
                         <span className="inline-block h-6 w-6 animate-[qs-spin_0.7s_linear_infinite] rounded-full border-2 border-[rgb(148_163_184/0.3)] border-t-[rgb(148_163_184/0.8)]" />
                         <span className="text-sm">問題を生成中…</span>
                       </div>
                     )}
-                    {(phase === "question" || phase === "chat_response") &&
-                      sessionState.current_question_text && (
+                    {showQuestionPhase && (
                       <QuestionPhase
                         sessionState={sessionState}
                         isSubmitting={isSubmitting}
@@ -341,16 +352,8 @@ export function QuizSessionPage() {
                       <ExplanationPhase
                         sessionState={sessionState}
                         explanationText={explanationText}
-                        questionText={
-                          questionSnapshot?.text ??
-                          sessionState.current_question_text ??
-                          ""
-                        }
-                        questionNumber={
-                          questionSnapshot?.number ??
-                          sessionState.total_questions_asked ??
-                          1
-                        }
+                        questionText={explanationQuestionText}
+                        questionNumber={explanationQuestionNumber}
                         onContinue={handleContinue}
                       />
                     )}

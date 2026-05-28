@@ -18,6 +18,11 @@ describe("scoreLevel", () => {
     );
   });
 
+  /*
+   * テスト対象: scoreLevel 関数。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("returns Japanese labels", () => {
     expect(scoreLevel(0).label).toBe("未着手");
     expect(scoreLevel(30).label).toBe("不十分");

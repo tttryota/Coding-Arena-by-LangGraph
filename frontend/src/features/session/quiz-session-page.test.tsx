@@ -64,6 +64,11 @@ beforeEach(() => {
 });
 
 describe("QuizSessionPage", () => {
+  /*
+   * テスト対象: QuizSessionPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("ローディング中はスケルトンを表示する", () => {
     vi.mocked(apiFetch).mockImplementation(() => new Promise(() => {}));
     renderPage();
@@ -72,6 +77,11 @@ describe("QuizSessionPage", () => {
     expect(document.querySelector(".animate-pulse")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: QuizSessionPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("質問フェーズを表示する", async () => {
     mockSuccess();
 
@@ -111,6 +121,11 @@ describe("QuizSessionPage", () => {
     ).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: QuizSessionPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("完了セッションはサマリーフェーズを表示する", async () => {
     mockSuccess(completedSession);
 
@@ -145,6 +160,11 @@ describe("QuizSessionPage", () => {
     expect(screen.getByText("ロードマップに戻る")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: QuizSessionPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("404エラー時は「見つかりません」を表示する", async () => {
     vi.mocked(apiFetch).mockImplementation(async (path: string) => {
       if (path.includes("/ingestion/feedbacks"))
@@ -159,6 +179,11 @@ describe("QuizSessionPage", () => {
     expect(screen.getByText("ロードマップへ")).toBeInTheDocument();
   });
 
+  /*
+   * テスト対象: QuizSessionPage コンポーネント。
+   * テストケース: 個別条件での処理を検証する。
+   * 期待結果: 想定どおりの処理結果が得られる。
+   */
   it("汎用エラー時は再読み込みを表示する", async () => {
     vi.mocked(apiFetch).mockImplementation(async (path: string) => {
       if (path.includes("/ingestion/feedbacks"))

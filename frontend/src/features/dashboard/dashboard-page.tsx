@@ -85,7 +85,7 @@ export function DashboardPage() {
       />
       <StatCard
         icon={Swords}
-        label="競プロクイズ"
+        label="競プロ(直近)"
         value={competitiveStats.totalCount ?? "—"}
         onClick={() => navigate("/algorithm-quiz")}
         hint={

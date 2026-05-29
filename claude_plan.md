@@ -306,6 +306,7 @@ class CompetitiveSessionState(TypedDict, total=False):
 | Method | Path | 用途 |
 |--------|------|------|
 | GET | `/algorithm-quiz/themes` | テーマ一覧取得 |
+| GET | `/algorithm-quiz/sessions` | セッション一覧取得（直近50件、ダッシュボード統計用）|
 | POST | `/algorithm-quiz/sessions` | セッション開始（テーマ未指定時はランダム選択、問題+rubric 同時生成）|
 | POST | `/algorithm-quiz/sessions/{id}/answer` | コード提出＋保存済み rubric で採点 |
 | GET | `/algorithm-quiz/sessions/{id}` | セッション状態取得 |

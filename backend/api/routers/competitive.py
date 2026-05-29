@@ -24,7 +24,7 @@ class _StartSessionRequest(BaseModel):
 
 
 class _SubmitAnswerRequest(BaseModel):
-    user_code: str = Field(min_length=1)
+    user_code: str = Field(min_length=1, strip_whitespace=True)
 
 
 def _container(request: Request) -> Container:

@@ -96,6 +96,32 @@ def submit_input(session_id: str, body: _SubmitInputRequest, request: Request) -
     return dict(result)
 
 
+@router.post("/{session_id}/practice/start")
+def start_practice(session_id: str, request: Request) -> dict:
+    """座学フェーズからコーディング練習に遷移する。"""
+    c = _container(request)
+    if c.coding_graph_runner is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Coding session service unavailable",
+        )
+    try:
+        c.coding_graph_runner.resume_graph(
+            {"lecture_phase_active": False},
+            thread_id=session_id,
+        )
+    except (ValueError, LookupError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    state = c.coding_graph_runner.get_state(thread_id=session_id)
+    return {
+        "session_id": session_id,
+        "confirmation_points": state.get("confirmation_points", []),
+        "current_question_text": state.get("current_question_text"),
+        "current_example_code": state.get("current_example_code"),
+        "current_format": state.get("current_format"),
+    }
+
+
 @router.get("/{session_id}")
 def get_session(session_id: str, request: Request) -> dict:
     c = _container(request)
@@ -110,6 +136,14 @@ def get_session(session_id: str, request: Request) -> dict:
         try:
             graph_state = c.graph_runner.get_state(thread_id=session_id)
             response["graph_state"] = dict(graph_state)
+        except LookupError:
+            pass
+    if c.coding_graph_runner is not None and "graph_state" not in response:
+        try:
+            coding_state = c.coding_graph_runner.get_state(
+                thread_id=session_id,
+            )
+            response["graph_state"] = dict(coding_state)
         except LookupError:
             pass
     return response

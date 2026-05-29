@@ -43,6 +43,7 @@ class Container:
             self._init_chroma_clients()
             self._init_graph_runner()
             self._init_competitive()
+            self._init_coding_graph()
             self._init_scheduler()
             self._init_batch_adapters()
         except Exception:
@@ -213,6 +214,34 @@ class Container:
         )
         compiled = build_competitive_graph(deps, checkpointer=MemorySaver())
         self.competitive_graph_runner = CompetitiveGraphRunner(compiled)
+
+    def _init_coding_graph(self) -> None:
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from quiz.application.coding_graph import (
+            CodingGraphDependencies,
+            CodingGraphRunner,
+            build_coding_graph,
+        )
+        from quiz.infrastructure.codex_coding_llm_adapters import (
+            CodexCodeEvaluationLlm,
+            CodexCodingProblemDeliveryLlm,
+            CodexCodingProblemSetDesignLlm,
+            CodexLectureChatResponseLlm,
+            CodexLectureGenerationLlm,
+        )
+
+        t = self.transport
+        deps = CodingGraphDependencies(
+            lecture_generation_llm=CodexLectureGenerationLlm(t),
+            lecture_chat_response_llm=CodexLectureChatResponseLlm(t),
+            coding_problem_set_design_llm=CodexCodingProblemSetDesignLlm(t),
+            coding_problem_delivery_llm=CodexCodingProblemDeliveryLlm(t),
+            coding_chat_response_llm=CodexLectureChatResponseLlm(t),
+            code_evaluation_llm=CodexCodeEvaluationLlm(t),
+        )
+        compiled = build_coding_graph(deps, checkpointer=MemorySaver())
+        self.coding_graph_runner = CodingGraphRunner(compiled)
 
     def _init_scheduler(self) -> None:
         from roadmap.infrastructure.thread_pool_scheduler import (

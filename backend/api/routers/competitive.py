@@ -24,7 +24,7 @@ class _StartSessionRequest(BaseModel):
 
 
 class _SubmitAnswerRequest(BaseModel):
-    user_code: str = Field(min_length=1, strip_whitespace=True)
+    user_code: str = Field(min_length=1)
 
 
 def _container(request: Request) -> Container:
@@ -186,6 +186,10 @@ def submit_answer(
     """コードを提出して採点する。"""
     c = _container(request)
     runner = _require_runner(c)
+
+    existing = c.competitive_store.find_answer_by_session(session_id)
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="Answer already submitted")
 
     _run_graph_resume(runner, {"user_code": body.user_code}, session_id)
 

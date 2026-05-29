@@ -434,7 +434,7 @@ pen ファイルの作業は各 Phase のフロントエンド実装**前**に�
 - → `feat: 競プロクイズのLangGraphグラフを実装`
 
 **Step 2-6: BE API 層**
-- `backend/api/routers/competitive.py` — 4エンドポイント
+- `backend/api/routers/competitive.py` — 5エンドポイント
 - DI コンテナ更新（`dependencies.py`）
 - テスト: API エンドポイントテスト
 - → Codex レビュー → 指摘対応 → LGTM

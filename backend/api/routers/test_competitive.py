@@ -98,7 +98,11 @@ class _FakeCompetitiveStore:
         if session_id not in self._sessions:
             msg = f"CompetitiveSession not found: {session_id}"
             raise ValueError(msg)
-        return {"id": session_id, **self._sessions[session_id]}
+        return {
+            "id": session_id,
+            "created_at": "2026-05-29T10:00:00",
+            **self._sessions[session_id],
+        }
 
     def find_answer_by_session(
         self, session_id: str,
@@ -241,7 +245,7 @@ class TestListSessions:
         data = resp.json()
         assert len(data["sessions"]) == 1
         assert data["sessions"][0]["session_id"]
-        assert "created_at" in data["sessions"][0]
+        assert data["sessions"][0]["created_at"] == "2026-05-29T10:00:00"
 
     def test_empty_when_no_sessions(self) -> None:
         client = _make_client()

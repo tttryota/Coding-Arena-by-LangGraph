@@ -49,8 +49,14 @@ export interface CompetitiveActivity {
 
 export type ActivityItem = QuizActivity | FeedbackActivity | CompetitiveActivity;
 
+export interface CompetitiveStats {
+  totalCount: number | null;
+  avgScore: number | null;
+}
+
 export interface DashboardData {
   stats: DashboardStats | null;
+  competitiveStats: CompetitiveStats;
   roadmaps: RoadmapListItem[];
   totalRoadmapCount: number;
   activity: ActivityItem[];
@@ -134,7 +140,8 @@ export function useDashboardData(): DashboardData {
   const isError =
     roadmapList.isError ||
     detailQueries.some((q) => q.isError) ||
-    feedbacksQuery.isError;
+    feedbacksQuery.isError ||
+    competitiveQuery.isError;
   const isEmpty =
     !roadmapList.isLoading && roadmapItems.length === 0 && !roadmapList.isError;
 
@@ -268,10 +275,30 @@ export function useDashboardData(): DashboardData {
       void q.refetch();
     }
     void feedbacksQuery.refetch();
-  }, [roadmapList, detailQueries, feedbacksQuery]);
+    void competitiveQuery.refetch();
+  }, [roadmapList, detailQueries, feedbacksQuery, competitiveQuery]);
+
+  const competitiveStats = useMemo<CompetitiveStats>(() => {
+    if (competitiveQuery.isLoading || !competitiveQuery.data) {
+      return { totalCount: null, avgScore: null };
+    }
+    const sessions = competitiveQuery.data.sessions;
+    const completed = sessions.filter((s) => s.status === "completed");
+    return {
+      totalCount: sessions.length,
+      avgScore:
+        completed.length > 0
+          ? Math.round(
+              completed.reduce((sum, s) => sum + (s.score ?? 0), 0) /
+                completed.length,
+            )
+          : null,
+    };
+  }, [competitiveQuery.isLoading, competitiveQuery.data]);
 
   return {
     stats,
+    competitiveStats,
     roadmaps,
     totalRoadmapCount,
     activity,

@@ -69,7 +69,9 @@ def _run_graph_resume(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except CompetitiveError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except (ValueError, LookupError) as exc:
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

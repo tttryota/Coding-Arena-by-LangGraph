@@ -21,12 +21,12 @@ import {
 import { RoadmapSummary } from "./roadmap-summary";
 import { RecentActivity } from "./recent-activity";
 import { DashboardWelcome } from "./dashboard-welcome";
-import { useCompetitiveSessions } from "@/features/competitive/use-competitive";
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const {
     stats,
+    competitiveStats,
     roadmaps,
     totalRoadmapCount,
     activity,
@@ -35,27 +35,6 @@ export function DashboardPage() {
     isEmpty,
     refetch,
   } = useDashboardData();
-  const {
-    data: competitiveSessions,
-    isLoading: isCompetitiveLoading,
-  } = useCompetitiveSessions();
-
-  const competitiveStats = (() => {
-    if (isCompetitiveLoading || !competitiveSessions) {
-      return { totalCount: null, avgScore: null };
-    }
-    const sessions = competitiveSessions.sessions;
-    const completed = sessions.filter((s) => s.status === "completed");
-    const totalCount = sessions.length;
-    const avgScore =
-      completed.length > 0
-        ? Math.round(
-            completed.reduce((sum, s) => sum + (s.score ?? 0), 0) /
-              completed.length,
-          )
-        : null;
-    return { totalCount, avgScore };
-  })();
 
   // Error toast
   const [showErrorToast, setShowErrorToast] = useState(false);

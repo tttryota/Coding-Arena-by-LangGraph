@@ -202,6 +202,20 @@ export interface CompetitiveSessionResponse {
   rubric_scores_json?: string;
 }
 
+export interface CompetitiveSessionListItem {
+  session_id: string;
+  theme_id: string;
+  theme_label: string;
+  theme_category: string;
+  programming_language: string;
+  status: "in_progress" | "completed";
+  score?: number;
+}
+
+export interface CompetitiveSessionListResponse {
+  sessions: CompetitiveSessionListItem[];
+}
+
 // --- Feedback (GET /ingestion/feedbacks) ---
 
 export interface FeedbackListItem {

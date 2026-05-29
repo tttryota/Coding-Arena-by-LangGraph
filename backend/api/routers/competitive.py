@@ -86,6 +86,29 @@ def list_themes(request: Request) -> dict:
     return {"themes": themes}
 
 
+@router.get("/sessions")
+def list_sessions(request: Request) -> dict:
+    """最近のセッション一覧を返す。"""
+    c = _container(request)
+    sessions = c.competitive_store.list_recent_sessions(limit=50)
+    items = []
+    for s in sessions:
+        item: dict[str, object] = {
+            "session_id": s.id,
+            "theme_id": s.theme_id,
+            "theme_label": s.theme_label,
+            "theme_category": s.theme_category,
+            "programming_language": s.programming_language,
+            "status": s.status,
+        }
+        if s.status == "completed":
+            answer = c.competitive_store.find_answer_by_session(s.id)
+            if answer:
+                item["score"] = answer.score
+        items.append(item)
+    return {"sessions": items}
+
+
 @router.post("/sessions", status_code=201)
 def start_session(
     request: Request, body: _StartSessionRequest | None = None,

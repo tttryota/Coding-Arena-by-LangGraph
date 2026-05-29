@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type {
   CompetitiveAnswerResponse,
+  CompetitiveSessionListResponse,
   CompetitiveSessionResponse,
   CompetitiveStartResponse,
   ThemesResponse,
@@ -13,6 +14,16 @@ export function useThemes() {
     queryFn: async () => {
       const res = await apiFetch("/algorithm-quiz/themes");
       return res.json() as Promise<ThemesResponse>;
+    },
+  });
+}
+
+export function useCompetitiveSessions() {
+  return useQuery({
+    queryKey: ["competitive-sessions"],
+    queryFn: async () => {
+      const res = await apiFetch("/algorithm-quiz/sessions");
+      return res.json() as Promise<CompetitiveSessionListResponse>;
     },
   });
 }

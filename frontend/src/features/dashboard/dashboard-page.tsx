@@ -7,6 +7,7 @@ import {
   BookOpenText,
   AlertTriangle,
   X,
+  Swords,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { scoreLevel } from "@/lib/score";
@@ -20,6 +21,7 @@ import {
 import { RoadmapSummary } from "./roadmap-summary";
 import { RecentActivity } from "./recent-activity";
 import { DashboardWelcome } from "./dashboard-welcome";
+import { useCompetitiveSessions } from "@/features/competitive/use-competitive";
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -33,6 +35,21 @@ export function DashboardPage() {
     isEmpty,
     refetch,
   } = useDashboardData();
+  const { data: competitiveSessions } = useCompetitiveSessions();
+
+  const competitiveStats = (() => {
+    const sessions = competitiveSessions?.sessions ?? [];
+    const completed = sessions.filter((s) => s.status === "completed");
+    const totalCount = sessions.length;
+    const avgScore =
+      completed.length > 0
+        ? Math.round(
+            completed.reduce((sum, s) => sum + (s.score ?? 0), 0) /
+              completed.length,
+          )
+        : null;
+    return { totalCount, avgScore };
+  })();
 
   // Error toast
   const [showErrorToast, setShowErrorToast] = useState(false);
@@ -51,7 +68,7 @@ export function DashboardPage() {
 
   // Stat card rendering — shared between loaded and empty states
   const statCards = stats && (
-    <div className="grid grid-cols-4 gap-4 max-[1180px]:grid-cols-2">
+    <div className="grid grid-cols-5 gap-4 max-[1180px]:grid-cols-2">
       <StatCard
         icon={Map}
         label="学習中のロードマップ"
@@ -81,6 +98,17 @@ export function DashboardPage() {
           stats.recentQuizCount >= 5 ? "安定したペース" : "もう少し増やせます"
         }
       />
+      <StatCard
+        icon={Swords}
+        label="競プロクイズ"
+        value={competitiveStats.totalCount}
+        onClick={() => navigate("/algorithm-quiz")}
+        hint={
+          competitiveStats.avgScore != null
+            ? `平均 ${competitiveStats.avgScore} 点`
+            : "未挑戦"
+        }
+      />
     </div>
   );
 
@@ -103,8 +131,8 @@ export function DashboardPage() {
         {/* Loading skeleton */}
         {showSkeleton && (
           <>
-            <div className="grid grid-cols-4 gap-4 max-[1180px]:grid-cols-2">
-              {[0, 1, 2, 3].map((i) => (
+            <div className="grid grid-cols-5 gap-4 max-[1180px]:grid-cols-2">
+              {[0, 1, 2, 3, 4].map((i) => (
                 <StatSkeleton key={i} />
               ))}
             </div>

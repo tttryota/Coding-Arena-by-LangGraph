@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Shuffle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import type { AlgoTheme } from "@/types/api";
 import { useThemes, useStartSession, useCompetitiveSessions } from "./use-competitive";
 import { useCompetitiveStore } from "./use-competitive-store";
 
@@ -16,8 +17,8 @@ export function CompetitivePage() {
   const navigate = useNavigate();
 
   const grouped = useMemo(() => {
-    if (!data?.themes) return new Map<string, typeof data.themes>();
-    const map = new Map<string, typeof data.themes>();
+    if (!data?.themes) return new Map<string, AlgoTheme[]>();
+    const map = new Map<string, AlgoTheme[]>();
     for (const theme of data.themes) {
       const list = map.get(theme.category) ?? [];
       list.push(theme);

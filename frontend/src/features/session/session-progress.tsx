@@ -1,11 +1,23 @@
-import { Check, CheckCircle2, Lightbulb } from "lucide-react";
+import { Check, CheckCircle2, Code2, Lightbulb } from "lucide-react";
 import { scoreLevel } from "@/lib/score";
-import type { SessionState, QuizAnswerRecord } from "@/types/api";
+import type { SessionState, QuizAnswerRecord, CodingDifficultyType } from "@/types/api";
 import type { QuizPhase } from "./use-quiz-session-store";
 
 interface SessionProgressProps {
   sessionState: SessionState;
   phase: QuizPhase;
+  /** Coding session mode */
+  isCoding?: boolean;
+  /** Coding session: current format for display */
+  codingFormat?: CodingDifficultyType;
+  /** Coding session: last score from evaluation */
+  codingScore?: number;
+  /** Feedback phase: question number from snapshot (to avoid showing next question) */
+  feedbackQuestionNumber?: number;
+  /** Feedback phase: CP index from snapshot (0-based) */
+  feedbackCpIndex?: number;
+  /** Feedback phase: question text from snapshot */
+  feedbackQuestionText?: string;
 }
 
 interface Step {
@@ -18,36 +30,53 @@ interface Step {
   typing?: string;
 }
 
+const FORMAT_LABELS: Record<CodingDifficultyType, string> = {
+  rewrite: "書き換え",
+  fill_blank: "穴埋め",
+  bug_fix: "バグ修正",
+  extend: "拡張",
+  implement: "実装",
+};
+
 function shortQ(text: string): string {
   const m = text.match(/^[^、。\n]{1,28}/);
   const prefix = m ? m[0] : text.slice(0, 28);
-  return prefix + (text.length > 28 ? "…" : "");
+  return prefix + (text.length > 28 ? "..." : "");
 }
 
 export function SessionProgress({
   sessionState: s,
   phase,
+  isCoding,
+  codingFormat,
+  codingScore,
+  feedbackQuestionNumber,
+  feedbackCpIndex,
+  feedbackQuestionText,
 }: SessionProgressProps) {
   const answers = s.answers ?? [];
-  const asked = s.total_questions_asked ?? 1;
-  const total = 20; // estimated total
+  const asked = feedbackQuestionNumber ?? s.total_questions_asked ?? 1;
+  const total = 20;
   const cpCount = s.confirmation_points?.length ?? 0;
-  const cpIndex = (s.current_point_index ?? 0) + 1;
+  const rawCpIdx = feedbackCpIndex ?? (s.current_point_index ?? 0);
+  const cpIndex = Math.min(rawCpIdx + 1, cpCount || 1);
 
   // Build step list
   const steps: Step[] = [];
 
-  // Past answers
-  for (const a of answers) {
-    const lvl = scoreLevel(a.score);
-    steps.push({
-      kind: "done",
-      n: a.question_number,
-      label: shortQ(a.question_text),
-      score: a.score,
-      color: lvl.fg,
-      bg: lvl.bg,
-    });
+  if (!isCoding) {
+    // Quiz mode: show answer history
+    for (const a of answers) {
+      const lvl = scoreLevel(a.score);
+      steps.push({
+        kind: "done",
+        n: a.question_number,
+        label: shortQ(a.question_text),
+        score: a.score,
+        color: lvl.fg,
+        bg: lvl.bg,
+      });
+    }
   }
 
   // Current question
@@ -63,24 +92,38 @@ export function SessionProgress({
       label: cp?.content ?? "",
       typing:
         phase === "explanation"
-          ? "解説中…"
+          ? "解説中..."
           : phase === "chat_response"
-            ? "対話中…"
-            : "回答中…",
+            ? "対話中..."
+            : "回答中...",
     });
   } else if (phase === "feedback") {
-    // Show current as just-answered
-    const latest = answers[answers.length - 1];
-    if (latest && steps[steps.length - 1]?.n !== asked) {
-      const lvl = scoreLevel(latest.score);
+    if (isCoding && codingScore != null) {
+      const lvl = scoreLevel(codingScore);
+      const feedbackLabel = feedbackQuestionText
+        ? shortQ(feedbackQuestionText)
+        : (s.current_question_text ? shortQ(s.current_question_text) : "");
       steps.push({
         kind: "done",
         n: asked,
-        label: shortQ(latest.question_text),
-        score: latest.score,
+        label: feedbackLabel,
+        score: codingScore,
         color: lvl.fg,
         bg: lvl.bg,
       });
+    } else {
+      const latest = answers[answers.length - 1];
+      if (latest && steps[steps.length - 1]?.n !== asked) {
+        const lvl = scoreLevel(latest.score);
+        steps.push({
+          kind: "done",
+          n: asked,
+          label: shortQ(latest.question_text),
+          score: latest.score,
+          color: lvl.fg,
+          bg: lvl.bg,
+        });
+      }
     }
   }
 
@@ -92,8 +135,9 @@ export function SessionProgress({
   }
 
   const pct = total > 0 ? Math.round((asked / total) * 100) : 0;
-  const avgScore =
-    answers.length > 0
+  const avgScore = isCoding
+    ? (codingScore ?? 0)
+    : answers.length > 0
       ? Math.round(
           answers.reduce((sum: number, a: QuizAnswerRecord) => sum + a.score, 0) /
             answers.length,
@@ -120,6 +164,17 @@ export function SessionProgress({
           style={{ width: `${pct}%` }}
         />
       </div>
+
+      {/* Coding format indicator */}
+      {isCoding && codingFormat && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-[rgb(15_23_42/0.4)] px-2.5 py-2">
+          <Code2 className="h-3 w-3 text-muted-foreground" />
+          <span className="text-[11px] text-muted-foreground">形式:</span>
+          <span className="text-[11px] font-medium text-foreground">
+            {FORMAT_LABELS[codingFormat]}
+          </span>
+        </div>
+      )}
 
       {/* Steps */}
       <div className="-mx-2 -mb-1 mt-1 flex max-h-[420px] flex-col gap-0.5 overflow-y-auto px-2 pb-1">
@@ -205,7 +260,7 @@ export function SessionProgress({
       {/* Footer stats */}
       <div className="flex flex-col gap-1.5 border-t border-border pt-3">
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>これまでの平均</span>
+          <span>{isCoding ? "直近スコア" : "これまでの平均"}</span>
           <span>
             <b className="font-mono font-semibold tabular-nums text-foreground">
               {avgScore}
@@ -226,11 +281,17 @@ export function SessionProgress({
       {/* Tip */}
       <div className="rounded-md border-l-2 border-border bg-[rgb(30_41_59/0.5)] px-2.5 py-2 text-[11px] leading-normal text-muted-foreground">
         <Lightbulb className="mr-1 inline h-[11px] w-[11px]" />
-        わからない時は{" "}
-        <kbd className="mx-0.5 rounded border border-input bg-[rgb(15_23_42/0.7)] px-[5px] py-px font-mono text-[10px] text-foreground">
-          解説して
-        </kbd>{" "}
-        ボタンを。チャットで自由に質問もできます。
+        {isCoding ? (
+          <>チャットで質問できます。進行は中断されません。</>
+        ) : (
+          <>
+            わからない時は{" "}
+            <kbd className="mx-0.5 rounded border border-input bg-[rgb(15_23_42/0.7)] px-[5px] py-px font-mono text-[10px] text-foreground">
+              解説して
+            </kbd>{" "}
+            ボタンを。チャットで自由に質問もできます。
+          </>
+        )}
       </div>
     </aside>
   );

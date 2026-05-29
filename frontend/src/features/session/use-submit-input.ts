@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import type { SessionState } from "@/types/api";
+import type { SessionState, CodingSessionStateDTO } from "@/types/api";
 
 export function useSubmitInput(sessionId: string) {
   return useMutation({
@@ -13,7 +13,7 @@ export function useSubmitInput(sessionId: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      return res.json() as Promise<SessionState>;
+      return res.json() as Promise<SessionState | CodingSessionStateDTO>;
     },
   });
 }

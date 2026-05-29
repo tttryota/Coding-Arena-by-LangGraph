@@ -9,6 +9,10 @@ import type { QuizAnswerRecord } from "@/types/api";
 interface SummaryPhaseProps {
   answers: QuizAnswerRecord[];
   onBack: () => void;
+  /** Coding session: final score */
+  codingScore?: number;
+  /** Coding session: total questions attempted */
+  codingTotalQuestions?: number;
 }
 
 const TIER_COLORS: Record<string, string> = {
@@ -25,14 +29,22 @@ const TIER_LABELS: Record<string, string> = {
   sufficient: "十分",
 };
 
-export function SummaryPhase({ answers, onBack }: SummaryPhaseProps) {
+export function SummaryPhase({
+  answers,
+  onBack,
+  codingScore,
+  codingTotalQuestions,
+}: SummaryPhaseProps) {
+  const isCoding = codingScore != null;
   const [expandedIdx, setExpandedIdx] = useState<number>(-1);
 
-  const avg =
-    answers.length > 0
+  const avg = isCoding
+    ? codingScore
+    : answers.length > 0
       ? Math.round(answers.reduce((a, x) => a + x.score, 0) / answers.length)
       : 0;
   const lvl = scoreLevel(avg);
+  const totalCount = isCoding ? (codingTotalQuestions ?? 0) : answers.length;
 
   // Tier distribution
   const tiers: Record<string, number> = {
@@ -57,7 +69,9 @@ export function SummaryPhase({ answers, onBack }: SummaryPhaseProps) {
           お疲れさまでした
         </div>
         <div className="text-[13px] leading-normal text-muted-foreground">
-          {answers.length} 問の回答を評価しました。各問の詳細は下の一覧から確認できます。
+          {isCoding
+            ? `${totalCount} 問のコーディング演習を完了しました。`
+            : `${totalCount} 問の回答を評価しました。各問の詳細は下の一覧から確認できます。`}
         </div>
       </div>
 
@@ -65,7 +79,7 @@ export function SummaryPhase({ answers, onBack }: SummaryPhaseProps) {
       <div className="mb-7 grid grid-cols-[auto_1fr] items-center gap-8 rounded-xl border border-border bg-card p-7">
         <div>
           <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            総合スコア
+            {isCoding ? "最終スコア" : "総合スコア"}
           </div>
           <div
             className="font-mono text-[80px] font-semibold leading-none tracking-tighter tabular-nums"
@@ -94,7 +108,8 @@ export function SummaryPhase({ answers, onBack }: SummaryPhaseProps) {
             </div>
           </div>
 
-          {/* Distribution */}
+          {/* Distribution (quiz mode only) */}
+          {!isCoding && (
           <div>
             <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               スコア分布
@@ -127,12 +142,13 @@ export function SummaryPhase({ answers, onBack }: SummaryPhaseProps) {
               ))}
             </div>
           </div>
+          )}
 
           {/* Stats */}
           <div className="flex gap-6 text-xs text-muted-foreground">
             <span>
               <b className="mr-1 font-mono text-sm font-semibold text-foreground">
-                {answers.length}
+                {totalCount}
               </b>
               問
             </span>
@@ -140,79 +156,82 @@ export function SummaryPhase({ answers, onBack }: SummaryPhaseProps) {
         </div>
       </div>
 
-      {/* Answer list header */}
-      <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-foreground">
-        <span>回答一覧</span>
-        <span className="font-normal text-muted-foreground">クリックで展開</span>
-      </div>
+      {/* Answer list (quiz mode only) */}
+      {!isCoding && answers.length > 0 && (
+        <>
+          <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-foreground">
+            <span>回答一覧</span>
+            <span className="font-normal text-muted-foreground">クリックで展開</span>
+          </div>
 
-      {/* Answer list */}
-      <ScrollArea className="max-h-[480px] overflow-hidden rounded-lg border border-border bg-card">
-        {answers.map((a, i) => {
-          const aLvl = scoreLevel(a.score);
-          const expanded = i === expandedIdx;
-          return (
-            <div key={i}>
-              <div
-                className={`grid cursor-pointer grid-cols-[36px_1fr_auto_auto_auto] items-center gap-3.5 border-b border-border px-[18px] py-3.5 transition-colors duration-150 hover:bg-[rgb(51_65_85/0.22)] ${i === answers.length - 1 && !expanded ? "border-b-0" : ""}`}
-                onClick={() => setExpandedIdx(expanded ? -1 : i)}
-              >
-                <span className="rounded bg-[rgb(30_41_59/0.7)] py-1 text-center font-mono text-[11px] font-semibold text-muted-foreground">
-                  Q{a.question_number}
-                </span>
-                <span className="min-w-0 truncate text-[13px] text-foreground">
-                  {a.question_text}
-                </span>
-                <span className="rounded border border-border px-1.5 py-px font-mono text-[10px] tracking-wide text-muted-foreground">
-                  {a.answer_type === "code" ? "CODE" : "TEXT"}
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <span
-                    className="font-mono text-[13px] font-semibold"
-                    style={{ color: aLvl.fg }}
+          <ScrollArea className="max-h-[480px] overflow-hidden rounded-lg border border-border bg-card">
+            {answers.map((a, i) => {
+              const aLvl = scoreLevel(a.score);
+              const expanded = i === expandedIdx;
+              return (
+                <div key={i}>
+                  <div
+                    className={`grid cursor-pointer grid-cols-[36px_1fr_auto_auto_auto] items-center gap-3.5 border-b border-border px-[18px] py-3.5 transition-colors duration-150 hover:bg-[rgb(51_65_85/0.22)] ${i === answers.length - 1 && !expanded ? "border-b-0" : ""}`}
+                    onClick={() => setExpandedIdx(expanded ? -1 : i)}
                   >
-                    {a.score}
-                  </span>
-                  <ScoreBadge score={a.score} />
-                </span>
-                <ChevronRight
-                  className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-150 ${expanded ? "rotate-90" : ""}`}
-                />
-              </div>
-              {expanded && (
-                <div className="border-b border-border bg-[rgb(2_6_23/0.4)] px-[18px] pb-[18px]">
-                  <div className="grid grid-cols-[80px_1fr] gap-x-5 gap-y-3.5 pt-3.5">
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      問題
-                    </div>
-                    <div className="whitespace-pre-wrap text-[13px] leading-[1.7] text-foreground">
+                    <span className="rounded bg-[rgb(30_41_59/0.7)] py-1 text-center font-mono text-[11px] font-semibold text-muted-foreground">
+                      Q{a.question_number}
+                    </span>
+                    <span className="min-w-0 truncate text-[13px] text-foreground">
                       {a.question_text}
-                    </div>
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      あなたの回答
-                    </div>
-                    {a.answer_type === "code" ? (
-                      <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border border-[rgb(51_65_85/0.5)] bg-[#0b1220] px-3.5 py-3 font-mono text-[12.5px] leading-relaxed text-[#e2e8f0]">
-                        {a.answer_text}
-                      </pre>
-                    ) : (
-                      <div className="whitespace-pre-wrap text-[13px] leading-[1.7] text-foreground">
-                        {a.answer_text}
-                      </div>
-                    )}
-                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                      フィードバック
-                    </div>
-                    <div className="text-[13px] leading-[1.7] text-foreground">
-                      {a.feedback}
-                    </div>
+                    </span>
+                    <span className="rounded border border-border px-1.5 py-px font-mono text-[10px] tracking-wide text-muted-foreground">
+                      {a.answer_type === "code" ? "CODE" : "TEXT"}
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className="font-mono text-[13px] font-semibold"
+                        style={{ color: aLvl.fg }}
+                      >
+                        {a.score}
+                      </span>
+                      <ScoreBadge score={a.score} />
+                    </span>
+                    <ChevronRight
+                      className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-150 ${expanded ? "rotate-90" : ""}`}
+                    />
                   </div>
+                  {expanded && (
+                    <div className="border-b border-border bg-[rgb(2_6_23/0.4)] px-[18px] pb-[18px]">
+                      <div className="grid grid-cols-[80px_1fr] gap-x-5 gap-y-3.5 pt-3.5">
+                        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          問題
+                        </div>
+                        <div className="whitespace-pre-wrap text-[13px] leading-[1.7] text-foreground">
+                          {a.question_text}
+                        </div>
+                        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          あなたの回答
+                        </div>
+                        {a.answer_type === "code" ? (
+                          <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border border-[rgb(51_65_85/0.5)] bg-[#0b1220] px-3.5 py-3 font-mono text-[12.5px] leading-relaxed text-[#e2e8f0]">
+                            {a.answer_text}
+                          </pre>
+                        ) : (
+                          <div className="whitespace-pre-wrap text-[13px] leading-[1.7] text-foreground">
+                            {a.answer_text}
+                          </div>
+                        )}
+                        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          フィードバック
+                        </div>
+                        <div className="text-[13px] leading-[1.7] text-foreground">
+                          {a.feedback}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </ScrollArea>
+              );
+            })}
+          </ScrollArea>
+        </>
+      )}
 
       {/* Actions */}
       <div className="mt-7 flex flex-wrap items-center justify-between gap-3">

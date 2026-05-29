@@ -203,6 +203,8 @@ def start_practice(session_id: str, request: Request) -> dict:
         "current_question_text": state.get("current_question_text"),
         "current_example_code": state.get("current_example_code"),
         "current_format": state.get("current_format"),
+        "current_point_index": state.get("current_point_index", 0),
+        "total_questions_asked": state.get("total_questions_asked", 1),
     }
 
 

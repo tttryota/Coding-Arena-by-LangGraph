@@ -233,6 +233,16 @@ export interface CodingConfirmationPointDTO {
   end_format: CodingDifficultyType;
 }
 
+export interface CodingProblemAttemptDTO {
+  confirmation_point_id: string;
+  format: CodingDifficultyType;
+  question_text: string;
+  example_code: string;
+  answer_text: string;
+  score: number;
+  feedback: string;
+}
+
 export interface CodingSessionStateDTO {
   session_id: string;
   roadmap_item_id: string;
@@ -248,6 +258,7 @@ export interface CodingSessionStateDTO {
   current_example_code?: string;
   current_format?: CodingDifficultyType;
   total_questions_asked?: number;
+  coding_attempts?: CodingProblemAttemptDTO[];
   user_input?: string;
   input_source?: "form" | "chat";
   next_action?: "next_step" | "retry" | "next_cp" | "complete";
@@ -268,6 +279,8 @@ export interface PracticeStartResponse {
   current_question_text?: string;
   current_example_code?: string;
   current_format?: CodingDifficultyType;
+  current_point_index?: number;
+  total_questions_asked?: number;
 }
 
 // --- Feedback (GET /ingestion/feedbacks) ---
@@ -292,7 +305,7 @@ export interface FeedbackListResponse {
 
 export interface SessionDetailResponse {
   session_id: string;
-  session: {
+  session?: {
     id: string;
     roadmap_item_id: string;
     status: "in_progress" | "completed";

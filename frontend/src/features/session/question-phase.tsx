@@ -5,10 +5,11 @@ import {
   SendHorizontal,
   ArrowUp,
   MessageCircle,
+  Code2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatBubble } from "./chat-bubble";
-import type { SessionState } from "@/types/api";
+import type { SessionState, CodingDifficultyType } from "@/types/api";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -26,7 +27,29 @@ interface QuestionPhaseProps {
   onSubmitAnswer: (text: string) => void;
   onSubmitChat: (text: string) => void;
   onExplain: () => void;
+  /** Coding session: example code to display above editor */
+  exampleCode?: string;
+  /** Coding session: current format badge */
+  currentFormat?: CodingDifficultyType;
+  /** Hide explain button (coding sessions) */
+  hideExplainButton?: boolean;
 }
+
+const FORMAT_LABELS: Record<CodingDifficultyType, string> = {
+  rewrite: "書き換え",
+  fill_blank: "穴埋め",
+  bug_fix: "バグ修正",
+  extend: "拡張",
+  implement: "実装",
+};
+
+const FORMAT_COLORS: Record<CodingDifficultyType, { text: string; bg: string }> = {
+  rewrite: { text: "#34d399", bg: "rgb(52 211 153 / 0.12)" },
+  fill_blank: { text: "#38bdf8", bg: "rgb(56 189 248 / 0.12)" },
+  bug_fix: { text: "#fb923c", bg: "rgb(251 146 60 / 0.12)" },
+  extend: { text: "#a78bfa", bg: "rgb(167 139 250 / 0.12)" },
+  implement: { text: "#f472b6", bg: "rgb(244 114 182 / 0.12)" },
+};
 
 export function QuestionPhase({
   sessionState: s,
@@ -39,9 +62,12 @@ export function QuestionPhase({
   onSubmitAnswer,
   onSubmitChat,
   onExplain,
+  exampleCode,
+  currentFormat,
+  hideExplainButton,
 }: QuestionPhaseProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isCode = s.current_answer_type === "code";
+  const isCode = currentFormat != null || s.current_answer_type === "code";
   const hasDraft = answerDraft.trim().length > 0;
   const cpCount = s.confirmation_points?.length ?? 0;
   const cpIndex = (s.current_point_index ?? 0) + 1;
@@ -77,15 +103,40 @@ export function QuestionPhase({
           {cpLabel}
         </span>
         <span className="flex-1" />
-        <span className="normal-case tracking-normal text-muted-foreground">
-          {isCode ? "コード回答" : "文章回答"}
-        </span>
+        {currentFormat != null ? (
+          <span
+            className="rounded-full px-2 py-px font-sans text-[11px] normal-case tracking-normal"
+            style={{
+              color: FORMAT_COLORS[currentFormat].text,
+              background: FORMAT_COLORS[currentFormat].bg,
+            }}
+          >
+            {FORMAT_LABELS[currentFormat]}
+          </span>
+        ) : (
+          <span className="normal-case tracking-normal text-muted-foreground">
+            {isCode ? "コード回答" : "文章回答"}
+          </span>
+        )}
       </div>
 
       {/* Question card */}
       <div className="rounded-md border border-border border-l-[3px] border-l-primary bg-[rgb(15_23_42/0.6)] px-5 py-[18px] text-[15px] leading-relaxed tracking-tight text-foreground">
         {s.current_question_text}
       </div>
+
+      {/* Example code (coding sessions) */}
+      {exampleCode && (
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <Code2 className="h-3 w-3" />
+            <span>サンプルコード</span>
+          </div>
+          <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border border-[rgb(51_65_85/0.5)] bg-[#0b1220] px-3.5 py-3 font-mono text-[12.5px] leading-relaxed text-[#e2e8f0]">
+            {exampleCode}
+          </pre>
+        </div>
+      )}
 
       {/* Answer block */}
       <div className="mt-5">
@@ -147,15 +198,17 @@ export function QuestionPhase({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onExplain}
-              disabled={isSubmitting}
-            >
-              <HelpCircle className="h-3.5 w-3.5" />
-              解説して
-            </Button>
+            {!hideExplainButton && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onExplain}
+                disabled={isSubmitting}
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+                解説して
+              </Button>
+            )}
             <button
               type="button"
               className="inline-flex h-8 items-center gap-[5px] rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
@@ -209,7 +262,7 @@ export function QuestionPhase({
         <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <MessageCircle className="h-[11px] w-[11px]" />
           <span>
-            質問・追加情報のリクエストはここから。クイズ進行は中断されません。
+            質問・追加情報のリクエストはここから。進行は中断されません。
           </span>
         </div>
       </div>

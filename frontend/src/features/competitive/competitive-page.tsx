@@ -5,11 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Shuffle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { useThemes, useStartSession } from "./use-competitive";
+import { useThemes, useStartSession, useCompetitiveSessions } from "./use-competitive";
 import { useCompetitiveStore } from "./use-competitive-store";
 
 export function CompetitivePage() {
   const { data, isLoading, isError } = useThemes();
+  const { data: sessionsData } = useCompetitiveSessions();
   const startMutation = useStartSession();
   const { setSession } = useCompetitiveStore();
   const navigate = useNavigate();
@@ -79,8 +80,14 @@ export function CompetitivePage() {
                       <Badge
                         key={theme.id}
                         variant="outline"
-                        className="cursor-pointer hover:bg-accent"
-                        onClick={() => handleStart(theme.id)}
+                        className={
+                          startMutation.isPending
+                            ? "opacity-50"
+                            : "cursor-pointer hover:bg-accent"
+                        }
+                        onClick={() =>
+                          !startMutation.isPending && handleStart(theme.id)
+                        }
                       >
                         {theme.label}
                       </Badge>
@@ -90,6 +97,43 @@ export function CompetitivePage() {
               </Card>
             ))}
           </div>
+
+          {sessionsData && sessionsData.sessions.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">過去の挑戦</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {sessionsData.sessions.slice(0, 10).map((s) => (
+                    <div
+                      key={s.session_id}
+                      className="flex items-center justify-between text-sm cursor-pointer hover:bg-accent rounded px-2 py-1"
+                      onClick={() =>
+                        navigate(`/algorithm-quiz/${s.session_id}`)
+                      }
+                    >
+                      <span>{s.theme_label}</span>
+                      <div className="flex items-center gap-2">
+                        {s.status === "completed" && s.score != null && (
+                          <Badge
+                            variant={
+                              s.score >= 70 ? "default" : "destructive"
+                            }
+                          >
+                            {s.score}点
+                          </Badge>
+                        )}
+                        {s.status === "in_progress" && (
+                          <Badge variant="outline">進行中</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </AppShell>

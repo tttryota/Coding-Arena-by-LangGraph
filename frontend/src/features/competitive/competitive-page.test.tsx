@@ -10,15 +10,28 @@ const mockThemes = {
   ],
 };
 
+const mockSessions = { sessions: [] };
+
+function mockFetch(themes = mockThemes, sessions = mockSessions) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.includes("/algorithm-quiz/themes")) {
+      return mockJsonResponse(themes);
+    }
+    if (url.includes("/algorithm-quiz/sessions")) {
+      return mockJsonResponse(sessions);
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe("CompetitivePage", () => {
   it("テーマ一覧を表示する", async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(mockJsonResponse(mockThemes));
+    const fetchSpy = mockFetch();
 
     renderWithProviders(<CompetitivePage />, {
       initialEntries: ["/algorithm-quiz"],
@@ -32,9 +45,7 @@ describe("CompetitivePage", () => {
   });
 
   it("ランダムで挑戦ボタンが表示される", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockJsonResponse(mockThemes),
-    );
+    mockFetch();
 
     renderWithProviders(<CompetitivePage />, {
       initialEntries: ["/algorithm-quiz"],

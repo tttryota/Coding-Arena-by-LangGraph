@@ -36,7 +36,8 @@ export const useCompetitiveStore = create<
 >((set) => ({
   ...initialState,
   setPhase: (phase) => set({ phase }),
-  setSession: (session) => set({ session, phase: "problem" }),
+  setSession: (session) =>
+    set({ session, phase: "problem", codeDraft: "", result: null, isSubmitting: false }),
   setResult: (result) => set({ result, phase: "result" }),
   setCodeDraft: (codeDraft) => set({ codeDraft }),
   setIsSubmitting: (isSubmitting) => set({ isSubmitting }),

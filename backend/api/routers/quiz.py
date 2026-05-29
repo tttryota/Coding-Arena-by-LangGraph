@@ -63,13 +63,45 @@ def start_session(body: _StartSessionRequest, request: Request) -> dict:
 
 @router.post("/{session_id}/input")
 def submit_input(session_id: str, body: _SubmitInputRequest, request: Request) -> dict:
+    c = _container(request)
+
+    if c.coding_graph_runner is not None:
+        try:
+            c.coding_graph_runner.get_state(thread_id=session_id)
+            return _resume_coding_session(c, session_id, body)
+        except LookupError:
+            pass
+
+    return _resume_quiz_session(c, session_id, body)
+
+
+def _resume_coding_session(
+    c: Container, session_id: str, body: _SubmitInputRequest,
+) -> dict:
+    from quiz.application.coding_graph import TransientLlmNodeError
+
+    try:
+        c.coding_graph_runner.resume_graph(
+            {"user_input": body.user_input, "input_source": body.input_source},
+            thread_id=session_id,
+        )
+    except TransientLlmNodeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (ValueError, LookupError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    state = c.coding_graph_runner.get_state(thread_id=session_id)
+    return dict(state)
+
+
+def _resume_quiz_session(
+    c: Container, session_id: str, body: _SubmitInputRequest,
+) -> dict:
     from quiz.application.session_lifecycle import resume_session
     from quiz.application.session_lifecycle_types import (
         QuizSessionLifecycleError,
         ResumeSessionInput,
     )
 
-    c = _container(request)
     if c.graph_runner is None:
         raise HTTPException(
             status_code=503,
@@ -97,7 +129,7 @@ def submit_input(session_id: str, body: _SubmitInputRequest, request: Request) -
 
 
 @router.post("/coding", status_code=201)
-def start_coding_session(
+def start_coding_session(  # noqa: PLR0915
     body: _StartSessionRequest, request: Request,
 ) -> dict:
     """コーディングセッションを開始する(座学→練習フロー)。"""
@@ -125,10 +157,14 @@ def start_coding_session(
         "roadmap_item_description": item.description,
         "is_resumed": False,
     }
+    from quiz.application.coding_graph import TransientLlmNodeError
+
     try:
         c.coding_graph_runner.start_graph(
             initial_state, thread_id=session_id,
         )
+    except TransientLlmNodeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except (ValueError, LookupError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -149,11 +185,15 @@ def start_practice(session_id: str, request: Request) -> dict:
             status_code=503,
             detail="Coding session service unavailable",
         )
+    from quiz.application.coding_graph import TransientLlmNodeError
+
     try:
         c.coding_graph_runner.resume_graph(
             {"lecture_phase_active": False},
             thread_id=session_id,
         )
+    except TransientLlmNodeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except (ValueError, LookupError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     state = c.coding_graph_runner.get_state(thread_id=session_id)
@@ -167,15 +207,15 @@ def start_practice(session_id: str, request: Request) -> dict:
 
 
 @router.get("/{session_id}")
-def get_session(session_id: str, request: Request) -> dict:
+def get_session(session_id: str, request: Request) -> dict:  # noqa: PLR0915
     c = _container(request)
+    response: dict = {"session_id": session_id}
     try:
         session = c.quiz_session_store.find_session(session_id)
-    except (ValueError, KeyError) as exc:
-        raise HTTPException(status_code=404, detail="Session not found") from exc
-    if session is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    response: dict = {"session_id": session_id, "session": session}
+        if session is not None:
+            response["session"] = session
+    except (ValueError, KeyError):
+        pass
     if c.coding_graph_runner is not None:
         try:
             coding_state = c.coding_graph_runner.get_state(
@@ -190,4 +230,6 @@ def get_session(session_id: str, request: Request) -> dict:
             response["graph_state"] = dict(graph_state)
         except LookupError:
             pass
+    if "session" not in response and "graph_state" not in response:
+        raise HTTPException(status_code=404, detail="Session not found")
     return response

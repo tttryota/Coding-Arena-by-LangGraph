@@ -66,6 +66,7 @@ class _FakeContainer:
         self.preset_reader = _FakePresetReader()
         self.note_topic_reader = _FakeNoteTopicReader()
         self.topic_store = _FakeTopicStore()
+        self.coding_graph_runner = None
 
 
 class _FakeUuidGenerator:

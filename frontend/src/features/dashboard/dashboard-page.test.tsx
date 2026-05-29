@@ -100,6 +100,8 @@ function mockSuccess(
     if (path === "/roadmaps/rm-2") return mockJsonResponse(roadmapTree2);
     if (path.includes("/ingestion/feedbacks"))
       return mockJsonResponse(feedbacks);
+    if (path === "/algorithm-quiz/sessions")
+      return mockJsonResponse({ sessions: [] });
     throw new Error(`Unexpected path: ${path}`);
   });
 }

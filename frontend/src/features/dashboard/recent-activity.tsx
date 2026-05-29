@@ -53,7 +53,7 @@ export function RecentActivity({ activity }: RecentActivityProps) {
               className={[
                 "relative flex w-full cursor-pointer items-start gap-3 rounded-[6px] border-0 bg-transparent px-3 py-[11px] text-left font-inherit text-foreground transition-[background] duration-150 hover:bg-[rgb(51_65_85/0.4)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
                 i > 0 && "shadow-[inset_0_1px_0_0_var(--border)]",
-                !isQuiz && item.unread && "is-unread",
+                !isQuiz && !isCompetitive && item.unread && "is-unread",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -68,7 +68,7 @@ export function RecentActivity({ activity }: RecentActivityProps) {
               }}
             >
               {/* Unread left bar */}
-              {!isQuiz && item.unread && (
+              {!isQuiz && !isCompetitive && item.unread && (
                 <span className="absolute bottom-3 left-1 top-3 w-0.5 rounded-r bg-primary opacity-70" />
               )}
 
@@ -109,7 +109,7 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                         {time}
                       </span>
                     </>
-                  ) : (
+                  ) : item.kind === "feedback" ? (
                     <>
                       {item.unread && (
                         <span className="inline-flex shrink-0 items-center rounded-full border border-[rgb(59_130_246/0.35)] bg-[rgb(37_99_235/0.15)] px-[7px] py-px text-[10px] font-semibold tracking-[0.04em] text-[#93c5fd]">
@@ -124,7 +124,7 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                         {time}
                       </span>
                     </>
-                  )}
+                  ) : null}
                 </span>
               </span>
             </button>

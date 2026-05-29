@@ -186,7 +186,7 @@ export interface CompetitiveSessionResponse {
   theme_id: string;
   theme_label: string;
   theme_category: string;
-  programming_language: string;
+  programming_language: "python" | "typescript";
   problem_statement: string;
   input_format: string;
   output_format: string;
@@ -207,7 +207,7 @@ export interface CompetitiveSessionListItem {
   theme_id: string;
   theme_label: string;
   theme_category: string;
-  programming_language: string;
+  programming_language: "python" | "typescript";
   status: "in_progress" | "completed";
   created_at: string;
   score?: number;

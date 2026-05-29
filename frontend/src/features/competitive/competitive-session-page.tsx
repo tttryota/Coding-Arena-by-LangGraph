@@ -34,7 +34,7 @@ export function CompetitiveSessionPage() {
         theme_id: restored.theme_id,
         theme_label: restored.theme_label,
         theme_category: restored.theme_category,
-        programming_language: restored.programming_language as "python" | "typescript",
+        programming_language: restored.programming_language,
         problem_statement: restored.problem_statement,
         input_format: restored.input_format,
         output_format: restored.output_format,

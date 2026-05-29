@@ -62,10 +62,16 @@ NODE_CODING_PROBLEM_DELIVERY = "coding_problem_delivery"
 NODE_AWAIT_CODING_INPUT = "await_coding_input"
 NODE_CODING_CHAT_RESPONSE = "coding_chat_response"
 NODE_CODE_EVALUATION = "code_evaluation"
+NODE_PROGRESS_UPDATE = "progress_update"
 
 # ---------------------------------------------------------------------------
 # Interrupt nodes
 # ---------------------------------------------------------------------------
+
+
+_ALLOWED_LECTURE_RESUME_KEYS = frozenset({
+    "user_input", "lecture_phase_active",
+})
 
 
 def _await_lecture_input(state: CodingSessionState) -> dict[str, object]:
@@ -73,6 +79,10 @@ def _await_lecture_input(state: CodingSessionState) -> dict[str, object]:
     user_input = interrupt(value=state)
     if not isinstance(user_input, dict):
         msg = f"Expected dict from interrupt resume, got {type(user_input).__name__}"
+        raise ValueError(msg)
+    extra = set(user_input.keys()) - _ALLOWED_LECTURE_RESUME_KEYS
+    if extra:
+        msg = f"Resume payload contains disallowed keys: {extra}"
         raise ValueError(msg)
     return user_input
 
@@ -90,12 +100,28 @@ def _await_coding_input(state: CodingSessionState) -> dict[str, object]:
     if extra:
         msg = f"Resume payload contains disallowed keys: {extra}"
         raise ValueError(msg)
+    if "user_input" not in user_input:
+        msg = "Resume payload must contain 'user_input'"
+        raise ValueError(msg)
+    source = user_input.get("input_source", "form")
+    if source not in ("form", "chat"):
+        msg = f"Invalid input_source: {source}"
+        raise ValueError(msg)
     return user_input
 
 
 # ---------------------------------------------------------------------------
 # Routing functions
 # ---------------------------------------------------------------------------
+
+
+def _coding_progress_update(state: CodingSessionState) -> dict[str, object]:
+    """コーディングセッションの進捗を集計する軽量ノード。"""
+    attempts = state.get("coding_attempts", [])
+    if not attempts:
+        return {}
+    avg_score = sum(a["score"] for a in attempts) // len(attempts)
+    return {"current_score": avg_score}
 
 
 def _route_lecture_input(state: CodingSessionState) -> str:
@@ -118,7 +144,7 @@ def _route_evaluation(state: CodingSessionState) -> str:
     action = state.get("next_action", "complete")
     if action in ("next_step", "retry", "next_cp"):
         return NODE_CODING_PROBLEM_DELIVERY
-    return END
+    return NODE_PROGRESS_UPDATE
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +169,7 @@ class CodingGraphDependencies:
 # ---------------------------------------------------------------------------
 
 
-def build_coding_graph(
+def build_coding_graph(  # noqa: PLR0915
     deps: CodingGraphDependencies,
     checkpointer: BaseCheckpointSaver,
 ) -> CompiledStateGraph:
@@ -183,6 +209,8 @@ def build_coding_graph(
         partial(evaluate_code, llm=deps.code_evaluation_llm),
     )
 
+    graph.add_node(NODE_PROGRESS_UPDATE, _coding_progress_update)
+
     # Entry point
     graph.set_entry_point(NODE_LECTURE_GENERATION)
 
@@ -194,6 +222,7 @@ def build_coding_graph(
     )
     graph.add_edge(NODE_CODING_PROBLEM_DELIVERY, NODE_AWAIT_CODING_INPUT)
     graph.add_edge(NODE_CODING_CHAT_RESPONSE, NODE_AWAIT_CODING_INPUT)
+    graph.add_edge(NODE_PROGRESS_UPDATE, END)
 
     # Conditional edges
     graph.add_conditional_edges(
@@ -217,7 +246,7 @@ def build_coding_graph(
         _route_evaluation,
         {
             NODE_CODING_PROBLEM_DELIVERY: NODE_CODING_PROBLEM_DELIVERY,
-            END: END,
+            NODE_PROGRESS_UPDATE: NODE_PROGRESS_UPDATE,
         },
     )
 

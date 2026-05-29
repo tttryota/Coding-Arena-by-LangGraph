@@ -41,12 +41,12 @@ class CompetitiveSessionState(TypedDict, total=False):
 
     フィールドの初期化責務:
     - theme_selection が初期化: session_id, status("in_progress"), algo_theme_id,
-      algo_theme_label, algo_theme_category, programming_language
-    - problem_generation が初期化: problem_statement, input_format, output_format,
+      algo_theme_label, algo_theme_category
+    - problem_generation が初期化: programming_language, problem_statement, input_format, output_format,
       constraints, examples, reference_solution, grading_rubric
     - await_submission の resume で設定: user_code
     - solution_evaluation が初期化: score, feedback, time_complexity,
-      space_complexity, improvement_suggestions
+      space_complexity, improvement_suggestions, rubric_scores_json
     """
 
     session_id: str
@@ -68,6 +68,7 @@ class CompetitiveSessionState(TypedDict, total=False):
     time_complexity: str
     space_complexity: str
     improvement_suggestions: str
+    rubric_scores_json: str
 
 
 class CompetitiveError(Exception):

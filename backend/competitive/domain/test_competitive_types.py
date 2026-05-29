@@ -39,6 +39,7 @@ _COMPETITIVE_SESSION_STATE_KEYS = (
     "time_complexity",
     "space_complexity",
     "improvement_suggestions",
+    "rubric_scores_json",
 )
 
 _ALGO_THEME_KEYS = ("id", "category", "label")
@@ -65,6 +66,7 @@ _EXPECTED_FIELD_TYPES: dict[str, str] = {
     "time_complexity": "str",
     "space_complexity": "str",
     "improvement_suggestions": "str",
+    "rubric_scores_json": "str",
 }
 
 

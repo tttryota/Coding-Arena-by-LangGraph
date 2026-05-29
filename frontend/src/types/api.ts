@@ -217,6 +217,44 @@ export interface CompetitiveSessionListResponse {
   sessions: CompetitiveSessionListItem[];
 }
 
+// --- Coding Session State (from coding graph) ---
+
+export interface CodingConfirmationPointDTO {
+  id: string;
+  content: string;
+  start_format: string;
+  end_format: string;
+}
+
+export interface CodingSessionStateDTO {
+  session_id: string;
+  roadmap_item_id: string;
+  roadmap_item_level: "detail" | "middle" | "major";
+  roadmap_item_title: string;
+  roadmap_item_description: string;
+  is_resumed: boolean;
+  lecture_content?: string;
+  lecture_phase_active?: boolean;
+  confirmation_points?: CodingConfirmationPointDTO[];
+  current_point_index?: number;
+  current_question_text?: string;
+  current_example_code?: string;
+  current_format?: string;
+  total_questions_asked?: number;
+  user_input?: string;
+  input_source?: "form" | "chat";
+  next_action?: "next_step" | "retry" | "next_cp" | "complete";
+  current_score?: number;
+  current_feedback?: string;
+  chat_response_text?: string;
+}
+
+export interface CodingSessionStartResponse {
+  session_id: string;
+  lecture_content?: string;
+  lecture_phase_active?: boolean;
+}
+
 // --- Feedback (GET /ingestion/feedbacks) ---
 
 export interface FeedbackListItem {

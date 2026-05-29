@@ -219,11 +219,18 @@ export interface CompetitiveSessionListResponse {
 
 // --- Coding Session State (from coding graph) ---
 
+export type CodingDifficultyType =
+  | "rewrite"
+  | "fill_blank"
+  | "bug_fix"
+  | "extend"
+  | "implement";
+
 export interface CodingConfirmationPointDTO {
   id: string;
   content: string;
-  start_format: string;
-  end_format: string;
+  start_format: CodingDifficultyType;
+  end_format: CodingDifficultyType;
 }
 
 export interface CodingSessionStateDTO {
@@ -239,7 +246,7 @@ export interface CodingSessionStateDTO {
   current_point_index?: number;
   current_question_text?: string;
   current_example_code?: string;
-  current_format?: string;
+  current_format?: CodingDifficultyType;
   total_questions_asked?: number;
   user_input?: string;
   input_source?: "form" | "chat";
@@ -253,6 +260,14 @@ export interface CodingSessionStartResponse {
   session_id: string;
   lecture_content?: string;
   lecture_phase_active?: boolean;
+}
+
+export interface PracticeStartResponse {
+  session_id: string;
+  confirmation_points: CodingConfirmationPointDTO[];
+  current_question_text?: string;
+  current_example_code?: string;
+  current_format?: CodingDifficultyType;
 }
 
 // --- Feedback (GET /ingestion/feedbacks) ---
@@ -283,5 +298,5 @@ export interface SessionDetailResponse {
     status: "in_progress" | "completed";
     completed_at: string | null;
   };
-  graph_state?: SessionState;
+  graph_state?: SessionState | CodingSessionStateDTO;
 }

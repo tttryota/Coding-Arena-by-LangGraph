@@ -19,17 +19,19 @@ if TYPE_CHECKING:
 class Container:
     """Application-level DI container."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0915
         self,
         engine: Engine,
         chroma_collection: object,
         embedder: object | None = None,
         preset_topics_path: str = "data/preset_topics.json",
+        algo_themes_path: str = "data/algo_themes.json",
     ) -> None:
         self._engine = engine
         self._chroma = chroma_collection
         self._embedder = embedder
         self._preset_topics_path = preset_topics_path
+        self._algo_themes_path = algo_themes_path
         self.transport = CodexLlmTransport()
         self.uuid_generator = UuidGenerator()
         self.executor = ThreadPoolExecutor(max_workers=2)
@@ -40,6 +42,7 @@ class Container:
             self._init_llm_clients()
             self._init_chroma_clients()
             self._init_graph_runner()
+            self._init_competitive()
             self._init_scheduler()
             self._init_batch_adapters()
         except Exception:
@@ -179,6 +182,37 @@ class Container:
         )
         compiled = build_graph(deps, checkpointer=MemorySaver())
         self.graph_runner = QuizGraphRunner(compiled)
+
+    def _init_competitive(self) -> None:
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from competitive.application.competitive_graph import (
+            CompetitiveGraphDependencies,
+            CompetitiveGraphRunner,
+            build_competitive_graph,
+        )
+        from competitive.infrastructure.algo_theme_file_reader import (
+            AlgoThemeFileReader,
+        )
+        from competitive.infrastructure.codex_competitive_llm import (
+            CodexCompetitiveProblemGenerationLlm,
+            CodexCompetitiveSolutionEvaluationLlm,
+        )
+        from competitive.infrastructure.sql_competitive_store import (
+            SqlCompetitiveStore,
+        )
+
+        self.algo_theme_reader = AlgoThemeFileReader(self._algo_themes_path)
+        self.competitive_store = SqlCompetitiveStore(self._engine)
+        problem_llm = CodexCompetitiveProblemGenerationLlm(self.transport)
+        eval_llm = CodexCompetitiveSolutionEvaluationLlm(self.transport)
+        deps = CompetitiveGraphDependencies(
+            theme_reader=self.algo_theme_reader,
+            problem_generation_llm=problem_llm,
+            solution_evaluation_llm=eval_llm,
+        )
+        compiled = build_competitive_graph(deps, checkpointer=MemorySaver())
+        self.competitive_graph_runner = CompetitiveGraphRunner(compiled)
 
     def _init_scheduler(self) -> None:
         from roadmap.infrastructure.thread_pool_scheduler import (

@@ -52,6 +52,7 @@ class SqlCompetitiveStore:
     def create_session(  # noqa: PLR0913
         self,
         *,
+        session_id: str | None = None,
         theme_id: str,
         theme_label: str,
         theme_category: str,
@@ -64,10 +65,10 @@ class SqlCompetitiveStore:
         reference_solution: str,
         grading_rubric: list[RubricItem],
     ) -> CompetitiveSessionRecord:
-        session_id = uuid.uuid4()
+        sid = uuid.UUID(session_id) if session_id else uuid.uuid4()
         with Session(self._engine) as s, s.begin():
             row = CompetitiveSession(
-                id=session_id,
+                id=sid,
                 theme_id=theme_id,
                 theme_label=theme_label,
                 theme_category=theme_category,
@@ -87,7 +88,7 @@ class SqlCompetitiveStore:
             )
             s.add(row)
         return CompetitiveSessionRecord(
-            id=str(session_id),
+            id=str(sid),
             theme_id=theme_id,
             theme_label=theme_label,
             theme_category=theme_category,

@@ -70,7 +70,7 @@ NODE_PROGRESS_UPDATE = "progress_update"
 
 
 _ALLOWED_LECTURE_RESUME_KEYS = frozenset({
-    "user_input", "lecture_phase_active",
+    "user_input", "input_source", "lecture_phase_active",
 })
 
 
@@ -115,13 +115,11 @@ def _await_coding_input(state: CodingSessionState) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
-def _coding_progress_update(state: CodingSessionState) -> dict[str, object]:
-    """コーディングセッションの進捗を集計する軽量ノード。"""
-    attempts = state.get("coding_attempts", [])
-    if not attempts:
-        return {}
-    avg_score = sum(a["score"] for a in attempts) // len(attempts)
-    return {"current_score": avg_score}
+def _coding_progress_update(
+    state: CodingSessionState,  # noqa: ARG001
+) -> dict[str, object]:
+    """コーディングセッションの完了処理。current_score/feedbackは最終評価を維持する。"""
+    return {}
 
 
 def _route_lecture_input(state: CodingSessionState) -> str:

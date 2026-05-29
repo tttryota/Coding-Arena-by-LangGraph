@@ -96,6 +96,50 @@ def submit_input(session_id: str, body: _SubmitInputRequest, request: Request) -
     return dict(result)
 
 
+@router.post("/coding", status_code=201)
+def start_coding_session(
+    body: _StartSessionRequest, request: Request,
+) -> dict:
+    """コーディングセッションを開始する(座学→練習フロー)。"""
+    import uuid
+
+    c = _container(request)
+    if c.coding_graph_runner is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Coding session service unavailable",
+        )
+    session_id = str(uuid.uuid4())
+    try:
+        item = c.roadmap_item_read_store.find_item(body.roadmap_item_id)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if item is None:
+        raise HTTPException(status_code=404, detail="Roadmap item not found")
+
+    initial_state = {
+        "session_id": session_id,
+        "roadmap_item_id": body.roadmap_item_id,
+        "roadmap_item_level": item.level,
+        "roadmap_item_title": item.title,
+        "roadmap_item_description": item.description,
+        "is_resumed": False,
+    }
+    try:
+        c.coding_graph_runner.start_graph(
+            initial_state, thread_id=session_id,
+        )
+    except (ValueError, LookupError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    state = c.coding_graph_runner.get_state(thread_id=session_id)
+    return {
+        "session_id": session_id,
+        "lecture_content": state.get("lecture_content"),
+        "lecture_phase_active": state.get("lecture_phase_active"),
+    }
+
+
 @router.post("/{session_id}/practice/start")
 def start_practice(session_id: str, request: Request) -> dict:
     """座学フェーズからコーディング練習に遷移する。"""
@@ -132,18 +176,18 @@ def get_session(session_id: str, request: Request) -> dict:
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
     response: dict = {"session_id": session_id, "session": session}
-    if c.graph_runner is not None:
-        try:
-            graph_state = c.graph_runner.get_state(thread_id=session_id)
-            response["graph_state"] = dict(graph_state)
-        except LookupError:
-            pass
-    if c.coding_graph_runner is not None and "graph_state" not in response:
+    if c.coding_graph_runner is not None:
         try:
             coding_state = c.coding_graph_runner.get_state(
                 thread_id=session_id,
             )
             response["graph_state"] = dict(coding_state)
+        except LookupError:
+            pass
+    if "graph_state" not in response and c.graph_runner is not None:
+        try:
+            graph_state = c.graph_runner.get_state(thread_id=session_id)
+            response["graph_state"] = dict(graph_state)
         except LookupError:
             pass
     return response

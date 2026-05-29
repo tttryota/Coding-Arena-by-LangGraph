@@ -21,14 +21,23 @@ export function CompetitiveSessionPage() {
     setResult,
     setIsSubmitting,
     setSession,
+    reset,
   } = useCompetitiveStore();
   const submitMutation = useSubmitAnswer(sessionId ?? "");
+  const needsRestore =
+    sessionId != null && (!session || session.session_id !== sessionId);
   const { data: restored, isLoading: isRestoring } = useCompetitiveSession(
-    !session && sessionId ? sessionId : "",
+    needsRestore ? sessionId : "",
   );
 
   useEffect(() => {
-    if (!session && restored && sessionId) {
+    if (session && sessionId && session.session_id !== sessionId) {
+      reset();
+    }
+  }, [session, sessionId, reset]);
+
+  useEffect(() => {
+    if (needsRestore && restored && sessionId) {
       setSession({
         session_id: restored.session_id,
         theme_id: restored.theme_id,

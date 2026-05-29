@@ -67,6 +67,11 @@ class _FakeGraphRunner:
 class _FakeSessionRecord:
     def __init__(self, session_id: str) -> None:
         self.id = session_id
+        self.theme_id = "algo-001"
+        self.theme_label = "二分探索"
+        self.theme_category = "探索"
+        self.programming_language = "python"
+        self.status = "in_progress"
 
 
 class _FakeAnswerRecord:
@@ -99,6 +104,9 @@ class _FakeCompetitiveStore:
         self, session_id: str,
     ) -> _FakeAnswerRecord | None:
         return self._answer
+
+    def list_recent_sessions(self, *, limit: int = 50) -> list[_FakeSessionRecord]:
+        return [_FakeSessionRecord(sid) for sid in self._sessions]
 
     def save_answer_and_complete(self, **kwargs: Any) -> _FakeAnswerRecord:
         self._answer = _FakeAnswerRecord()
@@ -146,17 +154,18 @@ class TestStartSession:
         assert data["problem_statement"] == "問題文"
         assert "reference_solution" not in data
 
-    def test_with_theme_id_passes_to_graph(self) -> None:
+    def test_with_theme_id(self) -> None:
         client = _make_client()
         resp = client.post(
             "/algorithm-quiz/sessions",
-            json={"theme_id": "algo-002"},
+            json={"theme_id": "algo-001"},
         )
 
         assert resp.status_code == 201
         data = resp.json()
         assert data["session_id"]
         assert data["theme_id"] == "algo-001"
+        assert "reference_solution" not in data
 
 
 class TestSubmitAnswer:
@@ -219,3 +228,25 @@ class TestGetSession:
         data = resp.json()
         assert data["score"] == 85
         assert data["feedback"] == "良い解答です"
+
+
+class TestListSessions:
+    def test_returns_sessions_with_created_at(self) -> None:
+        client = _make_client()
+        client.post("/algorithm-quiz/sessions")
+
+        resp = client.get("/algorithm-quiz/sessions")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["sessions"]) == 1
+        assert data["sessions"][0]["session_id"]
+        assert "created_at" in data["sessions"][0]
+
+    def test_empty_when_no_sessions(self) -> None:
+        client = _make_client()
+        resp = client.get("/algorithm-quiz/sessions")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sessions"] == []

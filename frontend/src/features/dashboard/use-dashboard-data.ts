@@ -2,6 +2,7 @@ import { useMemo, useCallback } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useRoadmaps } from "@/features/roadmap/use-roadmaps";
+import { useCompetitiveSessions } from "@/features/competitive/use-competitive";
 import type {
   RoadmapListItem,
   RoadmapTree,
@@ -38,7 +39,15 @@ export interface FeedbackActivity {
   createdAt: string;
 }
 
-export type ActivityItem = QuizActivity | FeedbackActivity;
+export interface CompetitiveActivity {
+  kind: "competitive";
+  sessionId: string;
+  themeLabel: string;
+  score: number;
+  createdAt: string;
+}
+
+export type ActivityItem = QuizActivity | FeedbackActivity | CompetitiveActivity;
 
 export interface DashboardData {
   stats: DashboardStats | null;
@@ -97,7 +106,10 @@ export function useDashboardData(): DashboardData {
     })),
   });
 
-  // 3. Unread feedbacks (provides both total_count for stat card and items
+  // 3. Competitive sessions (for activity timeline)
+  const competitiveQuery = useCompetitiveSessions();
+
+  // 4. Unread feedbacks (provides both total_count for stat card and items
   //    for activity timeline). Key uses "feedbacks" prefix so that
   //    use-mark-as-read's invalidateQueries({ queryKey: ["feedbacks"] })
   //    triggers a refetch. The key shape differs from useFeedbacks()
@@ -118,7 +130,7 @@ export function useDashboardData(): DashboardData {
   const allDetailsLoaded =
     roadmapIds.length === 0 || detailQueries.every((q) => !q.isLoading);
   const isLoading =
-    roadmapList.isLoading || !allDetailsLoaded || feedbacksQuery.isLoading;
+    roadmapList.isLoading || !allDetailsLoaded || feedbacksQuery.isLoading || competitiveQuery.isLoading;
   const isError =
     roadmapList.isError ||
     detailQueries.some((q) => q.isError) ||
@@ -223,22 +235,31 @@ export function useDashboardData(): DashboardData {
       }),
     );
 
+    // Competitive activities
+    const competitiveItems: CompetitiveActivity[] = (
+      competitiveQuery.data?.sessions ?? []
+    )
+      .filter((s) => s.status === "completed" && s.score != null)
+      .map((s) => ({
+        kind: "competitive" as const,
+        sessionId: s.session_id,
+        themeLabel: s.theme_label,
+        score: s.score!,
+        createdAt: s.created_at,
+      }));
+
     // Merge by timestamp descending
-    const merged: ActivityItem[] = [...quizItems, ...feedbackItems];
+    const merged: ActivityItem[] = [...quizItems, ...feedbackItems, ...competitiveItems];
     merged.sort((a, b) => {
-      const timeA =
-        a.kind === "quiz"
-          ? new Date(a.lastQuizAt).getTime()
-          : new Date(a.createdAt).getTime();
-      const timeB =
-        b.kind === "quiz"
-          ? new Date(b.lastQuizAt).getTime()
-          : new Date(b.createdAt).getTime();
-      return timeB - timeA;
+      const getTime = (item: ActivityItem) => {
+        if (item.kind === "quiz") return new Date(item.lastQuizAt).getTime();
+        return new Date(item.createdAt).getTime();
+      };
+      return getTime(b) - getTime(a);
     });
 
     return merged.slice(0, ACTIVITY_LIMIT);
-  }, [detailTrees, feedbacksQuery.data]);
+  }, [detailTrees, feedbacksQuery.data, competitiveQuery.data]);
 
   // Refetch all
   const refetch = useCallback(() => {

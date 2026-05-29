@@ -35,10 +35,16 @@ export function DashboardPage() {
     isEmpty,
     refetch,
   } = useDashboardData();
-  const { data: competitiveSessions } = useCompetitiveSessions();
+  const {
+    data: competitiveSessions,
+    isLoading: isCompetitiveLoading,
+  } = useCompetitiveSessions();
 
   const competitiveStats = (() => {
-    const sessions = competitiveSessions?.sessions ?? [];
+    if (isCompetitiveLoading || !competitiveSessions) {
+      return { totalCount: null, avgScore: null };
+    }
+    const sessions = competitiveSessions.sessions;
     const completed = sessions.filter((s) => s.status === "completed");
     const totalCount = sessions.length;
     const avgScore =
@@ -101,12 +107,14 @@ export function DashboardPage() {
       <StatCard
         icon={Swords}
         label="競プロクイズ"
-        value={competitiveStats.totalCount}
+        value={competitiveStats.totalCount ?? "—"}
         onClick={() => navigate("/algorithm-quiz")}
         hint={
-          competitiveStats.avgScore != null
-            ? `平均 ${competitiveStats.avgScore} 点`
-            : "未挑戦"
+          competitiveStats.totalCount == null
+            ? "読み込み中"
+            : competitiveStats.avgScore != null
+              ? `平均 ${competitiveStats.avgScore} 点`
+              : "未挑戦"
         }
       />
     </div>

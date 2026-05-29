@@ -209,6 +209,7 @@ export interface CompetitiveSessionListItem {
   theme_category: string;
   programming_language: string;
   status: "in_progress" | "completed";
+  created_at: string;
   score?: number;
 }
 

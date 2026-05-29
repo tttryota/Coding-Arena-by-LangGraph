@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { BookOpenText, MessageSquare } from "lucide-react";
+import { BookOpenText, MessageSquare, Swords } from "lucide-react";
 import { ScoreBadge } from "@/components/common/score-badge";
 import { formatRelativeTime } from "@/lib/relative-time";
 import type { ActivityItem } from "./use-dashboard-data";
@@ -35,13 +35,20 @@ export function RecentActivity({ activity }: RecentActivityProps) {
 
         {activity.map((item, i) => {
           const isQuiz = item.kind === "quiz";
+          const isCompetitive = item.kind === "competitive";
           const time = isQuiz
             ? formatRelativeTime(item.lastQuizAt)
             : formatRelativeTime(item.createdAt);
 
           return (
             <button
-              key={isQuiz ? `q-${item.itemId}` : `f-${item.id}`}
+              key={
+                isQuiz
+                  ? `q-${item.itemId}`
+                  : isCompetitive
+                    ? `c-${item.sessionId}`
+                    : `f-${item.id}`
+              }
               type="button"
               className={[
                 "relative flex w-full cursor-pointer items-start gap-3 rounded-[6px] border-0 bg-transparent px-3 py-[11px] text-left font-inherit text-foreground transition-[background] duration-150 hover:bg-[rgb(51_65_85/0.4)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
@@ -53,6 +60,8 @@ export function RecentActivity({ activity }: RecentActivityProps) {
               onClick={() => {
                 if (isQuiz) {
                   navigate(`/roadmaps/${item.roadmapId}`);
+                } else if (isCompetitive) {
+                  navigate(`/algorithm-quiz/${item.sessionId}`);
                 } else {
                   navigate("/feedbacks");
                 }
@@ -69,11 +78,15 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                   "mt-px inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] border",
                   isQuiz
                     ? "border-[rgb(59_130_246/0.25)] bg-[rgb(59_130_246/0.1)] text-[#93c5fd]"
-                    : "border-[rgb(168_85_247/0.22)] bg-[rgb(168_85_247/0.1)] text-[#c4b5fd]",
+                    : isCompetitive
+                      ? "border-[rgb(234_179_8/0.25)] bg-[rgb(234_179_8/0.1)] text-[#fde047]"
+                      : "border-[rgb(168_85_247/0.22)] bg-[rgb(168_85_247/0.1)] text-[#c4b5fd]",
                 ].join(" ")}
               >
                 {isQuiz ? (
                   <BookOpenText size={13} />
+                ) : isCompetitive ? (
+                  <Swords size={13} />
                 ) : (
                   <MessageSquare size={13} />
                 )}
@@ -82,16 +95,16 @@ export function RecentActivity({ activity }: RecentActivityProps) {
               {/* Body */}
               <span className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="truncate text-[13px] font-medium tracking-[-0.005em] text-foreground">
-                  {item.title}
+                  {isCompetitive ? item.themeLabel : item.title}
                 </span>
                 <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  {isQuiz ? (
+                  {isQuiz || isCompetitive ? (
                     <>
                       <ScoreBadge score={item.score} />
                       <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-border" />
                       <span
                         className="shrink-0 whitespace-nowrap"
-                        title={item.lastQuizAt}
+                        title={isQuiz ? item.lastQuizAt : item.createdAt}
                       >
                         {time}
                       </span>
@@ -127,6 +140,12 @@ export function RecentActivity({ activity }: RecentActivityProps) {
               <BookOpenText size={11} />
             </span>
             クイズ結果
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] border border-[rgb(234_179_8/0.25)] bg-[rgb(234_179_8/0.1)] text-[#fde047]">
+              <Swords size={11} />
+            </span>
+            競プロ
           </span>
           <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] border border-[rgb(168_85_247/0.22)] bg-[rgb(168_85_247/0.1)] text-[#c4b5fd]">

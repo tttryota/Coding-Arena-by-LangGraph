@@ -93,6 +93,7 @@ def list_sessions(request: Request) -> dict:
     sessions = c.competitive_store.list_recent_sessions(limit=50)
     items = []
     for s in sessions:
+        details = c.competitive_store.get_session_details(s.id)
         item: dict[str, object] = {
             "session_id": s.id,
             "theme_id": s.theme_id,
@@ -100,6 +101,7 @@ def list_sessions(request: Request) -> dict:
             "theme_category": s.theme_category,
             "programming_language": s.programming_language,
             "status": s.status,
+            "created_at": details.get("created_at", ""),
         }
         if s.status == "completed":
             answer = c.competitive_store.find_answer_by_session(s.id)

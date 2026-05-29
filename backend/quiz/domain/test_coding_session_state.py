@@ -112,7 +112,7 @@ def test_coding_difficulty_literal_values() -> None:
 def test_next_action_values() -> None:
     hints = get_type_hints(CodingSessionState)
     next_action_type = hints["next_action"]
-    assert get_args(next_action_type) == ("next_step", "next_cp", "complete")
+    assert get_args(next_action_type) == ("next_step", "retry", "next_cp", "complete")
 
 
 def test_input_source_values() -> None:

@@ -121,7 +121,6 @@ class TestCodingProblemSetDesign:
         )
         assert len(result["confirmation_points"]) == 3
         assert result["current_point_index"] == 0
-        assert result["lecture_phase_active"] is False
         assert result["total_questions_asked"] == 0
         assert result["coding_attempts"] == []
 
@@ -270,4 +269,4 @@ class TestCodeEvaluation:
             "coding_attempts": [],
         }
         result = evaluate_code(state, llm=FakeCodeEvaluationLlm(score=40))
-        assert result["next_action"] == "next_step"
+        assert result["next_action"] == "retry"

@@ -40,7 +40,6 @@ def design_coding_problem_set(
     return {
         "confirmation_points": points,
         "current_point_index": _INITIAL_POINT_INDEX,
-        "lecture_phase_active": False,
         "total_questions_asked": 0,
         "coding_attempts": [],
     }

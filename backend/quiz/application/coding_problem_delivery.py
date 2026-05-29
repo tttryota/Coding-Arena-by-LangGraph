@@ -25,6 +25,9 @@ def deliver_coding_problem(
     """現在の CP と format に基づいてコーディング問題を生成する。"""
     cp_index = state.get("current_point_index", 0)
     cps = state["confirmation_points"]
+    if not cps or cp_index >= len(cps):
+        msg = "No confirmation points available"
+        raise ValueError(msg)
     cp = cps[cp_index]
 
     current_format = state.get("current_format", cp["start_format"])

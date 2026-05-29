@@ -88,7 +88,7 @@ class CodingSessionState(TypedDict, total=False):
     input_source: Literal["form", "chat"]
 
     # 評価結果
-    next_action: Literal["next_step", "next_cp", "complete"]
+    next_action: Literal["next_step", "retry", "next_cp", "complete"]
     current_score: int
     current_feedback: str
 

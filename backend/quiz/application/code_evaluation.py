@@ -54,7 +54,7 @@ def _determine_next_action(  # noqa: PLR0913
         return "complete"
 
     if retry_count < 1:
-        return "next_step"
+        return "retry"
 
     if cp_index + 1 < total_cps:
         return "next_cp"

@@ -117,16 +117,30 @@ def evaluate_code(
         "coding_attempts": attempts,
     }
 
-    if next_action == "next_step" and result.score >= 70:
+    _apply_routing_updates(updates, next_action, result.score, current_format, cp, cps, cp_index)
+    return updates
+
+
+def _apply_routing_updates(  # noqa: PLR0913
+    updates: dict[str, object],
+    next_action: str,
+    score: int,
+    current_format: str,
+    cp: dict[str, object],
+    cps: list[dict[str, object]],
+    cp_index: int,
+) -> None:
+    """next_action に応じて state 更新を追加する。"""
+    if next_action == "complete":
+        updates["current_point_index"] = len(cps)
+    elif next_action == "next_step" and score >= 70:
         next_fmt = _next_format(current_format, cp["end_format"])
         if next_fmt:
             updates["current_format"] = next_fmt
     elif next_action == "next_cp":
         updates["current_point_index"] = cp_index + 1
-        next_cp = cps[cp_index + 1]
-        updates["current_format"] = next_cp["start_format"]
-
-    return updates
+        next_cp_item = cps[cp_index + 1]
+        updates["current_format"] = next_cp_item["start_format"]
 
 
 __all__ = ["evaluate_code"]

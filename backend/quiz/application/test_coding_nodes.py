@@ -227,6 +227,7 @@ class TestCodeEvaluation:
         }
         result = evaluate_code(state, llm=FakeCodeEvaluationLlm(score=80))
         assert result["next_action"] == "complete"
+        assert result["current_point_index"] == 1
 
     def test_convergence_rule_at_20_questions(self) -> None:
         from quiz.application.code_evaluation import evaluate_code

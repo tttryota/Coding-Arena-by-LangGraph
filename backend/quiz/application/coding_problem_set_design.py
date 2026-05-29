@@ -22,7 +22,7 @@ def design_coding_problem_set(
     *,
     llm: CodingProblemSetDesignLlmClient,
 ) -> dict[str, object]:
-    """確認ポイントリストを設計し、lecture_phase_active=False に切り替える。"""
+    """確認ポイントリストを設計する。"""
     result = llm.design_problem_set(
         state["roadmap_item_title"],
         state["roadmap_item_description"],

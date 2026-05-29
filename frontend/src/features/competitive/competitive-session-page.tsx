@@ -30,11 +30,14 @@ export function CompetitiveSessionPage() {
     needsRestore ? sessionId : "",
   );
 
+  const sessionMismatch =
+    session != null && sessionId != null && session.session_id !== sessionId;
+
   useEffect(() => {
-    if (session && sessionId && session.session_id !== sessionId) {
+    if (sessionMismatch) {
       reset();
     }
-  }, [session, sessionId, reset]);
+  }, [sessionMismatch, reset]);
 
   useEffect(() => {
     if (needsRestore && restored && sessionId) {
@@ -69,7 +72,7 @@ export function CompetitiveSessionPage() {
     return null;
   }
 
-  if (!session && isRestoring) {
+  if (sessionMismatch || (!session && isRestoring)) {
     return (
       <AppShell crumbs={[{ label: "競プロクイズ" }, { label: "読み込み中..." }]}>
         <div className="animate-pulse space-y-4">
@@ -197,7 +200,11 @@ export function CompetitiveSessionPage() {
             <Textarea
               value={codeDraft}
               onChange={(e) => setCodeDraft(e.target.value)}
-              placeholder={`# ${session.programming_language} で解答を書いてください`}
+              placeholder={
+                session.programming_language === "typescript"
+                  ? "// TypeScript で解答を書いてください"
+                  : "# Python で解答を書いてください"
+              }
               className="font-mono min-h-[200px]"
             />
             <Button

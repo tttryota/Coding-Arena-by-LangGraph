@@ -5,6 +5,7 @@ import {
   BookOpenText,
   PanelLeftClose,
   PanelLeft,
+  Swords,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
@@ -30,6 +31,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "ロードマップ",
     to: "/roadmaps",
     match: (p) => p.startsWith("/roadmaps") || p.startsWith("/sessions"),
+  },
+  {
+    icon: Swords,
+    label: "競プロ",
+    to: "/algorithm-quiz",
+    match: (p) => p.startsWith("/algorithm-quiz"),
   },
   { icon: MessageSquare, label: "フィードバック", to: "/feedbacks" },
 ];

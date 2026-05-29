@@ -141,6 +141,67 @@ export interface SessionState {
   chat_response_text?: string;
 }
 
+// --- Competitive Quiz (GET/POST /algorithm-quiz/*) ---
+
+export interface AlgoTheme {
+  id: string;
+  category: string;
+  label: string;
+}
+
+export interface ThemesResponse {
+  themes: AlgoTheme[];
+}
+
+export interface ProblemExample {
+  input: string;
+  output: string;
+}
+
+export interface CompetitiveStartResponse {
+  session_id: string;
+  theme_id: string;
+  theme_label: string;
+  theme_category: string;
+  programming_language: "python" | "typescript";
+  problem_statement: string;
+  input_format: string;
+  output_format: string;
+  constraints: string;
+  examples: ProblemExample[];
+}
+
+export interface CompetitiveAnswerResponse {
+  session_id: string;
+  score: number;
+  feedback: string;
+  time_complexity: string;
+  space_complexity: string;
+  improvement_suggestions: string;
+  rubric_scores_json: string;
+}
+
+export interface CompetitiveSessionResponse {
+  session_id: string;
+  theme_id: string;
+  theme_label: string;
+  theme_category: string;
+  programming_language: string;
+  problem_statement: string;
+  input_format: string;
+  output_format: string;
+  constraints: string;
+  examples: ProblemExample[];
+  status: "in_progress" | "completed";
+  created_at: string;
+  score?: number;
+  feedback?: string;
+  time_complexity?: string;
+  space_complexity?: string;
+  improvement_suggestions?: string;
+  rubric_scores_json?: string;
+}
+
 // --- Feedback (GET /ingestion/feedbacks) ---
 
 export interface FeedbackListItem {

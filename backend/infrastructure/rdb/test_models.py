@@ -26,6 +26,8 @@ EXPECTED_TABLES = {
     "summary_test_results",
     "topics",
     "diff_snapshots",
+    "competitive_sessions",
+    "competitive_answers",
 }
 
 

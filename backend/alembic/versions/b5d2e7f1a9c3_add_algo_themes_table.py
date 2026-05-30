@@ -31,8 +31,10 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
 
-    # Seed fixture data from JSON
+    # Seed fixture data from JSON (Docker: /opt/fixtures, local: data/)
     json_path = Path(__file__).resolve().parents[2] / "data" / "algo_themes.json"
+    if not json_path.exists():
+        json_path = Path("/opt/fixtures/algo_themes.json")
     themes = json.loads(json_path.read_text(encoding="utf-8"))
     op.bulk_insert(
         algo_themes,

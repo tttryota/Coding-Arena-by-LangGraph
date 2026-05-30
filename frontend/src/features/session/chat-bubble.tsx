@@ -1,4 +1,5 @@
 import { Sparkles } from "lucide-react";
+import { MarkdownContent } from "@/components/common/markdown-content";
 
 interface ChatBubbleProps {
   text: string;
@@ -14,9 +15,7 @@ export function ChatBubble({ text }: ChatBubbleProps) {
         <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           アシスタント
         </div>
-        <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
-          {text}
-        </div>
+        <MarkdownContent content={text} className="text-[13px]" />
       </div>
     </div>
   );

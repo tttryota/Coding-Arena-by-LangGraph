@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { scoreLevel } from "@/lib/score";
 import { ScoreBadge } from "@/components/common/score-badge";
+import { MarkdownContent } from "@/components/common/markdown-content";
 import { Button } from "@/components/ui/button";
 import type {
   SessionState,
@@ -109,9 +110,13 @@ export function FeedbackPhase({
 
       {/* Question text (re-display) — use snapshot for coding to avoid showing next question */}
       <div className="rounded-md border border-border border-l-[3px] border-l-primary bg-[rgb(15_23_42/0.6)] px-5 py-[18px] text-[15px] leading-relaxed tracking-tight text-foreground">
-        {isCoding
-          ? (codingQuestionText ?? s.current_question_text)
-          : (latestAnswer?.question_text ?? s.current_question_text)}
+        <MarkdownContent
+          content={
+            isCoding
+              ? (codingQuestionText ?? s.current_question_text ?? "")
+              : (latestAnswer?.question_text ?? s.current_question_text ?? "")
+          }
+        />
       </div>
 
       {/* User's answer echo (quiz mode only) */}
@@ -164,7 +169,7 @@ export function FeedbackPhase({
           フィードバック
         </div>
         <div className="rounded-md border-l-2 border-l-[rgb(51_65_85/0.7)] bg-[rgb(2_6_23/0.5)] px-4 py-3.5 text-[13.5px] leading-[1.75] text-foreground">
-          {feedback}
+          <MarkdownContent content={feedback ?? ""} className="text-[13.5px]" />
         </div>
 
         {/* Quiz deepdive notice */}
@@ -204,9 +209,9 @@ export function FeedbackPhase({
             <RotateCcw className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#fb923c]" />
             <span>
               <b className="font-semibold text-[#fed7aa]">
-                もう一度挑戦しましょう。
+                スコアが基準に達しませんでした。
               </b>{" "}
-              フィードバックを参考に、同じ形式で再挑戦できます。
+              次の問題はフィードバックを踏まえた同じ形式の問題です。
             </span>
           </div>
         )}
@@ -227,11 +232,6 @@ export function FeedbackPhase({
             <Button onClick={onNext}>
               <Flag className="h-3.5 w-3.5" />
               結果を見る
-            </Button>
-          ) : nextAction === "retry" ? (
-            <Button onClick={onNext} variant="outline">
-              <RotateCcw className="h-3.5 w-3.5" />
-              もう一度挑戦
             </Button>
           ) : (
             <Button onClick={onNext}>

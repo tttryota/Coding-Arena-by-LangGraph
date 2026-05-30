@@ -1,5 +1,6 @@
 import { BookOpenText, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MarkdownContent } from "@/components/common/markdown-content";
 import type { SessionState } from "@/types/api";
 
 interface ExplanationPhaseProps {
@@ -38,7 +39,7 @@ export function ExplanationPhase({
 
       {/* Question text (snapshot) */}
       <div className="rounded-md border border-border border-l-[3px] border-l-primary bg-[rgb(15_23_42/0.6)] px-5 py-[18px] text-[15px] leading-relaxed tracking-tight text-foreground">
-        {questionText}
+        <MarkdownContent content={questionText} />
       </div>
 
       {/* Explanation card */}
@@ -47,9 +48,7 @@ export function ExplanationPhase({
           <BookOpenText className="h-3 w-3" />
           解説
         </div>
-        <div className="whitespace-pre-wrap text-[13.5px] leading-[1.75] text-foreground">
-          {explanationText}
-        </div>
+        <MarkdownContent content={explanationText} className="text-[13.5px]" />
         <div className="mt-[18px] flex justify-end gap-2">
           <Button onClick={onContinue}>
             <Check className="h-3.5 w-3.5" />

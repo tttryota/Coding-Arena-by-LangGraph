@@ -8,6 +8,7 @@ import {
   Code2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MarkdownContent } from "@/components/common/markdown-content";
 import { ChatBubble } from "./chat-bubble";
 import type { SessionState, CodingDifficultyType } from "@/types/api";
 
@@ -122,7 +123,7 @@ export function QuestionPhase({
 
       {/* Question card */}
       <div className="rounded-md border border-border border-l-[3px] border-l-primary bg-[rgb(15_23_42/0.6)] px-5 py-[18px] text-[15px] leading-relaxed tracking-tight text-foreground">
-        {s.current_question_text}
+        <MarkdownContent content={s.current_question_text ?? ""} />
       </div>
 
       {/* Example code (coding sessions) */}

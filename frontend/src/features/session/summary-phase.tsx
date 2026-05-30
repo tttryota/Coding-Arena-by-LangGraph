@@ -3,6 +3,7 @@ import { CheckCircle2, ChevronRight, ArrowLeft, TrendingUp } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { scoreLevel } from "@/lib/score";
 import { ScoreBadge } from "@/components/common/score-badge";
+import { MarkdownContent } from "@/components/common/markdown-content";
 import { Button } from "@/components/ui/button";
 import type { QuizAnswerRecord } from "@/types/api";
 
@@ -202,9 +203,7 @@ export function SummaryPhase({
                         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           問題
                         </div>
-                        <div className="whitespace-pre-wrap text-[13px] leading-[1.7] text-foreground">
-                          {a.question_text}
-                        </div>
+                        <MarkdownContent content={a.question_text} className="text-[13px]" />
                         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           あなたの回答
                         </div>
@@ -220,9 +219,7 @@ export function SummaryPhase({
                         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                           フィードバック
                         </div>
-                        <div className="text-[13px] leading-[1.7] text-foreground">
-                          {a.feedback}
-                        </div>
+                        <MarkdownContent content={a.feedback} className="text-[13px]" />
                       </div>
                     </div>
                   )}

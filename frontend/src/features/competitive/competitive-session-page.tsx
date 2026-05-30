@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { AppShell } from "@/components/layout/app-shell";
+import { MarkdownContent } from "@/components/common/markdown-content";
 import { useCompetitiveStore } from "./use-competitive-store";
 import { useSubmitAnswer, useCompetitiveSession } from "./use-competitive";
 
@@ -152,7 +153,7 @@ export function CompetitiveSessionPage() {
             <CardTitle>問題</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="whitespace-pre-wrap">{session.problem_statement}</p>
+            <MarkdownContent content={session.problem_statement} />
 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
@@ -269,7 +270,7 @@ function CompetitiveResult({
         <CardContent className="space-y-4">
           <div>
             <h4 className="font-semibold mb-1">フィードバック</h4>
-            <p className="whitespace-pre-wrap">{result.feedback}</p>
+            <MarkdownContent content={result.feedback} />
           </div>
 
           {rubricScores.length > 0 && (
@@ -301,9 +302,7 @@ function CompetitiveResult({
 
           <div>
             <h4 className="font-semibold mb-1">改善提案</h4>
-            <p className="whitespace-pre-wrap">
-              {result.improvement_suggestions}
-            </p>
+            <MarkdownContent content={result.improvement_suggestions} />
           </div>
         </CardContent>
       </Card>

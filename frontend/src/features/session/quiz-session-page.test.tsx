@@ -305,7 +305,9 @@ describe("QuizSessionPage", () => {
 
     expect(await screen.findByText("もう少し頑張りましょう")).toBeInTheDocument();
     expect(screen.getAllByText("40").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("もう一度挑戦しましょう。")).toBeInTheDocument(); // notice card title
-    expect(screen.getByText("もう一度挑戦")).toBeInTheDocument();
+    expect(screen.getByText("スコアが基準に達しませんでした。")).toBeInTheDocument(); // notice card title
+    expect(screen.getByRole("button", { name: "次の問題へ" })).toBeInTheDocument();
+    // retry専用ボタンは削除済み — 通知カードは残るがボタンとしては存在しない
+    expect(screen.queryByRole("button", { name: "もう一度挑戦" })).not.toBeInTheDocument();
   });
 });

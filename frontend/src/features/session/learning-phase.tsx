@@ -1,5 +1,6 @@
 import { BookOpenText, ListChecks, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MarkdownContent } from "@/components/common/markdown-content";
 import type { SessionState } from "@/types/api";
 
 interface LearningPhaseProps {
@@ -29,9 +30,7 @@ export function LearningPhase({
           <BookOpenText className="h-3 w-3" />
           トピック概要
         </div>
-        <div className="whitespace-pre-wrap text-[13.5px] leading-[1.75] text-foreground">
-          {s.topic_overview}
-        </div>
+        <MarkdownContent content={s.topic_overview ?? ""} className="text-[13.5px]" />
       </div>
 
       {/* Confirmation points preview */}

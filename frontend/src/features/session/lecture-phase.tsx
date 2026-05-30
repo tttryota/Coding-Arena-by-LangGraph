@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { MarkdownContent } from "@/components/common/markdown-content";
 import { useState } from "react";
 
 interface LecturePhaseProps {
@@ -33,9 +34,7 @@ export function LecturePhase({
           <CardTitle>座学</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-            {lectureContent}
-          </div>
+          <MarkdownContent content={lectureContent} />
         </CardContent>
       </Card>
 
@@ -54,7 +53,11 @@ export function LecturePhase({
                     : "mr-8 bg-muted"
                 }`}
               >
-                {msg.content}
+                {msg.role === "assistant" ? (
+                  <MarkdownContent content={msg.content} />
+                ) : (
+                  <span className="whitespace-pre-wrap">{msg.content}</span>
+                )}
               </div>
             ))}
           </CardContent>

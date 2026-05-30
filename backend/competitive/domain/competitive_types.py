@@ -13,6 +13,18 @@ class AlgoTheme(TypedDict):
     label: str
 
 
+class AlgoThemeWithHistory(TypedDict):
+    """アルゴリズムテーマ + 挑戦履歴。"""
+
+    id: str
+    category: str
+    label: str
+    display_order: int
+    attempt_count: int
+    best_score: int | None
+    last_attempted_at: str | None
+
+
 class ProblemExample(TypedDict):
     """問題の入出力例。"""
 

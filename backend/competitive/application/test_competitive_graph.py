@@ -17,7 +17,7 @@ from competitive.domain.competitive_types import ThemeSelectionError
 
 
 class FakeThemeReader:
-    def pick_random(self) -> dict[str, str]:
+    def pick_next(self) -> dict[str, str]:
         return {"id": "algo-001", "category": "探索", "label": "二分探索"}
 
     def get_by_id(self, theme_id: str) -> dict[str, str]:
@@ -26,6 +26,13 @@ class FakeThemeReader:
         raise ThemeSelectionError(
             error_code="theme_not_found", message=f"Not found: {theme_id}",
         )
+
+    def list_themes(self) -> list[dict[str, object]]:
+        return [{
+            "id": "algo-001", "category": "探索", "label": "二分探索",
+            "display_order": 0, "attempt_count": 0, "best_score": None,
+            "last_attempted_at": None,
+        }]
 
 
 class FakeProblemResult:

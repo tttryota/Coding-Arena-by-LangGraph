@@ -19,19 +19,17 @@ if TYPE_CHECKING:
 class Container:
     """Application-level DI container."""
 
-    def __init__(  # noqa: PLR0913, PLR0915
+    def __init__(  # noqa: PLR0915
         self,
         engine: Engine,
         chroma_collection: object,
         embedder: object | None = None,
         preset_topics_path: str = "data/preset_topics.json",
-        algo_themes_path: str = "data/algo_themes.json",
     ) -> None:
         self._engine = engine
         self._chroma = chroma_collection
         self._embedder = embedder
         self._preset_topics_path = preset_topics_path
-        self._algo_themes_path = algo_themes_path
         self.transport = CodexLlmTransport()
         self.uuid_generator = UuidGenerator()
         self.executor = ThreadPoolExecutor(max_workers=2)
@@ -192,18 +190,18 @@ class Container:
             CompetitiveGraphRunner,
             build_competitive_graph,
         )
-        from competitive.infrastructure.algo_theme_file_reader import (
-            AlgoThemeFileReader,
-        )
         from competitive.infrastructure.codex_competitive_llm import (
             CodexCompetitiveProblemGenerationLlm,
             CodexCompetitiveSolutionEvaluationLlm,
+        )
+        from competitive.infrastructure.sql_algo_theme_reader import (
+            SqlAlgoThemeReader,
         )
         from competitive.infrastructure.sql_competitive_store import (
             SqlCompetitiveStore,
         )
 
-        self.algo_theme_reader = AlgoThemeFileReader(self._algo_themes_path)
+        self.algo_theme_reader = SqlAlgoThemeReader(self._engine)
         self.competitive_store = SqlCompetitiveStore(self._engine)
         problem_llm = CodexCompetitiveProblemGenerationLlm(self.transport)
         eval_llm = CodexCompetitiveSolutionEvaluationLlm(self.transport)

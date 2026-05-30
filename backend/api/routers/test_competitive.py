@@ -14,11 +14,19 @@ from api.app import create_app
 
 
 class _FakeThemeReader:
-    def list_themes(self) -> list[dict[str, str]]:
+    def list_themes(self) -> list[dict[str, object]]:
         return [
-            {"id": "algo-001", "category": "探索", "label": "二分探索"},
-            {"id": "algo-002", "category": "グラフ", "label": "DFS"},
+            {"id": "algo-001", "category": "探索", "label": "二分探索",
+             "display_order": 0, "attempt_count": 0, "best_score": None, "last_attempted_at": None},
+            {"id": "algo-002", "category": "グラフ", "label": "DFS",
+             "display_order": 1, "attempt_count": 0, "best_score": None, "last_attempted_at": None},
         ]
+
+    def pick_next(self) -> dict[str, str]:
+        return {"id": "algo-001", "category": "探索", "label": "二分探索"}
+
+    def get_by_id(self, theme_id: str) -> dict[str, str]:
+        return {"id": theme_id, "category": "探索", "label": "二分探索"}
 
 
 class _FakeGraphRunner:
@@ -144,10 +152,12 @@ class TestListThemes:
         data = resp.json()
         assert len(data["themes"]) == 2
         assert data["themes"][0]["id"] == "algo-001"
+        assert data["themes"][0]["display_order"] == 0
+        assert data["themes"][0]["attempt_count"] == 0
 
 
 class TestStartSession:
-    def test_random_start(self) -> None:
+    def test_auto_start(self) -> None:
         client = _make_client()
         resp = client.post("/algorithm-quiz/sessions")
 

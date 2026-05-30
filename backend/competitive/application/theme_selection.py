@@ -1,4 +1,4 @@
-"""theme_selection ノード: ランダムまたは指定テーマを選択する。"""
+"""theme_selection ノード: 学習順または指定テーマを選択する。"""
 
 from __future__ import annotations
 
@@ -23,11 +23,11 @@ def select_theme(
     """テーマを選択し、セッション初期状態を返す。
 
     state に algo_theme_id が指定されていればそれを使い、
-    未指定ならランダム選択する。
+    未指定なら学習順で次のテーマを選択する。
     """
     theme_id = state.get("algo_theme_id")
     try:
-        theme = reader.get_by_id(theme_id) if theme_id else reader.pick_random()
+        theme = reader.get_by_id(theme_id) if theme_id else reader.pick_next()
     except ThemeSelectionError:
         logger.exception("theme selection failed")
         raise

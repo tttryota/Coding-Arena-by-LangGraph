@@ -233,6 +233,15 @@ class CompetitiveAnswer(Base):
     )
 
 
+class AlgoThemeModel(Base):
+    __tablename__ = "algo_themes"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    category: Mapped[str] = mapped_column(String, nullable=False)
+    label: Mapped[str] = mapped_column(String, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class DiffSnapshot(Base):
     __tablename__ = "diff_snapshots"
 

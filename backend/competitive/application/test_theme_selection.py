@@ -11,7 +11,7 @@ class FakeThemeReader:
     def __init__(self, themes: list[dict[str, str]]) -> None:
         self._themes = themes
 
-    def pick_random(self) -> dict[str, str]:
+    def pick_next(self) -> dict[str, str]:
         if not self._themes:
             raise ThemeSelectionError(error_code="no_themes", message="empty")
         return self._themes[0]
@@ -24,9 +24,15 @@ class FakeThemeReader:
             error_code="theme_not_found", message=f"Not found: {theme_id}",
         )
 
+    def list_themes(self) -> list[dict[str, object]]:
+        return [
+            {**t, "display_order": i, "attempt_count": 0, "best_score": None, "last_attempted_at": None}
+            for i, t in enumerate(self._themes)
+        ]
+
 
 class TestSelectTheme:
-    def test_random_selection(self) -> None:
+    def test_next_selection(self) -> None:
         from competitive.application.theme_selection import select_theme
 
         reader = FakeThemeReader([

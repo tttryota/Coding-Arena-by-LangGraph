@@ -20,9 +20,9 @@ class AlgoThemeFileReader:
             if not isinstance(item, dict):
                 msg = f"Theme item must be dict: {item}"
                 raise TypeError(msg)
-            expected_keys = {"id", "category", "label"}
-            if set(item.keys()) != expected_keys:
-                msg = f"Theme must have exactly {expected_keys}, got {set(item.keys())}"
+            required_keys = {"id", "category", "label"}
+            if not required_keys.issubset(set(item.keys())):
+                msg = f"Theme must have at least {required_keys}, got {set(item.keys())}"
                 raise TypeError(msg)
             tid, cat, label = item["id"], item["category"], item["label"]
             if not all(isinstance(v, str) for v in (tid, cat, label)):
@@ -57,8 +57,8 @@ class AlgoThemeFileReader:
         """全テーマを返す。"""
         return self._load()
 
-    def pick_random(self) -> AlgoTheme:
-        """ランダムに1テーマを選択する。"""
+    def pick_next(self) -> AlgoTheme:
+        """次のテーマを選択する (ファイルベースではランダム)。"""
         themes = self._load()
         if not themes:
             msg = "No themes available"

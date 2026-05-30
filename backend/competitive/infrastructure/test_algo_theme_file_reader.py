@@ -16,8 +16,8 @@ from competitive.domain.competitive_types import ThemeSelectionError
 class TestAlgoThemeFileReader:
     def test_list_themes_returns_all(self, tmp_path: Path) -> None:
         data = [
-            {"id": "algo-001", "category": "探索", "label": "二分探索"},
-            {"id": "algo-002", "category": "グラフ", "label": "DFS"},
+            {"id": "algo-001", "category": "探索", "label": "二分探索", "display_order": 0},
+            {"id": "algo-002", "category": "グラフ", "label": "DFS", "display_order": 1},
         ]
         f = tmp_path / "themes.json"
         f.write_text(json.dumps(data), encoding="utf-8")
@@ -33,10 +33,10 @@ class TestAlgoThemeFileReader:
         assert themes[0]["id"] == "algo-001"
         assert themes[1]["label"] == "DFS"
 
-    def test_pick_random_returns_valid_theme(self, tmp_path: Path) -> None:
+    def test_pick_next_returns_valid_theme(self, tmp_path: Path) -> None:
         data = [
-            {"id": "algo-001", "category": "探索", "label": "二分探索"},
-            {"id": "algo-002", "category": "グラフ", "label": "DFS"},
+            {"id": "algo-001", "category": "探索", "label": "二分探索", "display_order": 0},
+            {"id": "algo-002", "category": "グラフ", "label": "DFS", "display_order": 1},
         ]
         f = tmp_path / "themes.json"
         f.write_text(json.dumps(data), encoding="utf-8")
@@ -46,14 +46,14 @@ class TestAlgoThemeFileReader:
         )
 
         reader = AlgoThemeFileReader(f)
-        theme = reader.pick_random()
+        theme = reader.pick_next()
 
         assert theme["id"] in {"algo-001", "algo-002"}
 
     def test_get_by_id_returns_matching_theme(self, tmp_path: Path) -> None:
         data = [
-            {"id": "algo-001", "category": "探索", "label": "二分探索"},
-            {"id": "algo-002", "category": "グラフ", "label": "DFS"},
+            {"id": "algo-001", "category": "探索", "label": "二分探索", "display_order": 0},
+            {"id": "algo-002", "category": "グラフ", "label": "DFS", "display_order": 1},
         ]
         f = tmp_path / "themes.json"
         f.write_text(json.dumps(data), encoding="utf-8")
@@ -69,7 +69,7 @@ class TestAlgoThemeFileReader:
         assert theme["label"] == "DFS"
 
     def test_get_by_id_raises_on_missing(self, tmp_path: Path) -> None:
-        data = [{"id": "algo-001", "category": "探索", "label": "二分探索"}]
+        data = [{"id": "algo-001", "category": "探索", "label": "二分探索", "display_order": 0}]
         f = tmp_path / "themes.json"
         f.write_text(json.dumps(data), encoding="utf-8")
 
@@ -94,7 +94,7 @@ class TestAlgoThemeFileReader:
             reader.list_themes()
         assert exc_info.value.error_code == "file_not_found"
 
-    def test_pick_random_raises_on_empty(self, tmp_path: Path) -> None:
+    def test_pick_next_raises_on_empty(self, tmp_path: Path) -> None:
         f = tmp_path / "themes.json"
         f.write_text("[]", encoding="utf-8")
 
@@ -105,7 +105,7 @@ class TestAlgoThemeFileReader:
         reader = AlgoThemeFileReader(f)
 
         with pytest.raises(ThemeSelectionError) as exc_info:
-            reader.pick_random()
+            reader.pick_next()
         assert exc_info.value.error_code == "no_themes"
 
     def test_invalid_json_raises_theme_selection_error(
@@ -143,8 +143,8 @@ class TestAlgoThemeFileReader:
 
     def test_duplicate_ids_raises(self, tmp_path: Path) -> None:
         data = [
-            {"id": "algo-001", "category": "探索", "label": "二分探索"},
-            {"id": "algo-001", "category": "ソート", "label": "バブルソート"},
+            {"id": "algo-001", "category": "探索", "label": "二分探索", "display_order": 0},
+            {"id": "algo-001", "category": "ソート", "label": "バブルソート", "display_order": 0},
         ]
         f = tmp_path / "themes.json"
         f.write_text(json.dumps(data), encoding="utf-8")
@@ -160,7 +160,7 @@ class TestAlgoThemeFileReader:
         assert exc_info.value.error_code == "duplicate_ids"
 
     def test_caches_after_first_load(self, tmp_path: Path) -> None:
-        data = [{"id": "algo-001", "category": "探索", "label": "二分探索"}]
+        data = [{"id": "algo-001", "category": "探索", "label": "二分探索", "display_order": 0}]
         f = tmp_path / "themes.json"
         f.write_text(json.dumps(data), encoding="utf-8")
 

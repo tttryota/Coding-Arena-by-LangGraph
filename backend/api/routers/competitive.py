@@ -117,7 +117,7 @@ def list_sessions(request: Request) -> dict:
 def start_session(
     request: Request, body: _StartSessionRequest | None = None,
 ) -> dict:
-    """セッションを開始する。テーマ未指定時はランダム選択。"""
+    """セッションを開始する。テーマ未指定時は学習順で次のテーマを選択。"""
     c = _container(request)
     runner = _require_runner(c)
     session_id = str(uuid.uuid4())

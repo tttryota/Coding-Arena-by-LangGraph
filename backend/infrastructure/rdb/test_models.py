@@ -28,6 +28,7 @@ EXPECTED_TABLES = {
     "diff_snapshots",
     "competitive_sessions",
     "competitive_answers",
+    "algo_themes",
 }
 
 

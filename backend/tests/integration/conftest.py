@@ -13,6 +13,7 @@ import chromadb
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from infrastructure.rdb.base import Base
@@ -27,7 +28,10 @@ if TYPE_CHECKING:
 
 @pytest.fixture(scope="session")
 def engine() -> Engine:
-    """in-memory SQLite + 全テーブル作成。"""
+    """in-memory SQLite + 全テーブル作成 + algo_themes fixture 投入。"""
+    import json
+    from pathlib import Path
+
     import infrastructure.rdb.models  # noqa: F401  — register all ORM models
 
     eng = create_engine(
@@ -36,16 +40,36 @@ def engine() -> Engine:
         poolclass=StaticPool,
     )
     Base.metadata.create_all(eng)
+
+    # algo_themes fixture を投入
+    json_path = Path(__file__).resolve().parents[2] / "data" / "algo_themes.json"
+    if json_path.exists():
+        themes = json.loads(json_path.read_text(encoding="utf-8"))
+        from infrastructure.rdb.models import AlgoThemeModel
+
+        with Session(eng) as session:
+            for t in themes:
+                session.add(AlgoThemeModel(
+                    id=t["id"], category=t["category"],
+                    label=t["label"], display_order=t["display_order"],
+                ))
+            session.commit()
+
     return eng
+
+
+# algo_themes はマスタデータなのでクリーンアップ対象外
+_PRESERVED_TABLES = {"algo_themes"}
 
 
 @pytest.fixture
 def clean_tables(engine: Engine) -> Iterator[None]:
-    """各テスト前に全テーブルをクリーンアップ。"""
+    """各テスト前に全テーブルをクリーンアップ (マスタデータ除外)。"""
     yield
     with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
-            conn.execute(text(f"DELETE FROM {table.name}"))  # noqa: S608
+            if table.name not in _PRESERVED_TABLES:
+                conn.execute(text(f"DELETE FROM {table.name}"))  # noqa: S608
 
 
 @pytest.fixture

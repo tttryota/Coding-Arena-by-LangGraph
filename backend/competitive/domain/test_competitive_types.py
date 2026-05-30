@@ -155,12 +155,15 @@ def test_algo_themes_json_schema_and_uniqueness() -> None:
     assert len(ids) == len(set(ids)), "Duplicate IDs found"
     assert len(labels) == len(set(labels)), "Duplicate labels found"
 
-    expected_keys = {"id", "category", "label"}
+    expected_keys = {"id", "category", "label", "display_order"}
     for i, theme in enumerate(themes):
         assert set(theme.keys()) == expected_keys, (
             f"Theme {i} has unexpected keys: {set(theme.keys())}"
         )
-        for key in expected_keys:
+        for key in ("id", "category", "label"):
             assert isinstance(theme[key], str), (
                 f"Theme {i}.{key} should be str, got {type(theme[key])}"
             )
+        assert isinstance(theme["display_order"], int), (
+            f"Theme {i}.display_order should be int, got {type(theme['display_order'])}"
+        )

@@ -12,5 +12,6 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 COPY . .
+COPY data/algo_themes.json data/algo_themes.json
 
 CMD ["sh", "-c", "uv run --frozen --no-dev alembic upgrade head && uv run --frozen --no-dev uvicorn dev_server:app --host 0.0.0.0 --port 8001"]

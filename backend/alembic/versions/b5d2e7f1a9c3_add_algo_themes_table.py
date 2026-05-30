@@ -21,33 +21,51 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-def upgrade() -> None:
-    algo_themes = op.create_table(
-        "algo_themes",
-        sa.Column("id", sa.String(), nullable=False),
-        sa.Column("category", sa.String(), nullable=False),
-        sa.Column("label", sa.String(), nullable=False),
-        sa.Column("display_order", sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-    )
-
-    # Seed fixture data from JSON (Docker: /opt/fixtures, local: data/)
+def _load_themes() -> list[dict[str, object]]:
+    """Fixture JSON を読み込む (Docker: /opt/fixtures, local: data/)。"""
     json_path = Path(__file__).resolve().parents[2] / "data" / "algo_themes.json"
     if not json_path.exists():
         json_path = Path("/opt/fixtures/algo_themes.json")
-    themes = json.loads(json_path.read_text(encoding="utf-8"))
-    op.bulk_insert(
-        algo_themes,
-        [
-            {
-                "id": t["id"],
-                "category": t["category"],
-                "label": t["label"],
-                "display_order": t["display_order"],
-            }
-            for t in themes
-        ],
+    return json.loads(json_path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+
+
+def upgrade() -> None:
+    conn = op.get_bind()
+    # べき等: テーブルが既に存在する場合はスキップ
+    inspector = sa.inspect(conn)
+    if "algo_themes" not in inspector.get_table_names():
+        op.create_table(
+            "algo_themes",
+            sa.Column("id", sa.String(), nullable=False),
+            sa.Column("category", sa.String(), nullable=False),
+            sa.Column("label", sa.String(), nullable=False),
+            sa.Column("display_order", sa.Integer(), nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+        )
+
+    # データが空なら INSERT
+    algo_themes = sa.table(
+        "algo_themes",
+        sa.column("id", sa.String),
+        sa.column("category", sa.String),
+        sa.column("label", sa.String),
+        sa.column("display_order", sa.Integer),
     )
+    count = conn.execute(sa.select(sa.func.count()).select_from(algo_themes)).scalar()
+    if count == 0:
+        themes = _load_themes()
+        op.bulk_insert(
+            algo_themes,
+            [
+                {
+                    "id": t["id"],
+                    "category": t["category"],
+                    "label": t["label"],
+                    "display_order": t["display_order"],
+                }
+                for t in themes
+            ],
+        )
 
 
 def downgrade() -> None:

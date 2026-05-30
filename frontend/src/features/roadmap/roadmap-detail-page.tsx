@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Plus, TrendingUp, AlertTriangle, RotateCcw, ArrowLeft } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
+import { GeneratingDialog } from "@/components/common/generating-dialog";
 import { ApiError } from "@/lib/api";
 import { useRoadmap } from "./use-roadmap";
 import { useStartSession } from "./use-start-session";
@@ -64,6 +65,7 @@ export function RoadmapDetailPage() {
     roadmapId ?? "",
   );
   const startSession = useStartSession();
+  const [generatingTarget, setGeneratingTarget] = useState("");
   const initExpanded = useTreeStore((s) => s.initExpanded);
 
   const [dlg, setDlg] = useState<DialogState>({ kind: null });
@@ -90,6 +92,7 @@ export function RoadmapDetailPage() {
   const handleStartQuiz = useCallback(
     async (node: RoadmapTreeNode) => {
       if (startSession.isPending) return;
+      setGeneratingTarget(node.title);
       try {
         const result = await startSession.mutateAsync(node.id);
         if (result.resume_required && result.resume_session_id) {
@@ -152,6 +155,12 @@ export function RoadmapDetailPage() {
 
   return (
     <>
+      <GeneratingDialog
+        open={startSession.isPending}
+        target={generatingTarget}
+        description="確認ポイントに沿って出題します"
+      />
+
       <AppShell crumbs={crumbs} action={headerAction}>
         {/* Loading */}
         {isLoading && (

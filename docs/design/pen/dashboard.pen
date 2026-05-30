@@ -214,6 +214,38 @@
             },
             {
               "type": "frame",
+              "id": "F3VMI8",
+              "width": "fill_container",
+              "cornerRadius": 6,
+              "gap": 10,
+              "padding": [
+                8,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon_font",
+                  "id": "YSu0g",
+                  "width": 16,
+                  "height": 16,
+                  "iconFontName": "trophy",
+                  "iconFontFamily": "lucide",
+                  "fill": "#94A3B8"
+                },
+                {
+                  "type": "text",
+                  "id": "P5NgUL",
+                  "fill": "#94A3B8",
+                  "content": "競プロ",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
               "id": "SZBO8",
               "width": "fit_content(0)",
               "height": "fill_container"
@@ -713,6 +745,101 @@
                       "id": "srvmW",
                       "fill": "#94A3B8",
                       "content": "安定したペース",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xtHki",
+                  "width": "fill_container",
+                  "fill": "#0F172A",
+                  "cornerRadius": 8,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#6366F180"
+                  },
+                  "layout": "vertical",
+                  "padding": [
+                    18,
+                    20
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "mNE6C",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        0,
+                        0,
+                        12,
+                        0
+                      ],
+                      "justifyContent": "space_between",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "GCABg",
+                          "fill": "#94A3B8",
+                          "content": "競プロクイズ",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "CfwvY",
+                          "width": 16,
+                          "height": 16,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "icon_font",
+                              "id": "JK4MK",
+                              "x": 0,
+                              "y": 0,
+                              "width": 14,
+                              "height": 14,
+                              "iconFontName": "trophy",
+                              "iconFontFamily": "lucide",
+                              "fill": "#6366F1"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QEn2G",
+                      "gap": 4,
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "N8fMK4",
+                          "fill": "#F8FAFC",
+                          "content": "24",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 28,
+                          "fontWeight": "600",
+                          "letterSpacing": -0.56
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "UYQ3x",
+                      "width": "fit_content(0)",
+                      "height": 10
+                    },
+                    {
+                      "type": "text",
+                      "id": "WFxdH",
+                      "fill": "#94A3B8",
+                      "content": "平均スコア 68 ・直近7日 5問",
                       "fontFamily": "Inter",
                       "fontSize": 11,
                       "fontWeight": "normal"

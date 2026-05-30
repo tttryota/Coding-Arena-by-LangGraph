@@ -66,20 +66,34 @@ export function Sidebar({
         collapsed ? "w-16 px-2" : "w-60 px-3",
       )}
     >
-      {/* Brand */}
+      {/* Brand + Collapse toggle */}
       <div
         className={cn(
           "mb-2 flex items-center px-2 py-2",
-          collapsed ? "justify-center" : "gap-2.5",
+          collapsed ? "flex-col gap-1.5" : "gap-2.5",
         )}
       >
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-indigo-500">
           <BookOpenText className="h-4 w-4 text-white" />
         </div>
         {!collapsed && (
-          <span className="text-sm font-semibold tracking-tight">
+          <span className="flex-1 text-sm font-semibold tracking-tight">
             Obsidian Quiz
           </span>
+        )}
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-[rgb(51_65_85/0.4)] hover:text-foreground"
+            aria-label={collapsed ? "サイドバーを展開" : "サイドバーを折りたたむ"}
+          >
+            {collapsed ? (
+              <PanelLeft className="h-3.5 w-3.5" />
+            ) : (
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            )}
+          </button>
         )}
       </div>
 
@@ -123,30 +137,6 @@ export function Sidebar({
         );
       })}
 
-      {/* Spacer */}
-      <div className="flex-1" />
-
-      {/* Collapse toggle */}
-      {onToggleCollapse && (
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className={cn(
-            "flex items-center rounded-md py-2 text-[13px] text-muted-foreground transition-colors hover:bg-[rgb(51_65_85/0.4)] hover:text-foreground",
-            collapsed ? "justify-center px-0" : "gap-2.5 px-2.5",
-          )}
-          aria-label={collapsed ? "サイドバーを展開" : "サイドバーを折りたたむ"}
-        >
-          {collapsed ? (
-            <PanelLeft className="h-4 w-4" />
-          ) : (
-            <>
-              <PanelLeftClose className="h-4 w-4" />
-              <span>折りたたむ</span>
-            </>
-          )}
-        </button>
-      )}
     </aside>
   );
 }

@@ -1,33 +1,43 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shuffle } from "lucide-react";
+import { Play } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import type { AlgoTheme } from "@/types/api";
-import { useThemes, useStartSession, useCompetitiveSessions } from "./use-competitive";
+import { GeneratingDialog } from "@/components/common/generating-dialog";
+import { useThemes, useStartSession } from "./use-competitive";
 import { useCompetitiveStore } from "./use-competitive-store";
+
+const PHASES = [
+  { label: "基礎", min: 0, max: 19 },
+  { label: "基本", min: 20, max: 39 },
+  { label: "中級", min: 40, max: 69 },
+  { label: "上級", min: 70, max: 99 },
+  { label: "発展", min: 100, max: 130 },
+] as const;
 
 export function CompetitivePage() {
   const { data, isLoading, isError } = useThemes();
-  const { data: sessionsData } = useCompetitiveSessions();
   const startMutation = useStartSession();
   const { setSession } = useCompetitiveStore();
   const navigate = useNavigate();
+  const [generatingTarget, setGeneratingTarget] = useState("");
 
-  const grouped = useMemo(() => {
-    if (!data?.themes) return new Map<string, AlgoTheme[]>();
-    const map = new Map<string, AlgoTheme[]>();
-    for (const theme of data.themes) {
-      const list = map.get(theme.category) ?? [];
-      list.push(theme);
-      map.set(theme.category, list);
-    }
-    return map;
+  const { phaseGroups, nextThemeId, nextThemeLabel } = useMemo(() => {
+    if (!data?.themes) return { phaseGroups: [], nextThemeId: null as string | null, nextThemeLabel: null as string | null };
+    const groups = PHASES.map((phase) => ({
+      label: phase.label,
+      themes: data.themes.filter(
+        (t) => t.display_order >= phase.min && t.display_order <= phase.max,
+      ),
+    }));
+    const next = data.themes.find((t) => t.attempt_count === 0);
+    return { phaseGroups: groups, nextThemeId: next?.id ?? null, nextThemeLabel: next?.label ?? null };
   }, [data]);
 
-  const handleStart = async (themeId?: string) => {
+  const handleStart = async (themeId?: string, label?: string) => {
+    setGeneratingTarget(label ?? nextThemeLabel ?? "");
     try {
       const result = await startMutation.mutateAsync(themeId);
       setSession(result);
@@ -39,6 +49,12 @@ export function CompetitivePage() {
 
   return (
     <AppShell crumbs={[{ label: "競プロクイズ" }]}>
+      <GeneratingDialog
+        open={startMutation.isPending}
+        target={generatingTarget}
+        description="テーマに沿った問題を出題します"
+      />
+
       {isError && (
         <div className="rounded-md bg-destructive/10 p-4 text-destructive">
           テーマの読み込みに失敗しました。
@@ -58,39 +74,52 @@ export function CompetitivePage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <h1 className="text-2xl font-bold">競プロクイズ</h1>
             <Button
+              size="sm"
               onClick={() => handleStart()}
               disabled={startMutation.isPending}
             >
-              <Shuffle className="mr-2 h-4 w-4" />
-              ランダムで挑戦
+              <Play className="mr-1.5 h-3.5 w-3.5" />
+              {nextThemeLabel ? `次: ${nextThemeLabel}` : "挑戦する"}
             </Button>
           </div>
 
           <div className="space-y-4">
-            {[...grouped.entries()].map(([category, themes]) => (
-              <Card key={category}>
+            {phaseGroups.map((group) => (
+              <Card key={group.label}>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">{category}</CardTitle>
+                  <CardTitle className="text-lg">{group.label}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
-                    {themes.map((theme) => (
+                    {group.themes.map((theme) => (
                       <Badge
                         key={theme.id}
-                        variant="outline"
-                        className={
+                        variant={theme.attempt_count > 0 ? "secondary" : "outline"}
+                        className={[
+                          "py-1.5 px-3 text-sm",
                           startMutation.isPending
                             ? "opacity-50"
-                            : "cursor-pointer hover:bg-accent"
-                        }
+                            : "cursor-pointer hover:bg-accent",
+                          theme.id === nextThemeId
+                            ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
+                            : "",
+                        ].join(" ")}
                         onClick={() =>
-                          !startMutation.isPending && handleStart(theme.id)
+                          !startMutation.isPending && handleStart(theme.id, theme.label)
                         }
                       >
+                        <span className="mr-1.5 text-[11px] text-muted-foreground">
+                          {theme.category}
+                        </span>
                         {theme.label}
+                        {theme.best_score != null && (
+                          <span className={`ml-2 text-[11px] font-semibold ${theme.best_score >= 70 ? "text-emerald-400" : "text-orange-400"}`}>
+                            {theme.best_score}
+                          </span>
+                        )}
                       </Badge>
                     ))}
                   </div>
@@ -99,42 +128,6 @@ export function CompetitivePage() {
             ))}
           </div>
 
-          {sessionsData && sessionsData.sessions.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">過去の挑戦</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {sessionsData.sessions.slice(0, 10).map((s) => (
-                    <div
-                      key={s.session_id}
-                      className="flex items-center justify-between text-sm cursor-pointer hover:bg-accent rounded px-2 py-1"
-                      onClick={() =>
-                        navigate(`/algorithm-quiz/${s.session_id}`)
-                      }
-                    >
-                      <span>{s.theme_label}</span>
-                      <div className="flex items-center gap-2">
-                        {s.status === "completed" && s.score != null && (
-                          <Badge
-                            variant={
-                              s.score >= 70 ? "default" : "destructive"
-                            }
-                          >
-                            {s.score}点
-                          </Badge>
-                        )}
-                        {s.status === "in_progress" && (
-                          <Badge variant="outline">進行中</Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       )}
     </AppShell>

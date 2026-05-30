@@ -147,6 +147,10 @@ export interface AlgoTheme {
   id: string;
   category: string;
   label: string;
+  display_order: number;
+  attempt_count: number;
+  best_score: number | null;
+  last_attempted_at: string | null;
 }
 
 export interface ThemesResponse {

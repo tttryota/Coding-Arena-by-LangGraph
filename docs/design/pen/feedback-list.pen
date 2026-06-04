@@ -46,8 +46,10 @@
             {
               "type": "frame",
               "id": "XmV7b",
+              "width": "fill_container",
               "gap": 10,
               "padding": 8,
+              "justifyContent": "space_between",
               "alignItems": "center",
               "children": [
                 {
@@ -97,6 +99,26 @@
                   "fontFamily": "Inter",
                   "fontSize": 14,
                   "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "f6SBUG",
+                  "width": 24,
+                  "height": 24,
+                  "cornerRadius": 4,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "IMog5",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "panel-left-close",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    }
+                  ]
                 }
               ]
             },
@@ -1715,8 +1737,10 @@
             {
               "type": "frame",
               "id": "vx2gK",
+              "width": "fill_container",
               "gap": 10,
               "padding": 8,
+              "justifyContent": "space_between",
               "alignItems": "center",
               "children": [
                 {
@@ -1766,6 +1790,26 @@
                   "fontFamily": "Inter",
                   "fontSize": 14,
                   "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "Yj0Uc",
+                  "width": 24,
+                  "height": 24,
+                  "cornerRadius": 4,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "h2ESv",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "panel-left-close",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    }
+                  ]
                 }
               ]
             },
@@ -2343,8 +2387,10 @@
             {
               "type": "frame",
               "id": "caLbf",
+              "width": "fill_container",
               "gap": 10,
               "padding": 8,
+              "justifyContent": "space_between",
               "alignItems": "center",
               "children": [
                 {
@@ -2394,6 +2440,26 @@
                   "fontFamily": "Inter",
                   "fontSize": 14,
                   "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "I9ce4Y",
+                  "width": 24,
+                  "height": 24,
+                  "cornerRadius": 4,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "Tm8h2",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "panel-left-close",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    }
+                  ]
                 }
               ]
             },
@@ -2704,8 +2770,10 @@
             {
               "type": "frame",
               "id": "FrryJ",
+              "width": "fill_container",
               "gap": 10,
               "padding": 8,
+              "justifyContent": "space_between",
               "alignItems": "center",
               "children": [
                 {
@@ -2755,6 +2823,26 @@
                   "fontFamily": "Inter",
                   "fontSize": 14,
                   "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "VnhPT",
+                  "width": 24,
+                  "height": 24,
+                  "cornerRadius": 4,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "IqXfH",
+                      "width": 14,
+                      "height": 14,
+                      "iconFontName": "panel-left-close",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    }
+                  ]
                 }
               ]
             },

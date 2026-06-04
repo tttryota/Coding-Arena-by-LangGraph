@@ -7,7 +7,7 @@ Usage:
     cd backend
     uv run python scripts/verify_session_flow.py
 """
-# ruff: noqa: T201, BLE001, PLR0915, RUF002, I001, ARG002, SIM113
+# ruff: noqa: T201, BLE001, PLR0915, I001, ARG002, SIM113
 
 from __future__ import annotations
 

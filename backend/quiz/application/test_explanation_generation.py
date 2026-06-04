@@ -5,10 +5,10 @@ from copy import deepcopy
 from typing import TYPE_CHECKING
 
 import pytest
-from quiz.application.explanation_generation import generate_explanation
-from quiz.application.explanation_generation_types import ExplanationGenerationError
 from structlog.testing import capture_logs
 
+from quiz.application.explanation_generation import generate_explanation
+from quiz.application.explanation_generation_types import ExplanationGenerationError
 from shared.log_assertions import find_log_events
 
 if TYPE_CHECKING:

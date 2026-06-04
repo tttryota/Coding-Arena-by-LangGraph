@@ -20,7 +20,7 @@ def find_log_events(
     ]
 
 
-def assert_single_log_event(
+def assert_single_log_event(  # noqa: PLR0913
     log_output: list[MutableMapping[str, Any]],
     event_name: str,
     expected_fields: dict[str, object],

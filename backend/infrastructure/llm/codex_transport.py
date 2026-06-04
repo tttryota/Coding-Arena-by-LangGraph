@@ -13,7 +13,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 
 class CodexTransportError(Exception):
@@ -190,7 +190,9 @@ class CodexLlmTransport:
             raise CodexTransportHttpError(msg)
         return line
 
-    def _request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    def _request(  # noqa: PLR0915
+        self, method: str, params: dict[str, Any],
+    ) -> dict[str, Any]:
         req_id = self._next_id
         self._next_id += 1
 
@@ -208,13 +210,22 @@ class CodexLlmTransport:
                 parsed = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if not isinstance(parsed, dict):
+                continue
 
             if "id" in parsed and parsed["id"] == req_id:
                 if "error" in parsed:
                     error = parsed["error"]
+                    if not isinstance(error, dict):
+                        msg = "JSON-RPC error payload must be an object"
+                        raise CodexTransportResponseError(msg)
                     msg = f"JSON-RPC error {error.get('code')}: {error.get('message')}"
                     raise CodexTransportHttpError(msg)
-                return parsed.get("result", {})
+                result = parsed.get("result", {})
+                if not isinstance(result, dict):
+                    msg = "JSON-RPC result must be an object"
+                    raise CodexTransportResponseError(msg)
+                return cast("dict[str, Any]", result)
 
             if "method" in parsed and "id" not in parsed:
                 self._notification_buffer.append(parsed)
@@ -262,7 +273,15 @@ class CodexLlmTransport:
             params["model"] = model
 
         result = self._request("thread/start", params)
-        return result["thread"]["id"]
+        thread = result.get("thread")
+        if not isinstance(thread, dict):
+            msg = "thread/start response must include thread"
+            raise CodexTransportResponseError(msg)
+        thread_id = thread.get("id")
+        if not isinstance(thread_id, str):
+            msg = "thread/start response must include thread.id"
+            raise CodexTransportResponseError(msg)
+        return thread_id
 
     def _start_turn(self, thread_id: str, user_text: str) -> str:
         result = self._request("turn/start", {
@@ -270,11 +289,21 @@ class CodexLlmTransport:
             "input": [{"type": "text", "text": user_text, "text_elements": []}],
         })
         turn = result.get("turn", {})
+        if not isinstance(turn, dict):
+            msg = "turn/start response must include turn"
+            raise CodexTransportResponseError(msg)
         if turn.get("status") == "failed":
             error = turn.get("error", {})
+            if not isinstance(error, dict):
+                msg = "turn/start error payload must be an object"
+                raise CodexTransportResponseError(msg)
             msg = f"Turn failed: {error.get('message', 'unknown')}"
             raise CodexTransportHttpError(msg)
-        return turn["id"]
+        turn_id = turn.get("id")
+        if not isinstance(turn_id, str):
+            msg = "turn/start response must include turn.id"
+            raise CodexTransportResponseError(msg)
+        return turn_id
 
     def _collect_turn_response(self, turn_id: str) -> str:
         item_buffers: dict[str, str] = {}
@@ -298,6 +327,8 @@ class CodexLlmTransport:
                 parsed = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if not isinstance(parsed, dict):
+                continue
 
             if "method" in parsed and "id" not in parsed:
                 if self._handle_notification(
@@ -307,7 +338,7 @@ class CodexLlmTransport:
             elif "method" in parsed and "id" in parsed:
                 self._reply_unsupported(parsed["id"], parsed["method"])
 
-    def _handle_notification(
+    def _handle_notification(  # noqa: C901, PLR0915
         self,
         notification: dict[str, Any],
         turn_id: str,
@@ -321,10 +352,15 @@ class CodexLlmTransport:
         # turn/completed は params.turn.id で turnId を持つ
         if method == "turn/completed":
             turn = params.get("turn", {})
+            if not isinstance(turn, dict):
+                return False
             if turn.get("id") != turn_id:
                 return False
             if turn.get("status") == "failed":
                 error = turn.get("error", {})
+                if not isinstance(error, dict):
+                    msg = "turn/completed error payload must be an object"
+                    raise CodexTransportResponseError(msg)
                 msg = f"Turn failed: {error.get('message', 'unknown')}"
                 raise CodexTransportHttpError(msg)
             return True
@@ -339,8 +375,10 @@ class CodexLlmTransport:
 
         elif method == "item/completed":
             item = params.get("item", {})
+            if not isinstance(item, dict):
+                return False
             if item.get("type") == "agentMessage":
-                completed_messages.append(item)
+                completed_messages.append(cast("dict[str, Any]", item))
 
         return False
 
@@ -362,8 +400,8 @@ class CodexLlmTransport:
 
         result = "\n\n".join(texts)
         if not result:
-            msg = "Empty response from codex app-server"
-            raise CodexTransportResponseError(msg)
+            error_message = "Empty response from codex app-server"
+            raise CodexTransportResponseError(error_message)
         return result
 
 

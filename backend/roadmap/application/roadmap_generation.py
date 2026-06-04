@@ -117,7 +117,7 @@ def get_roadmap_generation_job(
     return job_store.get_job(job_id)
 
 
-def _run_roadmap_generation_job(
+def _run_roadmap_generation_job(  # noqa: PLR0913
     job_id: UUID,
     topic: str,
     *,

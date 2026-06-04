@@ -12,15 +12,15 @@ from sqlalchemy import create_engine
 
 from api.app import create_app
 from api.dependencies import Container
-from ingestion.infrastructure.multilingual_e5_embedder import MultilingualE5Embedder
 from infrastructure.config.settings import Settings
 from infrastructure.rdb.base import Base
+from ingestion.infrastructure.multilingual_e5_embedder import MultilingualE5Embedder
 
 
 def _bootstrap() -> object:
     import infrastructure.rdb.models  # noqa: F401  — register all ORM models
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = Settings()
 
     engine = create_engine(
         f"sqlite:///{settings.sqlite_path}",
@@ -53,4 +53,4 @@ app = create_app(_bootstrap())  # type: ignore[arg-type]
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8001)  # noqa: S104

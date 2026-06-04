@@ -27,7 +27,9 @@ if TYPE_CHECKING:
     from roadmap.domain.roadmap_retrieval_types import (
         RoadmapItemRecord,
         RoadmapRecord,
-        RoadmapRetrievalReader,
+    )
+    from roadmap.infrastructure.sql_roadmap_retrieval_reader import (
+        SqlRoadmapRetrievalReader,
     )
 
 _DEFAULT_MINIMUM_CHUNK_CHARACTERS = 50
@@ -36,7 +38,7 @@ _DEFAULT_MINIMUM_CHUNK_CHARACTERS = 50
 class RoadmapItemReaderAdapter:
     """SqlRoadmapRetrievalReader をラップして RoadmapItemReader Protocol を満たす。"""
 
-    def __init__(self, retrieval_reader: RoadmapRetrievalReader) -> None:
+    def __init__(self, retrieval_reader: SqlRoadmapRetrievalReader) -> None:
         self._reader = retrieval_reader
 
     def list_items(self) -> list[RoadmapCandidate]:

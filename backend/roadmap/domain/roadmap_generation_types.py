@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Protocol, TypedDict
-from uuid import UUID
+from typing import TYPE_CHECKING, Literal, Protocol, TypedDict
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 from roadmap.domain.roadmap_persistence_types import (
     RoadmapItemInput,

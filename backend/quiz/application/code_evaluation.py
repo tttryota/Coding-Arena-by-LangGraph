@@ -15,7 +15,10 @@ import structlog
 
 if TYPE_CHECKING:
     from quiz.application.code_evaluation_types import CodeEvaluationLlmClient
-    from quiz.domain.coding_session_state import CodingSessionState
+    from quiz.domain.coding_session_state import (
+        CodingConfirmationPoint,
+        CodingSessionState,
+    )
 
 logger = structlog.get_logger(__name__)
 
@@ -126,8 +129,8 @@ def _apply_routing_updates(  # noqa: PLR0913
     next_action: str,
     score: int,
     current_format: str,
-    cp: dict[str, object],
-    cps: list[dict[str, object]],
+    cp: CodingConfirmationPoint,
+    cps: list[CodingConfirmationPoint],
     cp_index: int,
 ) -> None:
     """next_action に応じて state 更新を追加する。"""

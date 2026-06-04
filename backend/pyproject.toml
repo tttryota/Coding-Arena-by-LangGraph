@@ -65,10 +65,12 @@ select = [
     "TC",
 ]
 ignore = ["D", "ANN", "ERA", "FIX", "TD", "E501", "RET504"]
+allowed-confusables = ["（", "）", "？"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/test_*.py" = ["S101", "N", "PLR0915", "PLR0913", "ARG"]
 "shared/**" = ["S101"]
+"roadmap/domain/roadmap_retrieval_types.pyi" = ["A002"]
 
 [tool.ruff.lint.pylint]
 max-args = 4             # review-criteria: 引数4つ以内
@@ -88,6 +90,11 @@ warn_unused_configs = true
 explicit_package_bases = true
 mypy_path = "."
 plugins = ["pydantic.mypy"]
+exclude = [
+    "(^|/)test_.*\\.py$",
+    "^tests/",
+    "^scripts/",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["."]

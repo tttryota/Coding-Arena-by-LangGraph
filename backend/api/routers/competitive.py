@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from api.dependencies import Container
+    from competitive.application.competitive_graph import CompetitiveGraphRunner
+    from competitive.domain.competitive_types import CompetitiveSessionState
+    from competitive.infrastructure.sql_competitive_store import (
+        CompetitiveAnswerRecord,
+    )
 
 router = APIRouter(prefix="/algorithm-quiz", tags=["competitive"])
 
@@ -31,24 +38,28 @@ def _container(request: Request) -> Container:
     c = getattr(request.app.state, "container", None)
     if c is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-    return c  # type: ignore[return-value]
+    return cast("Container", c)
 
 
-def _require_runner(c: Container) -> object:
+def _require_runner(c: Container) -> CompetitiveGraphRunner:
     if c.competitive_graph_runner is None:
         raise HTTPException(
             status_code=503,
             detail="Competitive service unavailable",
         )
-    return c.competitive_graph_runner
+    return cast("CompetitiveGraphRunner", c.competitive_graph_runner)
 
 
-def _run_graph_start(runner: object, state: dict, thread_id: str) -> None:
+def _run_graph_start(
+    runner: CompetitiveGraphRunner,
+    state: dict[str, object],
+    thread_id: str,
+) -> None:
     from competitive.application.competitive_graph import TransientLlmNodeError
     from competitive.domain.competitive_types import CompetitiveError
 
     try:
-        runner.start_graph(state, thread_id=thread_id)  # type: ignore[union-attr]
+        runner.start_graph(cast("CompetitiveSessionState", state), thread_id=thread_id)
     except TransientLlmNodeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except CompetitiveError as exc:
@@ -58,13 +69,13 @@ def _run_graph_start(runner: object, state: dict, thread_id: str) -> None:
 
 
 def _run_graph_resume(
-    runner: object, user_input: dict, thread_id: str,
+    runner: CompetitiveGraphRunner, user_input: dict[str, object], thread_id: str,
 ) -> None:
     from competitive.application.competitive_graph import TransientLlmNodeError
     from competitive.domain.competitive_types import CompetitiveError
 
     try:
-        runner.resume_graph(user_input, thread_id=thread_id)  # type: ignore[union-attr]
+        runner.resume_graph(user_input, thread_id=thread_id)
     except TransientLlmNodeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except CompetitiveError as exc:
@@ -76,7 +87,7 @@ def _run_graph_resume(
 
 
 @router.get("/themes")
-def list_themes(request: Request) -> dict:
+def list_themes(request: Request) -> dict[str, object]:
     """テーマ一覧を取得する。"""
     from competitive.domain.competitive_types import CompetitiveError
 
@@ -89,7 +100,7 @@ def list_themes(request: Request) -> dict:
 
 
 @router.get("/sessions")
-def list_sessions(request: Request) -> dict:
+def list_sessions(request: Request) -> dict[str, object]:
     """最近のセッション一覧を返す。"""
     c = _container(request)
     sessions = c.competitive_store.list_recent_sessions(limit=50)
@@ -116,7 +127,7 @@ def list_sessions(request: Request) -> dict:
 @router.post("/sessions", status_code=201)
 def start_session(
     request: Request, body: _StartSessionRequest | None = None,
-) -> dict:
+) -> dict[str, object]:
     """セッションを開始する。テーマ未指定時は学習順で次のテーマを選択。"""
     c = _container(request)
     runner = _require_runner(c)
@@ -126,7 +137,7 @@ def start_session(
         initial_state["algo_theme_id"] = body.theme_id
 
     _run_graph_start(runner, initial_state, session_id)
-    state = runner.get_state(thread_id=session_id)  # type: ignore[union-attr]
+    state = runner.get_state(thread_id=session_id)
 
     c.competitive_store.create_session(
         session_id=session_id,
@@ -157,19 +168,26 @@ def start_session(
     }
 
 
-def _save_answer(c: Container, session_id: str, state: dict, user_code: str) -> object:
+def _save_answer(
+    c: Container,
+    session_id: str,
+    state: Mapping[str, object],
+    user_code: str,
+) -> CompetitiveAnswerRecord:
     from sqlalchemy.exc import IntegrityError
 
     try:
         return c.competitive_store.save_answer_and_complete(
             session_id=session_id,
             answer_text=user_code,
-            score=state.get("score", 0),
-            feedback=state.get("feedback", ""),
-            time_complexity=state.get("time_complexity", ""),
-            space_complexity=state.get("space_complexity", ""),
-            improvement_suggestions=state.get("improvement_suggestions", ""),
-            rubric_scores_json=state.get("rubric_scores_json", "[]"),
+            score=cast("int", state.get("score", 0)),
+            feedback=cast("str", state.get("feedback", "")),
+            time_complexity=cast("str", state.get("time_complexity", "")),
+            space_complexity=cast("str", state.get("space_complexity", "")),
+            improvement_suggestions=cast(
+                "str", state.get("improvement_suggestions", ""),
+            ),
+            rubric_scores_json=cast("str", state.get("rubric_scores_json", "[]")),
         )
     except IntegrityError as exc:
         raise HTTPException(
@@ -182,7 +200,7 @@ def _save_answer(c: Container, session_id: str, state: dict, user_code: str) -> 
 @router.post("/sessions/{session_id}/answer")
 def submit_answer(
     session_id: str, body: _SubmitAnswerRequest, request: Request,
-) -> dict:
+) -> dict[str, object]:
     """コードを提出して採点する。"""
     c = _container(request)
     runner = _require_runner(c)
@@ -194,7 +212,7 @@ def submit_answer(
     _run_graph_resume(runner, {"user_code": body.user_code}, session_id)
 
     try:
-        state = runner.get_state(thread_id=session_id)  # type: ignore[union-attr]
+        state = runner.get_state(thread_id=session_id)
     except LookupError as exc:
         raise HTTPException(
             status_code=404, detail="Session not found",
@@ -203,17 +221,17 @@ def submit_answer(
     answer = _save_answer(c, session_id, state, body.user_code)
     return {
         "session_id": session_id,
-        "score": answer.score,  # type: ignore[union-attr]
-        "feedback": answer.feedback,  # type: ignore[union-attr]
-        "time_complexity": answer.time_complexity,  # type: ignore[union-attr]
-        "space_complexity": answer.space_complexity,  # type: ignore[union-attr]
-        "improvement_suggestions": answer.improvement_suggestions,  # type: ignore[union-attr]
-        "rubric_scores_json": answer.rubric_scores_json,  # type: ignore[union-attr]
+        "score": answer.score,
+        "feedback": answer.feedback,
+        "time_complexity": answer.time_complexity,
+        "space_complexity": answer.space_complexity,
+        "improvement_suggestions": answer.improvement_suggestions,
+        "rubric_scores_json": answer.rubric_scores_json,
     }
 
 
 @router.get("/sessions/{session_id}")
-def get_session(session_id: str, request: Request) -> dict:
+def get_session(session_id: str, request: Request) -> dict[str, object]:
     """セッション状態を取得する(reference_solution/rubricは除外)。"""
     c = _container(request)
     try:

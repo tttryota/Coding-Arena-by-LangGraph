@@ -13,7 +13,7 @@ class ChromaQueryCollection(Protocol):
         self,
         query_embeddings: list[list[float]],
         n_results: int,
-    ) -> dict: ...
+    ) -> dict[str, object]: ...
 
 
 class ChromaExplanationRagClient:

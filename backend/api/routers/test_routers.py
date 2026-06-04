@@ -166,7 +166,8 @@ class _FakeGraphRunner:
         pass
 
     def get_state(self, *, thread_id: str) -> dict:
-        raise LookupError(f"No checkpoint for {thread_id}")
+        message = f"No checkpoint for {thread_id}"
+        raise LookupError(message)
 
 
 class _FakeBatchDiffDetector:
@@ -226,7 +227,7 @@ class _FakeTopicStore:
         from roadmap.domain.topic_listing_types import StoredTopicRecord
 
         return StoredTopicRecord(
-            name=name, canonical_name=canonical_name, source="manual"
+            name=name, canonical_name=canonical_name, source="manual",
         )
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID  # noqa: TC003
 
 from fastapi import APIRouter, HTTPException, Request
@@ -38,22 +38,22 @@ def _container(request: Request) -> Container:
     c = getattr(request.app.state, "container", None)
     if c is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-    return c  # type: ignore[return-value]
+    return cast("Container", c)
 
 
 @router.get("")
-def list_roadmaps(request: Request) -> dict:
+def list_roadmaps(request: Request) -> dict[str, object]:
     from dataclasses import asdict
 
     from roadmap.application.roadmap_retrieval import list_roadmaps as _list
 
     c = _container(request)
     result = _list(reader=c.roadmap_retrieval_reader)
-    return asdict(result)  # type: ignore[arg-type]
+    return cast("dict[str, object]", asdict(cast("Any", result)))
 
 
 @router.get("/topics")
-def list_topics(request: Request) -> dict:
+def list_topics(request: Request) -> dict[str, object]:
     from roadmap.application.topic_listing import list_topic_candidates
 
     c = _container(request)
@@ -67,7 +67,9 @@ def list_topics(request: Request) -> dict:
 
 
 @router.post("/topics", status_code=201)
-def register_topic(body: _RegisterTopicRequest, request: Request) -> dict:
+def register_topic(
+    body: _RegisterTopicRequest, request: Request,
+) -> dict[str, object]:
     from roadmap.application.topic_listing import register_manual_topic
     from roadmap.domain.topic_listing_types import TopicListingEmptyTopicNameError
 
@@ -87,7 +89,7 @@ def register_topic(body: _RegisterTopicRequest, request: Request) -> dict:
 
 
 @router.get("/{roadmap_id}")
-def get_roadmap(roadmap_id: UUID, request: Request) -> dict:
+def get_roadmap(roadmap_id: UUID, request: Request) -> dict[str, object]:
     from dataclasses import asdict
 
     from roadmap.application.roadmap_retrieval import get_roadmap as _get
@@ -98,11 +100,13 @@ def get_roadmap(roadmap_id: UUID, request: Request) -> dict:
         result = _get(roadmap_id, reader=c.roadmap_retrieval_reader)
     except RoadmapRetrievalNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return asdict(result)  # type: ignore[arg-type]
+    return cast("dict[str, object]", asdict(cast("Any", result)))
 
 
 @router.post("/generate", status_code=202)
-def generate_roadmap(body: _GenerateRequest, request: Request) -> dict:
+def generate_roadmap(
+    body: _GenerateRequest, request: Request,
+) -> dict[str, object]:
     from roadmap.application.roadmap_generation import request_roadmap_generation
     from roadmap.domain.roadmap_generation_types import (
         RoadmapGenerationInputError,
@@ -125,7 +129,7 @@ def generate_roadmap(body: _GenerateRequest, request: Request) -> dict:
 
 
 @router.get("/generate/{job_id}")
-def get_generation_job(job_id: UUID, request: Request) -> dict:
+def get_generation_job(job_id: UUID, request: Request) -> dict[str, object]:
     from roadmap.domain.roadmap_generation_types import (
         RoadmapGenerationJobNotFoundError,
     )
@@ -144,7 +148,7 @@ def move_item(
     item_id: UUID,
     body: _MoveItemRequest,
     request: Request,
-) -> dict:
+) -> dict[str, object]:
     from roadmap.application.roadmap_item_crud import move_roadmap_item
     from roadmap.domain.roadmap_item_crud_types import (
         RoadmapItemCrudInputError,
@@ -175,7 +179,7 @@ def add_item(
     roadmap_id: UUID,
     body: _AddItemRequest,
     request: Request,
-) -> dict:
+) -> dict[str, object]:
     from roadmap.application.roadmap_item_crud import add_roadmap_item
     from roadmap.domain.roadmap_item_crud_types import (
         RoadmapItemAddInput,
@@ -208,7 +212,7 @@ def delete_item(
     roadmap_id: UUID,
     item_id: UUID,
     request: Request,
-) -> dict:
+) -> dict[str, object]:
     from roadmap.application.roadmap_item_crud import delete_roadmap_item
     from roadmap.domain.roadmap_item_crud_types import (
         RoadmapItemCrudInputError,
@@ -232,7 +236,7 @@ def delete_item(
     }
 
 
-def _serialize_candidate(candidate: object) -> dict:
+def _serialize_candidate(candidate: object) -> dict[str, object]:
     return {
         "name": getattr(candidate, "name", ""),
         "source": getattr(candidate, "source", ""),
@@ -240,7 +244,7 @@ def _serialize_candidate(candidate: object) -> dict:
     }
 
 
-def _serialize_crud_item(item: object) -> dict:
+def _serialize_crud_item(item: object) -> dict[str, object]:
     return {
         "id": str(getattr(item, "id", "")),
         "roadmap_id": str(getattr(item, "roadmap_id", "")),

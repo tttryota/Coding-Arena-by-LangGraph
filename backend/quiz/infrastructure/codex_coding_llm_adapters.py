@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import structlog
 
@@ -35,9 +35,10 @@ _VALID_FORMATS = frozenset({
     "rewrite", "fill_blank", "bug_fix", "extend", "implement",
 })
 _FORMAT_ORDER = ("rewrite", "fill_blank", "bug_fix", "extend", "implement")
+type JsonObject = dict[str, object]
 
 
-def _parse_json(text: str) -> dict | list:
+def _parse_json_object(text: str) -> JsonObject:
     cleaned = text.strip()
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
@@ -45,7 +46,11 @@ def _parse_json(text: str) -> dict | list:
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         cleaned = "\n".join(lines)
-    return json.loads(cleaned)
+    parsed = json.loads(cleaned)
+    if not isinstance(parsed, dict):
+        msg = f"expected JSON object, got {type(parsed).__name__}"
+        raise TypeError(msg)
+    return cast("JsonObject", parsed)
 
 
 def _validate_str(value: object, field: str) -> str:
@@ -68,6 +73,14 @@ def _validate_score(value: object, field: str) -> int:
         msg = f"{field} must be 0-100, got {score}"
         raise ValueError(msg)
     return score
+
+
+def _validate_format(value: object, field: str) -> CodingDifficulty:
+    fmt = _validate_str(value, field)
+    if fmt not in _VALID_FORMATS:
+        msg = f"invalid {field}: {fmt}"
+        raise ValueError(msg)
+    return cast("CodingDifficulty", fmt)
 
 
 def _error_code_for(exc: Exception) -> str:
@@ -129,8 +142,8 @@ class LectureGenerationResult:
 class CodingConfirmationPointDraft:
     id: str
     content: str
-    start_format: str
-    end_format: str
+    start_format: CodingDifficulty
+    end_format: CodingDifficulty
 
 
 @dataclass(frozen=True)
@@ -181,7 +194,7 @@ class CodexLectureGenerationLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
+            data = _parse_json_object(raw)
             content = _validate_str(data["lecture_content"], "lecture_content")
             if not content.strip():
                 msg = "lecture_content is empty"
@@ -270,19 +283,20 @@ class CodexCodingProblemSetDesignLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
+            data = _parse_json_object(raw)
+            raw_points = data.get("confirmation_points", [])
+            if not isinstance(raw_points, list):
+                msg = "confirmation_points must be a list"
+                raise TypeError(msg)
             points = []
-            for item in data["confirmation_points"]:
+            for item in raw_points:
+                if not isinstance(item, dict):
+                    msg = f"confirmation point must be dict, got {type(item).__name__}"
+                    raise TypeError(msg)
                 cp_id = _validate_str(item["id"], "id")
                 content = _validate_str(item["content"], "content")
-                start_fmt = _validate_str(item["start_format"], "start_format")
-                end_fmt = _validate_str(item["end_format"], "end_format")
-                if start_fmt not in _VALID_FORMATS:
-                    msg = f"invalid start_format: {start_fmt}"
-                    raise ValueError(msg)
-                if end_fmt not in _VALID_FORMATS:
-                    msg = f"invalid end_format: {end_fmt}"
-                    raise ValueError(msg)
+                start_fmt = _validate_format(item["start_format"], "start_format")
+                end_fmt = _validate_format(item["end_format"], "end_format")
                 if _FORMAT_ORDER.index(start_fmt) > _FORMAT_ORDER.index(end_fmt):
                     msg = f"start_format ({start_fmt}) must be <= end_format ({end_fmt})"
                     raise ValueError(msg)
@@ -352,7 +366,7 @@ class CodexCodingProblemDeliveryLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
+            data = _parse_json_object(raw)
             return CodingProblemDeliveryResult(
                 question_text=_validate_str(data["question_text"], "question_text"),
                 example_code=_validate_str(data["example_code"], "example_code"),
@@ -407,7 +421,7 @@ class CodexCodeEvaluationLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
+            data = _parse_json_object(raw)
             return CodeEvaluationResult(
                 score=_validate_score(data["score"], "score"),
                 feedback=_validate_str(data["feedback"], "feedback"),

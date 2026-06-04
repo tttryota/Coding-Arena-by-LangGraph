@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from api.dependencies import Container
+    from quiz.application.coding_graph import CodingGraphRunner
+    from quiz.application.graph import QuizGraphRunner
+    from quiz.application.session_lifecycle_types import QuizAnswerStore
+    from quiz.domain.coding_session_state import CodingSessionState
+    from quiz.domain.session_state import RoadmapItemLevel
 
 router = APIRouter(prefix="/sessions", tags=["quiz"])
 
@@ -26,11 +31,13 @@ def _container(request: Request) -> Container:
     c = getattr(request.app.state, "container", None)
     if c is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-    return c  # type: ignore[return-value]
+    return cast("Container", c)
 
 
 @router.post("", status_code=201)
-def start_session(body: _StartSessionRequest, request: Request) -> dict:
+def start_session(
+    body: _StartSessionRequest, request: Request,
+) -> dict[str, object]:
     from quiz.application.session_lifecycle import start_session as _start
     from quiz.application.session_lifecycle_types import (
         QuizSessionLifecycleError,
@@ -38,7 +45,8 @@ def start_session(body: _StartSessionRequest, request: Request) -> dict:
     )
 
     c = _container(request)
-    if c.graph_runner is None:
+    runner = c.graph_runner
+    if runner is None:
         raise HTTPException(
             status_code=503,
             detail="Quiz service unavailable: embedder not configured",
@@ -48,7 +56,7 @@ def start_session(body: _StartSessionRequest, request: Request) -> dict:
             StartSessionInput(roadmap_item_id=body.roadmap_item_id),
             session_store=c.quiz_session_store,
             item_reader=c.roadmap_item_read_store,
-            graph_runner=c.graph_runner,
+            graph_runner=cast("QuizGraphRunner", runner),
         )
     except QuizSessionLifecycleError as exc:
         raise HTTPException(status_code=422, detail=exc.message) from exc
@@ -62,7 +70,9 @@ def start_session(body: _StartSessionRequest, request: Request) -> dict:
 
 
 @router.post("/{session_id}/input")
-def submit_input(session_id: str, body: _SubmitInputRequest, request: Request) -> dict:
+def submit_input(
+    session_id: str, body: _SubmitInputRequest, request: Request,
+) -> dict[str, object]:
     c = _container(request)
 
     if c.coding_graph_runner is not None:
@@ -77,11 +87,11 @@ def submit_input(session_id: str, body: _SubmitInputRequest, request: Request) -
 
 def _resume_coding_session(
     c: Container, session_id: str, body: _SubmitInputRequest,
-) -> dict:
+) -> dict[str, object]:
     from quiz.application.coding_graph import TransientLlmNodeError
 
     try:
-        c.coding_graph_runner.resume_graph(
+        cast("CodingGraphRunner", c.coding_graph_runner).resume_graph(
             {"user_input": body.user_input, "input_source": body.input_source},
             thread_id=session_id,
         )
@@ -89,20 +99,23 @@ def _resume_coding_session(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except (ValueError, LookupError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    state = c.coding_graph_runner.get_state(thread_id=session_id)
+    state = cast("CodingGraphRunner", c.coding_graph_runner).get_state(
+        thread_id=session_id,
+    )
     return dict(state)
 
 
 def _resume_quiz_session(
     c: Container, session_id: str, body: _SubmitInputRequest,
-) -> dict:
+) -> dict[str, object]:
     from quiz.application.session_lifecycle import resume_session
     from quiz.application.session_lifecycle_types import (
         QuizSessionLifecycleError,
         ResumeSessionInput,
     )
 
-    if c.graph_runner is None:
+    runner = c.graph_runner
+    if runner is None:
         raise HTTPException(
             status_code=503,
             detail="Quiz service unavailable: embedder not configured",
@@ -115,9 +128,9 @@ def _resume_quiz_session(
                 input_source=body.input_source,
             ),
             session_store=c.quiz_session_store,
-            answer_store=c.quiz_answer_store,
+            answer_store=cast("QuizAnswerStore", c.quiz_answer_store),
             item_reader=c.roadmap_item_read_store,
-            graph_runner=c.graph_runner,
+            graph_runner=cast("QuizGraphRunner", runner),
         )
     except QuizSessionLifecycleError as exc:
         if exc.error_code == "session_resume_transient_llm_error":
@@ -131,12 +144,13 @@ def _resume_quiz_session(
 @router.post("/coding", status_code=201)
 def start_coding_session(  # noqa: PLR0915
     body: _StartSessionRequest, request: Request,
-) -> dict:
+) -> dict[str, object]:
     """コーディングセッションを開始する(座学→練習フロー)。"""
     import uuid
 
     c = _container(request)
-    if c.coding_graph_runner is None:
+    runner = c.coding_graph_runner
+    if runner is None:
         raise HTTPException(
             status_code=503,
             detail="Coding session service unavailable",
@@ -149,10 +163,10 @@ def start_coding_session(  # noqa: PLR0915
     if item is None:
         raise HTTPException(status_code=404, detail="Roadmap item not found")
 
-    initial_state = {
+    initial_state: CodingSessionState = {
         "session_id": session_id,
         "roadmap_item_id": body.roadmap_item_id,
-        "roadmap_item_level": item.level,
+        "roadmap_item_level": cast("RoadmapItemLevel", item.level),
         "roadmap_item_title": item.title,
         "roadmap_item_description": item.description,
         "is_resumed": False,
@@ -160,7 +174,7 @@ def start_coding_session(  # noqa: PLR0915
     from quiz.application.coding_graph import TransientLlmNodeError
 
     try:
-        c.coding_graph_runner.start_graph(
+        cast("CodingGraphRunner", runner).start_graph(
             initial_state, thread_id=session_id,
         )
     except TransientLlmNodeError as exc:
@@ -168,7 +182,7 @@ def start_coding_session(  # noqa: PLR0915
     except (ValueError, LookupError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    state = c.coding_graph_runner.get_state(thread_id=session_id)
+    state = cast("CodingGraphRunner", runner).get_state(thread_id=session_id)
     return {
         "session_id": session_id,
         "lecture_content": state.get("lecture_content"),
@@ -177,10 +191,11 @@ def start_coding_session(  # noqa: PLR0915
 
 
 @router.post("/{session_id}/practice/start")
-def start_practice(session_id: str, request: Request) -> dict:
+def start_practice(session_id: str, request: Request) -> dict[str, object]:
     """座学フェーズからコーディング練習に遷移する。"""
     c = _container(request)
-    if c.coding_graph_runner is None:
+    runner = c.coding_graph_runner
+    if runner is None:
         raise HTTPException(
             status_code=503,
             detail="Coding session service unavailable",
@@ -188,7 +203,7 @@ def start_practice(session_id: str, request: Request) -> dict:
     from quiz.application.coding_graph import TransientLlmNodeError
 
     try:
-        c.coding_graph_runner.resume_graph(
+        cast("CodingGraphRunner", runner).resume_graph(
             {"lecture_phase_active": False},
             thread_id=session_id,
         )
@@ -196,7 +211,7 @@ def start_practice(session_id: str, request: Request) -> dict:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except (ValueError, LookupError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    state = c.coding_graph_runner.get_state(thread_id=session_id)
+    state = cast("CodingGraphRunner", runner).get_state(thread_id=session_id)
     return {
         "session_id": session_id,
         "confirmation_points": state.get("confirmation_points", []),
@@ -209,9 +224,11 @@ def start_practice(session_id: str, request: Request) -> dict:
 
 
 @router.get("/{session_id}")
-def get_session(session_id: str, request: Request) -> dict:  # noqa: PLR0915
+def get_session(  # noqa: PLR0915
+    session_id: str, request: Request,
+) -> dict[str, object]:
     c = _container(request)
-    response: dict = {"session_id": session_id}
+    response: dict[str, object] = {"session_id": session_id}
     try:
         session = c.quiz_session_store.find_session(session_id)
         if session is not None:
@@ -220,7 +237,7 @@ def get_session(session_id: str, request: Request) -> dict:  # noqa: PLR0915
         pass
     if c.coding_graph_runner is not None:
         try:
-            coding_state = c.coding_graph_runner.get_state(
+            coding_state = cast("CodingGraphRunner", c.coding_graph_runner).get_state(
                 thread_id=session_id,
             )
             response["graph_state"] = dict(coding_state)
@@ -228,7 +245,9 @@ def get_session(session_id: str, request: Request) -> dict:  # noqa: PLR0915
             pass
     if "graph_state" not in response and c.graph_runner is not None:
         try:
-            graph_state = c.graph_runner.get_state(thread_id=session_id)
+            graph_state = cast("QuizGraphRunner", c.graph_runner).get_state(
+                thread_id=session_id,
+            )
             response["graph_state"] = dict(graph_state)
         except LookupError:
             pass

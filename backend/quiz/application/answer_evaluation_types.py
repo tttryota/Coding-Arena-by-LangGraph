@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol, TypedDict
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from quiz.domain.session_state import (
         ConfirmationPointFormat,
         QuizAnswerRecord,
@@ -47,7 +49,7 @@ class AnswerEvaluationLlmClient(Protocol):
         answer_type: QuizAnswerType,
         past_answers: list[QuizAnswerRecord],
         total_questions_asked: int,
-        remaining_points: list[tuple[str, str]],
+        remaining_points: Sequence[tuple[str, str]],
     ) -> EvaluationOutput: ...
 
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langgraph.graph import END, StateGraph
 from langgraph.types import interrupt
@@ -20,9 +20,6 @@ from competitive.application.theme_selection import select_theme
 from competitive.domain.competitive_types import CompetitiveSessionState
 
 if TYPE_CHECKING:
-    from langgraph.checkpoint.base import BaseCheckpointSaver
-    from langgraph.graph.state import CompiledStateGraph
-
     from competitive.application.problem_generation_types import (
         ProblemGenerationLlmClient,
     )
@@ -93,8 +90,8 @@ class CompetitiveGraphDependencies:
 
 def build_competitive_graph(
     deps: CompetitiveGraphDependencies,
-    checkpointer: BaseCheckpointSaver,
-) -> CompiledStateGraph:
+    checkpointer: Any,
+) -> Any:
     """全ノードとエッジを登録して CompiledStateGraph を返す。"""
     graph: StateGraph[CompetitiveSessionState] = StateGraph(
         CompetitiveSessionState,
@@ -150,7 +147,7 @@ def _is_transient_llm_error(exc: Exception) -> bool:
 class CompetitiveGraphRunner:
     """競プログラフの実行を管理する。"""
 
-    def __init__(self, compiled_graph: CompiledStateGraph) -> None:
+    def __init__(self, compiled_graph: Any) -> None:
         self._graph = compiled_graph
 
     @staticmethod

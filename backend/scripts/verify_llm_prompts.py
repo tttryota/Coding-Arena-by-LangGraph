@@ -7,7 +7,7 @@ Usage:
     cd backend
     uv run python scripts/verify_llm_prompts.py
 """
-# ruff: noqa: T201, BLE001, PLR0915, RUF001, RUF003, I001
+# ruff: noqa: T201, BLE001, PLR0915, I001
 
 from __future__ import annotations
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from competitive.domain.competitive_types import (
         ProblemExample,
         ProgrammingLanguage,
@@ -44,7 +46,7 @@ class SolutionEvaluationResult(Protocol):
     def improvement_suggestions(self) -> str: ...
 
     @property
-    def rubric_scores(self) -> list[dict[str, object]]: ...
+    def rubric_scores(self) -> Sequence[RubricScoreItemLike]: ...
 
 
 class SolutionEvaluationLlmClient(Protocol):

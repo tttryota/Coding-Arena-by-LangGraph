@@ -83,7 +83,8 @@ class _NoOpGraphRunner:
     def get_state(self, *, thread_id: str) -> dict:
         if self._get_state_result:
             return self._get_state_result
-        raise LookupError(f"No checkpoint for {thread_id}")
+        message = f"No checkpoint for {thread_id}"
+        raise LookupError(message)
 
 
 def _create_roadmap_and_get_detail_item_id(
@@ -240,7 +241,7 @@ _QUESTION_SET_DESIGN_RESPONSE = json.dumps(
 
 _QUESTION_DELIVERY_RESPONSE = json.dumps(
     {
-        "question_text": "TypeScriptのジェネリクスとは何ですか？",  # noqa: RUF001
+        "question_text": "TypeScriptのジェネリクスとは何ですか？",
         "answer_type": "textarea",
     },
     ensure_ascii=False,
@@ -331,7 +332,7 @@ class TestQ2UserInputSubmission:
         assert input_data["roadmap_item_id"] == detail_item_id
         assert input_data["roadmap_item_level"] == "detail"
         assert input_data["is_resumed"] is True
-        # post-run state 固有フィールドが含まれることを確認（退行防止）
+        # post-run state 固有フィールドが含まれることを確認(退行防止)
         assert "next_action" in input_data or "input_type" in input_data
 
         # Assert: グラフ完走後、セッションが完了状態 (再度 start しても resume_required=False)

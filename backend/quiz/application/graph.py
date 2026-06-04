@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langgraph.graph import END, StateGraph
 from langgraph.types import interrupt
@@ -29,9 +29,6 @@ from quiz.application.summary_test_record_types import (  # noqa: TC001
 from quiz.domain.session_state import SessionState
 
 if TYPE_CHECKING:
-    from langgraph.checkpoint.base import BaseCheckpointSaver
-    from langgraph.graph.state import CompiledStateGraph
-
     from quiz.application.graph_types import GraphDependencies
 
 # ---------------------------------------------------------------------------
@@ -127,8 +124,8 @@ def _route_by_roadmap_item_level(state: SessionState) -> str:
 
 def build_graph(  # noqa: PLR0915
     deps: GraphDependencies,
-    checkpointer: BaseCheckpointSaver | None = None,
-) -> CompiledStateGraph:
+    checkpointer: Any = None,
+) -> Any:
     """全ノードとエッジを登録して CompiledStateGraph を返す。"""
     graph: StateGraph[SessionState] = StateGraph(SessionState)
 
@@ -255,7 +252,7 @@ def _is_transient_llm_error(exc: Exception) -> bool:
 class QuizGraphRunner:
     """GraphRunner Protocol の concrete 実装。"""
 
-    def __init__(self, compiled_graph: CompiledStateGraph) -> None:
+    def __init__(self, compiled_graph: Any) -> None:
         self._graph = compiled_graph
 
     def start_graph(self, state: SessionState, *, thread_id: str) -> None:

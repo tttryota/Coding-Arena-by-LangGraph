@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
 import structlog
 
@@ -18,16 +18,21 @@ from infrastructure.llm.codex_transport import (
     CodexTransportHttpError,
     CodexTransportResponseError,
 )
-
 from quiz.application.question_set_design_types import QuestionSetDesignResult
 
 if TYPE_CHECKING:
-    from quiz.application.answer_evaluation_types import EvaluationOutput
+    from collections.abc import Sequence
+
+    from quiz.application.answer_evaluation_types import (
+        DeepdivePointDraft,
+        EvaluationOutput,
+    )
     from quiz.application.progress_update_types import ProgressOutput
     from quiz.application.question_delivery_types import QuestionOutput
     from quiz.application.summary_test_record_types import SummaryAnalysis
     from quiz.domain.session_state import (
         ConfirmationPoint,
+        ConfirmationPointFormat,
         QuizAnswerRecord,
         QuizAnswerType,
         RoadmapItemLevel,
@@ -43,6 +48,7 @@ _VALID_NEXT_ACTIONS = frozenset({"next", "deepdive", "complete"})
 _VALID_ANSWER_TYPES = frozenset({"textarea", "code"})
 _VALID_CP_FORMATS = frozenset({"knowledge", "knowledge_and_practice"})
 _FORMAT_TO_ANSWER_TYPE = {"knowledge": "textarea", "knowledge_and_practice": "code"}
+type JsonObject = dict[str, object]
 
 
 def _validate_str(value: object, field: str) -> str:
@@ -77,7 +83,7 @@ def _error_code_for(exc: Exception) -> str:
     return "llm_request_failed"
 
 
-def _validate_confirmation_point(item: object) -> dict[str, str]:
+def _validate_confirmation_point(item: object) -> ConfirmationPoint:
     if not isinstance(item, dict):
         msg = f"confirmation point must be dict, got {type(item).__name__}"
         raise TypeError(msg)
@@ -87,10 +93,14 @@ def _validate_confirmation_point(item: object) -> dict[str, str]:
     if fmt not in _VALID_CP_FORMATS:
         msg = f"invalid confirmation point format: {fmt}"
         raise ValueError(msg)
-    return {"id": cp_id, "content": content, "format": fmt}
+    return {
+        "id": cp_id,
+        "content": content,
+        "format": cast("ConfirmationPointFormat", fmt),
+    }
 
 
-def _validate_deepdive_point(item: object) -> dict[str, str]:
+def _validate_deepdive_point(item: object) -> DeepdivePointDraft:
     if not isinstance(item, dict):
         msg = f"deepdive point must be dict, got {type(item).__name__}"
         raise TypeError(msg)
@@ -102,10 +112,10 @@ def _validate_deepdive_point(item: object) -> dict[str, str]:
     if fmt not in _VALID_CP_FORMATS:
         msg = f"invalid deepdive point format: {fmt}"
         raise ValueError(msg)
-    return {"content": content, "format": fmt}
+    return {"content": content, "format": cast("ConfirmationPointFormat", fmt)}
 
 
-def _parse_json(text: str) -> dict | list:
+def _parse_json_object(text: str) -> JsonObject:
     """LLM レスポンスから JSON を抽出してパースする。"""
     cleaned = text.strip()
     if cleaned.startswith("```"):
@@ -114,7 +124,43 @@ def _parse_json(text: str) -> dict | list:
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         cleaned = "\n".join(lines)
-    return json.loads(cleaned)
+    parsed = json.loads(cleaned)
+    if not isinstance(parsed, dict):
+        msg = f"expected JSON object, got {type(parsed).__name__}"
+        raise TypeError(msg)
+    return cast("JsonObject", parsed)
+
+
+def _parse_json(text: str) -> JsonObject:
+    return _parse_json_object(text)
+
+
+def _validate_answer_type(value: object) -> Literal["textarea", "code"]:
+    answer_type = _validate_str(value, "answer_type")
+    if answer_type not in _VALID_ANSWER_TYPES:
+        msg = f"invalid answer_type from LLM: {answer_type}"
+        raise ValueError(msg)
+    return cast("Literal['textarea', 'code']", answer_type)
+
+
+def _validate_input_type(
+    value: object,
+) -> Literal["answer", "question", "explanation_request"]:
+    input_type = _validate_str(value, "input_type")
+    if input_type not in _VALID_INPUT_TYPES:
+        msg = f"invalid input_type from LLM: {input_type}"
+        raise ValueError(msg)
+    return cast("Literal['answer', 'question', 'explanation_request']", input_type)
+
+
+def _validate_next_action(
+    value: object,
+) -> Literal["next", "deepdive", "complete"]:
+    next_action = _validate_str(value, "next_action")
+    if next_action not in _VALID_NEXT_ACTIONS:
+        msg = f"invalid next_action from LLM: {next_action}"
+        raise ValueError(msg)
+    return cast("Literal['next', 'deepdive', 'complete']", next_action)
 
 
 def _answers_to_text(answers: list[QuizAnswerRecord]) -> str:
@@ -180,17 +226,18 @@ class CodexQuestionSetDesignLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
+            data = _parse_json_object(raw)
             topic_overview = _validate_str(
                 data.get("topic_overview", ""), "topic_overview",
             )
             if not topic_overview.strip():
                 msg = "topic_overview is empty"
-                raise ValueError(msg)  # noqa: TRY301
-            points = [
-                _validate_confirmation_point(item)
-                for item in data["confirmation_points"]
-            ]
+                raise ValueError(msg)
+            raw_points = data.get("confirmation_points", [])
+            if not isinstance(raw_points, list):
+                msg = "confirmation_points must be a list"
+                raise TypeError(msg)
+            points = [_validate_confirmation_point(item) for item in raw_points]
             return QuestionSetDesignResult(
                 confirmation_points=points,
                 topic_overview=topic_overview,
@@ -272,9 +319,9 @@ class CodexQuestionDeliveryLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
+            data = _parse_json_object(raw)
             question_text = _validate_str(data["question_text"], "question_text")
-            answer_type = _validate_str(data["answer_type"], "answer_type")
+            answer_type = _validate_answer_type(data["answer_type"])
 
             expected = _FORMAT_TO_ANSWER_TYPE[confirmation_point_format]
             if answer_type != expected:
@@ -309,7 +356,7 @@ class CodexInputClassificationLlm:
         self,
         question_text: str,
         user_input: str,
-    ) -> str:
+    ) -> Literal["answer", "question", "explanation_request"]:
         from quiz.application.input_classification_types import (
             InputClassificationError,
         )
@@ -334,12 +381,8 @@ class CodexInputClassificationLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
-            input_type = data["input_type"]
-            if input_type not in _VALID_INPUT_TYPES:
-                msg = f"invalid input_type from LLM: {input_type}"
-                raise InputClassificationError(error_code="invalid_input_type", message=msg)
-            return input_type
+            data = _parse_json_object(raw)
+            return _validate_input_type(data["input_type"])
         except InputClassificationError:
             raise
         except Exception as exc:
@@ -396,11 +439,10 @@ class CodexAnswerEvaluationLlm:
         answer_type: QuizAnswerType,
         past_answers: list[QuizAnswerRecord],
         total_questions_asked: int,
-        remaining_points: list[tuple[str, str]],
+        remaining_points: Sequence[tuple[str, str]],
     ) -> EvaluationOutput:
         from quiz.application.answer_evaluation_types import (
             AnswerEvaluationError,
-            DeepdivePointDraft,
             EvaluationOutput,
         )
 
@@ -453,18 +495,17 @@ class CodexAnswerEvaluationLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
-            next_action = _validate_str(data["next_action"], "next_action")
+            data = _parse_json_object(raw)
+            next_action = _validate_next_action(data["next_action"])
             score = _validate_score(data["score"], "score")
             feedback = _validate_str(data["feedback"], "feedback")
-
-            if next_action not in _VALID_NEXT_ACTIONS:
-                msg = f"invalid next_action from LLM: {next_action}"
-                raise AnswerEvaluationError(error_code="invalid_next_action", message=msg)
 
             deepdive_points: list[DeepdivePointDraft] = []
             if next_action == "deepdive":
                 raw_points = data.get("deepdive_points", [])
+                if not isinstance(raw_points, list):
+                    msg = "deepdive_points must be a list"
+                    raise TypeError(msg)
                 deepdive_points = [_validate_deepdive_point(dp) for dp in raw_points]
                 if not deepdive_points:
                     msg = "LLM returned deepdive with empty deepdive_points"
@@ -570,7 +611,7 @@ class CodexProgressUpdateLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
+            data = _parse_json_object(raw)
             return ProgressOutput(
                 score=_validate_score(data["score"], "score"),
                 comment=_validate_str(data["comment"], "comment"),
@@ -616,7 +657,7 @@ class CodexSummaryTestLlm:
                 CodexMessage(role="system", content=system),
                 CodexMessage(role="user", content=user),
             ])
-            data = _parse_json(raw)
+            data = _parse_json_object(raw)
             return SummaryAnalysis(
                 score=_validate_score(data["score"], "score"),
                 analysis=_validate_str(data["analysis"], "analysis"),

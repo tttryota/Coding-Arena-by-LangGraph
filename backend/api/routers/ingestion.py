@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import UUID  # noqa: TC003
 
 from fastapi import APIRouter, HTTPException, Request
@@ -23,11 +23,13 @@ def _container(request: Request) -> Container:
     c = getattr(request.app.state, "container", None)
     if c is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
-    return c  # type: ignore[return-value]
+    return cast("Container", c)
 
 
 @router.post("/trigger", status_code=202)
-def trigger_ingestion(body: _TriggerRequest, request: Request) -> dict:
+def trigger_ingestion(
+    body: _TriggerRequest, request: Request,
+) -> dict[str, object]:
     from dataclasses import asdict
 
     from ingestion.application.batch_executor import BatchExecutionConfig, run_once
@@ -54,10 +56,13 @@ def trigger_ingestion(body: _TriggerRequest, request: Request) -> dict:
             chunk_store=c.chunk_store,
             post_ingestion_hook=c.post_ingestion_hook,
         )
-        result = run_once(config, trigger=trigger)  # type: ignore[arg-type]
+        result = run_once(
+            config,
+            trigger=cast("Literal['startup', 'interval']", trigger),
+        )
     except BatchSchedulerConfigError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return asdict(result)
+    return cast("dict[str, object]", asdict(cast("Any", result)))
 
 
 @router.get("/feedbacks")
@@ -66,7 +71,7 @@ def list_feedbacks(
     date_from: str | None = None,
     date_to: str | None = None,
     read_status: str = "all",
-) -> dict:
+) -> dict[str, object]:
     from ingestion.application.feedback_listing import list_feedbacks as _list
     from ingestion.domain.feedback_listing_types import (
         FeedbackListingInputError,
@@ -79,7 +84,7 @@ def list_feedbacks(
             FeedbackListingQuery(
                 date_from=date_from,
                 date_to=date_to,
-                read_status=read_status,  # type: ignore[arg-type]
+                read_status=cast("Literal['all', 'read', 'unread']", read_status),
             ),
             reader=c.ingestion_feedback_store,
         )
@@ -92,7 +97,7 @@ def list_feedbacks(
 
 
 @router.put("/feedbacks/{feedback_id}/read")
-def mark_as_read(feedback_id: UUID, request: Request) -> dict:
+def mark_as_read(feedback_id: UUID, request: Request) -> dict[str, object]:
     from datetime import UTC, datetime
 
     from ingestion.application.feedback_listing import mark_feedback_as_read
@@ -110,7 +115,7 @@ def mark_as_read(feedback_id: UUID, request: Request) -> dict:
     return _serialize_feedback(item)
 
 
-def _serialize_feedback(item: object) -> dict:
+def _serialize_feedback(item: object) -> dict[str, object]:
     rid = getattr(item, "roadmap_item_id", None)
     return {
         "id": str(getattr(item, "id", "")),

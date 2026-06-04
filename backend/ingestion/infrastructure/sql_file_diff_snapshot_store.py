@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy.orm import Session
 
@@ -23,7 +23,7 @@ class SqlFileDiffSnapshotStore:
             row = s.get(DiffSnapshot, snapshot_key)
             if row is None:
                 return None
-            return json.loads(row.files_json)
+            return cast("dict[str, int]", json.loads(row.files_json))
 
     def replace(self, snapshot_key: str, files: dict[str, int]) -> None:
         with Session(self._engine) as s, s.begin():

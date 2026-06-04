@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from infrastructure.llm.codex_transport import CodexLlmTransport
 from infrastructure.uuid_generator import UuidGenerator
@@ -15,9 +15,16 @@ if TYPE_CHECKING:
 
     from sqlalchemy import Engine
 
+    from ingestion.domain.embedder_types import EmbeddingModel
+
 
 class Container:
     """Application-level DI container."""
+
+    graph_runner: Any
+    coding_graph_runner: Any
+    competitive_graph_runner: Any
+    batch_embedder: Any
 
     def __init__(  # noqa: PLR0915
         self,
@@ -138,23 +145,29 @@ class Container:
         self.tag_classifier = CodexLlmTagClassifier(t)
 
     def _init_chroma_clients(self) -> None:
-        from ingestion.infrastructure.chroma_chunk_store import ChromaChunkStore
+        from ingestion.infrastructure.chroma_chunk_store import (
+            ChromaChunkStore,
+            ChunkCollection,
+        )
         from quiz.infrastructure.chroma_explanation_rag import (
             ChromaExplanationRagClient,
+            ChromaQueryCollection,
         )
         from roadmap.infrastructure.chroma_note_topic_reader import (
+            ChromaMetadataCollection,
             ChromaNoteTopicReader,
         )
 
-        self.chunk_store = ChromaChunkStore(self._chroma)
+        self.chunk_store = ChromaChunkStore(cast("ChunkCollection", self._chroma))
+        self.explanation_rag_client: Any | None = None
         if self._embedder is not None:
             self.explanation_rag_client = ChromaExplanationRagClient(
-                self._chroma,
-                self._embedder,
+                cast("ChromaQueryCollection", self._chroma),
+                cast("EmbeddingModel", self._embedder),
             )
-        else:
-            self.explanation_rag_client = None  # type: ignore[assignment]
-        self.note_topic_reader = ChromaNoteTopicReader(self._chroma)
+        self.note_topic_reader = ChromaNoteTopicReader(
+            cast("ChromaMetadataCollection", self._chroma),
+        )
 
     def _init_graph_runner(self) -> None:
         # MemorySaver: in-memory checkpointer。プロセス再起動で interrupt 中のセッションは失われる。
@@ -164,14 +177,14 @@ class Container:
         from quiz.application.graph_types import GraphDependencies
 
         if self.explanation_rag_client is None:
-            self.graph_runner = None  # type: ignore[assignment]
+            self.graph_runner = None
             return
         deps = GraphDependencies(
             question_set_design_llm=self.question_set_design_llm,
             question_delivery_llm=self.question_delivery_llm,
-            input_classification_llm=self.input_classification_llm,
+            input_classification_llm=cast("Any", self.input_classification_llm),
             chat_response_llm=self.chat_response_llm,
-            answer_evaluation_llm=self.answer_evaluation_llm,
+            answer_evaluation_llm=cast("Any", self.answer_evaluation_llm),
             explanation_rag=self.explanation_rag_client,
             explanation_llm=self.explanation_llm,
             progress_update_llm=self.progress_update_llm,
@@ -208,7 +221,7 @@ class Container:
         deps = CompetitiveGraphDependencies(
             theme_reader=self.algo_theme_reader,
             problem_generation_llm=problem_llm,
-            solution_evaluation_llm=eval_llm,
+            solution_evaluation_llm=cast("Any", eval_llm),
         )
         compiled = build_competitive_graph(deps, checkpointer=MemorySaver())
         self.competitive_graph_runner = CompetitiveGraphRunner(compiled)
@@ -233,7 +246,9 @@ class Container:
         deps = CodingGraphDependencies(
             lecture_generation_llm=CodexLectureGenerationLlm(t),
             lecture_chat_response_llm=CodexLectureChatResponseLlm(t),
-            coding_problem_set_design_llm=CodexCodingProblemSetDesignLlm(t),
+            coding_problem_set_design_llm=cast(
+                "Any", CodexCodingProblemSetDesignLlm(t),
+            ),
             coding_problem_delivery_llm=CodexCodingProblemDeliveryLlm(t),
             coding_chat_response_llm=CodexLectureChatResponseLlm(t),
             code_evaluation_llm=CodexCodeEvaluationLlm(t),
@@ -294,9 +309,9 @@ class Container:
             self.tag_classifier,
         )
         if self._embedder is not None:
-            self.batch_embedder = EmbedderAdapter(self._embedder)
+            self.batch_embedder = EmbedderAdapter(cast("Any", self._embedder))
         else:
-            self.batch_embedder = None  # type: ignore[assignment]
+            self.batch_embedder = None
         self.post_ingestion_hook = IngestionFeedbackHook(
             llm_client=self.ingestion_feedback_llm,
             roadmap_reader=RoadmapItemReaderAdapter(self.roadmap_retrieval_reader),

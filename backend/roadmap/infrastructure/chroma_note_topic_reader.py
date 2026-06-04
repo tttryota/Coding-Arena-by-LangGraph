@@ -7,9 +7,11 @@ from typing import Protocol
 
 from roadmap.domain.topic_listing_types import NoteTopicRecord, TopicNoteCountRecord
 
+type ChromaMetadata = dict[str, object]
+
 
 class ChromaMetadataCollection(Protocol):
-    def get(self, include: list[str]) -> dict: ...
+    def get(self, include: list[str]) -> dict[str, object]: ...
 
 
 class ChromaNoteTopicReader:
@@ -19,6 +21,8 @@ class ChromaNoteTopicReader:
     def list_note_topics(self) -> list[NoteTopicRecord]:
         results = self._collection.get(include=["metadatas"])
         metadatas = results.get("metadatas", [])
+        if not isinstance(metadatas, list):
+            return []
         seen: dict[str, str] = {}
         for meta in metadatas:
             if not isinstance(meta, dict):
@@ -38,6 +42,8 @@ class ChromaNoteTopicReader:
     ) -> list[TopicNoteCountRecord]:
         results = self._collection.get(include=["metadatas"])
         metadatas = results.get("metadatas", [])
+        if not isinstance(metadatas, list):
+            return []
         # source_path 単位でユニーク化してノート数をカウント(chunk 重複を排除)
         tag_sources: dict[str, set[str]] = {cn: set() for cn in canonical_names}
         for meta in metadatas:
@@ -60,7 +66,7 @@ def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKC", text.strip()).casefold()
 
 
-def _extract_tags(meta: dict) -> list[str]:
+def _extract_tags(meta: ChromaMetadata) -> list[str]:
     tags = meta.get("tags", [])
     if isinstance(tags, list):
         return [t for t in tags if isinstance(t, str)]

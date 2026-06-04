@@ -2,6 +2,7 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@10.28.0",
   "type": "module",
   "imports": {
     "@/*": "./src/*"
@@ -9,7 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "format": "prettier --write 'src/**/*.{ts,tsx}'",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",

@@ -1,0 +1,8 @@
+[settings]
+python.github_attestations = false
+
+[tools]
+python = "3.12.8"
+node = "22.21.1"
+pnpm = "10.28.0"
+lefthook = "2.1.9"

@@ -1,0 +1,9 @@
+pre-commit:
+  commands:
+    quality:
+      run: scripts/hooks/pre-commit.sh
+
+pre-push:
+  commands:
+    quality:
+      run: scripts/hooks/pre-push.sh

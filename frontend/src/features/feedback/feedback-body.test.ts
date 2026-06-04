@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFeedbackBody } from "./feedback-body";
+import { parseFeedbackBody } from "./feedback-body-parser";
 
 describe("parseFeedbackBody", () => {
   describe("frontend spec format (bracket, inline)", () => {

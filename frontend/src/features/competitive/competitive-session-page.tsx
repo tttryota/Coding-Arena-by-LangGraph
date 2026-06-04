@@ -66,7 +66,7 @@ export function CompetitiveSessionPage() {
         });
       }
     }
-  }, [session, restored, sessionId, setSession, setResult]);
+  }, [needsRestore, restored, sessionId, setSession, setResult]);
 
   if (!sessionId) {
     navigate("/algorithm-quiz");

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck, AlertTriangle, X } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -45,14 +45,12 @@ export function FeedbackListPage() {
   const isDirty =
     dateFrom !== null || dateTo !== null || readStatus !== "all";
 
-  const { data, isLoading, isError, refetch } = useFeedbacks(filters);
+  const { data, isLoading, isError, errorUpdatedAt, refetch } = useFeedbacks(filters);
   const markAsRead = useMarkAsRead();
 
-  // Error toast (per spec: "エラー = Toast通知")
-  const [showErrorToast, setShowErrorToast] = useState(false);
-  useEffect(() => {
-    if (isError) setShowErrorToast(true);
-  }, [isError]);
+  const [dismissedErrorAt, setDismissedErrorAt] = useState<number | null>(null);
+  const showErrorToast =
+    isError && errorUpdatedAt > 0 && dismissedErrorAt !== errorUpdatedAt;
 
   // Expanded card IDs
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -65,7 +63,7 @@ export function FeedbackListPage() {
     });
   }, []);
 
-  const items = data?.items ?? [];
+  const items = useMemo(() => data?.items ?? [], [data]);
   const totalCount = data?.total_count ?? 0;
   const unreadCount = items.filter((f) => !f.is_read).length;
 
@@ -84,14 +82,11 @@ export function FeedbackListPage() {
     }
   }, [items, markAsRead]);
 
-  const handleOpenRoadmap = useCallback(
-    (_roadmapItemId: string) => {
-      // TODO: resolve roadmap_item_id → roadmap_id when backend supports it
-      // For now, navigate to roadmap list as the ID resolution API is not available
-      navigate("/roadmaps");
-    },
-    [navigate],
-  );
+  const handleOpenRoadmap = useCallback(() => {
+    // TODO: resolve roadmap_item_id → roadmap_id when backend supports it
+    // For now, navigate to roadmap list as the ID resolution API is not available
+    navigate("/roadmaps");
+  }, [navigate]);
 
   const crumbs = [{ label: "フィードバック" }];
 
@@ -176,8 +171,7 @@ export function FeedbackListPage() {
                 onToggle={() => toggleExpand(item.id)}
                 onMarkRead={() => handleMarkRead(item.id)}
                 onOpenRoadmap={() => {
-                  if (item.roadmap_item_id)
-                    handleOpenRoadmap(item.roadmap_item_id);
+                  if (item.roadmap_item_id) handleOpenRoadmap();
                 }}
               />
             ))}
@@ -208,7 +202,7 @@ export function FeedbackListPage() {
             type="button"
             className="inline-flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => {
-              setShowErrorToast(false);
+              setDismissedErrorAt(errorUpdatedAt);
               void refetch();
             }}
           >
@@ -217,7 +211,7 @@ export function FeedbackListPage() {
           <button
             type="button"
             className="inline-flex cursor-pointer items-center p-1 text-muted-foreground hover:text-foreground"
-            onClick={() => setShowErrorToast(false)}
+            onClick={() => setDismissedErrorAt(errorUpdatedAt)}
             aria-label="閉じる"
           >
             <X className="h-3.5 w-3.5" />

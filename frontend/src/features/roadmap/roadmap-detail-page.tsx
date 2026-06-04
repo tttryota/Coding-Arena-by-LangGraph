@@ -89,29 +89,26 @@ export function RoadmapDetailPage() {
     setDlg(state);
   }, []);
 
-  const handleStartQuiz = useCallback(
-    async (node: RoadmapTreeNode) => {
-      if (startSession.isPending) return;
-      setGeneratingTarget(node.title);
-      try {
-        const result = await startSession.mutateAsync(node.id);
-        if (result.resume_required && result.resume_session_id) {
-          openDlg({
-            kind: "resume",
-            node,
-            resumeSessionId: result.resume_session_id,
-          });
-        } else {
-          navigate(`/sessions/${result.session_id}`, {
-            state: { topic: data?.topic, roadmapId },
-          });
-        }
-      } catch {
-        setActionError({ message: "クイズの開始に失敗しました" });
+  const handleStartQuiz = async (node: RoadmapTreeNode) => {
+    if (startSession.isPending) return;
+    setGeneratingTarget(node.title);
+    try {
+      const result = await startSession.mutateAsync(node.id);
+      if (result.resume_required && result.resume_session_id) {
+        openDlg({
+          kind: "resume",
+          node,
+          resumeSessionId: result.resume_session_id,
+        });
+      } else {
+        navigate(`/sessions/${result.session_id}`, {
+          state: { topic: data?.topic, roadmapId },
+        });
       }
-    },
-    [startSession, navigate, openDlg, data?.topic, roadmapId],
-  );
+    } catch {
+      setActionError({ message: "クイズの開始に失敗しました" });
+    }
+  };
 
   const handleAddChild = useCallback(
     (parent: RoadmapTreeNode) => openDlg({ kind: "add", parent }),

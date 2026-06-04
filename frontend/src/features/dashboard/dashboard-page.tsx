@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Map,
@@ -30,17 +30,16 @@ export function DashboardPage() {
     roadmaps,
     totalRoadmapCount,
     activity,
+    errorUpdatedAt,
     isLoading,
     isError,
     isEmpty,
     refetch,
   } = useDashboardData();
 
-  // Error toast
-  const [showErrorToast, setShowErrorToast] = useState(false);
-  useEffect(() => {
-    if (isError) setShowErrorToast(true);
-  }, [isError]);
+  const [dismissedErrorAt, setDismissedErrorAt] = useState<number | null>(null);
+  const showErrorToast =
+    isError && errorUpdatedAt > 0 && dismissedErrorAt !== errorUpdatedAt;
 
   const crumbs = [{ label: "ダッシュボード" }];
   const hasAvgScore = stats?.avgScore != null && stats.avgScore > 0;
@@ -172,14 +171,17 @@ export function DashboardPage() {
           <button
             type="button"
             className="inline-flex cursor-pointer items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => void refetch()}
+            onClick={() => {
+              setDismissedErrorAt(errorUpdatedAt);
+              void refetch();
+            }}
           >
             再読み込み
           </button>
           <button
             type="button"
             className="inline-flex cursor-pointer items-center p-1 text-muted-foreground hover:text-foreground"
-            onClick={() => setShowErrorToast(false)}
+            onClick={() => setDismissedErrorAt(errorUpdatedAt)}
             aria-label="閉じる"
           >
             <X className="h-3.5 w-3.5" />

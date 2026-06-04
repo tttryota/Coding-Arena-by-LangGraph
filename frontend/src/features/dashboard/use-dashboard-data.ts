@@ -60,6 +60,7 @@ export interface DashboardData {
   roadmaps: RoadmapListItem[];
   totalRoadmapCount: number;
   activity: ActivityItem[];
+  errorUpdatedAt: number;
   isLoading: boolean;
   isError: boolean;
   /** True when roadmap list is loaded and has 0 items (show welcome state) */
@@ -93,7 +94,10 @@ const FEEDBACK_ACTIVITY_LIMIT = 5;
 export function useDashboardData(): DashboardData {
   // 1. Roadmap list
   const roadmapList = useRoadmaps();
-  const roadmapItems = roadmapList.data?.items ?? [];
+  const roadmapItems = useMemo(
+    () => roadmapList.data?.items ?? [],
+    [roadmapList.data],
+  );
   const roadmapIds = useMemo(
     () => roadmapItems.map((r) => r.roadmap_id),
     [roadmapItems],
@@ -144,6 +148,12 @@ export function useDashboardData(): DashboardData {
     competitiveQuery.isError;
   const isEmpty =
     !roadmapList.isLoading && roadmapItems.length === 0 && !roadmapList.isError;
+  const errorUpdatedAt = Math.max(
+    roadmapList.errorUpdatedAt,
+    feedbacksQuery.errorUpdatedAt,
+    competitiveQuery.errorUpdatedAt,
+    ...detailQueries.map((q) => q.errorUpdatedAt),
+  );
 
   // Collect all detail trees that have loaded successfully
   const detailTrees = useMemo(
@@ -152,6 +162,18 @@ export function useDashboardData(): DashboardData {
         .map((q) => q.data)
         .filter((d): d is RoadmapTree => d != null),
     [detailQueries],
+  );
+  const latestTreeDataUpdatedAt = useMemo(
+    () => Math.max(0, ...detailQueries.map((q) => q.dataUpdatedAt)),
+    [detailQueries],
+  );
+  const unreadFeedbackItems = useMemo(
+    () => feedbacksQuery.data?.items ?? [],
+    [feedbacksQuery.data],
+  );
+  const competitiveSessions = useMemo(
+    () => competitiveQuery.data?.sessions ?? [],
+    [competitiveQuery.data],
   );
 
   // Stats
@@ -171,14 +193,14 @@ export function useDashboardData(): DashboardData {
 
     const unreadCount = feedbacksQuery.data?.total_count ?? 0;
 
-    // Recent quiz count from detail trees
-    const now = Date.now();
-    const cutoff = now - SEVEN_DAYS_MS;
+    // Use the most recent successful data fetch time as the reference point.
+    const cutoff = latestTreeDataUpdatedAt - SEVEN_DAYS_MS;
     let recentQuizCount = 0;
     for (const tree of detailTrees) {
       const details = flattenDetailNodes(tree.items);
       for (const node of details) {
         if (
+          latestTreeDataUpdatedAt > 0 &&
           node.last_quiz_at != null &&
           new Date(node.last_quiz_at).getTime() >= cutoff
         ) {
@@ -193,7 +215,15 @@ export function useDashboardData(): DashboardData {
       unreadCount,
       recentQuizCount,
     };
-  }, [roadmapList.isLoading, roadmapList.isError, roadmapList.data, roadmapItems, feedbacksQuery.data, detailTrees]);
+  }, [
+    roadmapList.isLoading,
+    roadmapList.isError,
+    roadmapList.data,
+    roadmapItems,
+    feedbacksQuery.data,
+    detailTrees,
+    latestTreeDataUpdatedAt,
+  ]);
 
   // Roadmap summary (top N)
   const roadmaps = useMemo(
@@ -224,15 +254,14 @@ export function useDashboardData(): DashboardData {
     }
 
     // Feedback activities — limit to 5 items per spec before merging
-    const allFeedbacks = feedbacksQuery.data?.items ?? [];
-    const recentFeedbacks = [...allFeedbacks]
+    const recentFeedbacks = [...unreadFeedbackItems]
       .sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       )
       .slice(0, FEEDBACK_ACTIVITY_LIMIT);
 
-    const feedbackItems: FeedbackActivity[] = recentFeedbacks.map(
+    const feedbackActivities: FeedbackActivity[] = recentFeedbacks.map(
       (f: FeedbackListItem) => ({
         kind: "feedback" as const,
         id: f.id,
@@ -243,9 +272,7 @@ export function useDashboardData(): DashboardData {
     );
 
     // Competitive activities
-    const competitiveItems: CompetitiveActivity[] = (
-      competitiveQuery.data?.sessions ?? []
-    )
+    const competitiveItems: CompetitiveActivity[] = competitiveSessions
       .filter((s) => s.status === "completed" && s.score != null)
       .map((s) => ({
         kind: "competitive" as const,
@@ -256,7 +283,11 @@ export function useDashboardData(): DashboardData {
       }));
 
     // Merge by timestamp descending
-    const merged: ActivityItem[] = [...quizItems, ...feedbackItems, ...competitiveItems];
+    const merged: ActivityItem[] = [
+      ...quizItems,
+      ...feedbackActivities,
+      ...competitiveItems,
+    ];
     merged.sort((a, b) => {
       const getTime = (item: ActivityItem) => {
         if (item.kind === "quiz") return new Date(item.lastQuizAt).getTime();
@@ -266,7 +297,7 @@ export function useDashboardData(): DashboardData {
     });
 
     return merged.slice(0, ACTIVITY_LIMIT);
-  }, [detailTrees, feedbacksQuery.data, competitiveQuery.data]);
+  }, [detailTrees, unreadFeedbackItems, competitiveSessions]);
 
   // Refetch all
   const refetch = useCallback(() => {
@@ -302,6 +333,7 @@ export function useDashboardData(): DashboardData {
     roadmaps,
     totalRoadmapCount,
     activity,
+    errorUpdatedAt,
     isLoading,
     isError,
     isEmpty,

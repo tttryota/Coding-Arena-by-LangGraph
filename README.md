@@ -9,9 +9,12 @@ codex app-serverをベースとしたLangGraph問題生成フローによって�
 
 - `backend/`: FastAPI アプリケーション
 - `backend/src/`: backend の実コードと近接テスト
+- `backend/docs/`: backend の振る舞い docs
 - `frontend/`: React + Vite フロントエンド
 - `docs/`: 仕様・設計メモ
 - `data/`: SQLite、ChromaDB、Hugging Face キャッシュ
+
+backend の docs は [backend/docs/README.md](/Users/tsuryoryo/Desktop/repo/obsidian/backend/docs/README.md) から辿れます。overview と機能別 docs を分けていて、実装詳細よりも API 契約、状態遷移、永続化境界を優先して記述しています。
 
 ## 前提環境
 

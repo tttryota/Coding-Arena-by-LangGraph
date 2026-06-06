@@ -44,6 +44,7 @@ def _bootstrap() -> object:
         engine=engine,
         chroma_collection=collection,
         embedder=embedder,
+        vault_path=settings.vault_path,
     )
     return container
 

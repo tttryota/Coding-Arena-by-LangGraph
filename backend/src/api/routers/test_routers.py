@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
@@ -43,10 +44,23 @@ def client_no_embedder() -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
+@pytest.fixture
+def client_no_vault() -> TestClient:
+    """vault_path=None の Container。ingestion の 503 テスト用。"""
+    from api.app import create_app
+
+    app = create_app()
+    container = _FakeContainer()
+    container.vault_path = None
+    app.state.container = container
+    return TestClient(app, raise_server_exceptions=False)
+
+
 class _FakeContainer:
     """ルーターテスト用の最小スタブ。"""
 
     def __init__(self) -> None:
+        self.vault_path = Path("/vault")
         self.roadmap_retrieval_reader = _FakeRoadmapReader()
         self.uuid_generator = _FakeUuidGenerator()
         self.job_scheduler = _FakeScheduler()
@@ -756,6 +770,23 @@ class TestQuizSessionGetEndpoint:
 
 
 class TestIngestionTriggerEndpoint:
+    def test_returns_503_when_vault_path_is_not_configured(
+        self,
+        client_no_vault: TestClient,
+    ) -> None:
+        """テスト対象: IngestionTriggerEndpoint の処理。
+        テストケース: 個別条件での処理を検証する。
+        期待結果: 想定どおりの処理結果が得られる。"""
+        response = client_no_vault.post(
+            "/ingestion/trigger",
+            json={"target_path": "/some/path", "trigger": "startup"},
+        )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == (
+            "Ingestion service unavailable: VAULT_PATH not configured"
+        )
+
     def test_returns_503_when_embedder_is_none(
         self,
         client_no_embedder: TestClient,

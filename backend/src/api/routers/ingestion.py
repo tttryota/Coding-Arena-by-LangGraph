@@ -37,6 +37,11 @@ def trigger_ingestion(
     from ingestion.infrastructure.batch_adapters import VaultMarkdownLoaderImpl
 
     c = _container(request)
+    if c.vault_path is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Ingestion service unavailable: VAULT_PATH not configured",
+        )
     if c.batch_embedder is None:
         raise HTTPException(
             status_code=503,

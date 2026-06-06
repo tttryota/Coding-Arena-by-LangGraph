@@ -7,7 +7,10 @@ services:
       - ./data:/app/data
       - ./data/huggingface:/root/.cache/huggingface
       - ${HOME}/.codex:/root/.codex
-      - ${VAULT_PATH}:/vault:ro
+      - type: bind
+        source: ${VAULT_PATH:-./.docker/empty-vault}
+        target: /vault
+        read_only: true
     depends_on:
       - chromadb
     env_file:

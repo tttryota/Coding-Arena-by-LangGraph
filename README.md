@@ -8,6 +8,7 @@ codex app-serverをベースとしたLangGraph問題生成フローによって�
 ## リポジトリ構成
 
 - `backend/`: FastAPI アプリケーション
+- `backend/src/`: backend の実コードと近接テスト
 - `frontend/`: React + Vite フロントエンド
 - `docs/`: 仕様・設計メモ
 - `data/`: SQLite、ChromaDB、Hugging Face キャッシュ
@@ -17,7 +18,7 @@ codex app-serverをベースとしたLangGraph問題生成フローによって�
 推奨起動方法は Docker Compose です。
 
 - Docker / Docker Compose
-- Obsidian Vault の絶対パス
+- `codex` にログイン済みのホスト環境
 
 ローカル開発をする場合は以下を前提にします。
 
@@ -46,7 +47,7 @@ lefthook install
 cp .env.example .env
 ```
 
-最低限、`VAULT_PATH` を実際の Vault パスに変更してください。
+Vault を取り込みたい場合だけ、`VAULT_PATH` を実際の Vault パスに設定してください。未設定でもアプリは起動できますが、`POST /ingestion/trigger` は無効になります。
 
 ```env
 VAULT_PATH=/absolute/path/to/your/obsidian/vault
@@ -59,6 +60,7 @@ VAULT_PATH=/absolute/path/to/your/obsidian/vault
 ### Docker Compose で起動
 
 backend コンテナはホストの `~/.codex` を `/root/.codex` にマウントして、その認証情報を使います。ホストで `codex` に未ログインの場合は、先にログインしてください。
+`VAULT_PATH` を未設定のままでも起動できます。その場合、Vault 取り込みは無効になり、feedback API の参照だけが利用可能です。
 
 ```bash
 docker compose up --build
@@ -153,4 +155,4 @@ pnpm run build
 - Docker 起動時、バックエンドコンテナは起動時に Alembic migration を自動実行します
 - SQLite は `data/app.db`、ChromaDB は `data/chromadb/` に保存されます
 - backend コンテナはホストの `~/.codex` を共有します
-- Vault は Docker では `/vault` に読み取り専用でマウントされます
+- `VAULT_PATH` を設定した場合だけ、Vault は Docker で `/vault` に読み取り専用マウントされます

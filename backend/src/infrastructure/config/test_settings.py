@@ -1,9 +1,6 @@
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-from pydantic import ValidationError
-
 from infrastructure.config.settings import Settings
 
 
@@ -32,23 +29,19 @@ class TestSettingsDefaults:
         """テスト対象: SettingsDefaults の処理。
         テストケース: 個別条件での処理を検証する。
         期待結果: 想定どおりの処理結果が得られる。"""
-        with (
-            patch.dict("os.environ", {}, clear=True),
-            pytest.raises(
-                ValidationError,
-            ),
-        ):
-            Settings(_env_file=None)
+        with patch.dict("os.environ", {}, clear=True):
+            settings = Settings(_env_file=None)
 
-    def test_vault_path_missing_raises(self) -> None:
+        assert settings.vault_path is None
+
+    def test_vault_path_missing_returns_none(self) -> None:
         """テスト対象: SettingsDefaults の処理。
         テストケース: 個別条件での処理を検証する。
         期待結果: 想定どおりの処理結果が得られる。"""
-        with (
-            patch.dict("os.environ", {}, clear=True),
-            pytest.raises(ValidationError),
-        ):
-            Settings(_env_file=None)
+        with patch.dict("os.environ", {}, clear=True):
+            settings = Settings(_env_file=None)
+
+        assert settings.vault_path is None
 
 
 class TestSettingsEnvOverride:

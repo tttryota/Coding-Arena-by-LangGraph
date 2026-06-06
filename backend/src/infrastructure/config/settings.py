@@ -9,7 +9,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    vault_path: Path
+    vault_path: Path | None = None
     sqlite_path: Path = Path("data/app.db")
     chromadb_host: str = "localhost"
     chromadb_port: int = 8000

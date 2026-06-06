@@ -6,6 +6,7 @@ LLM のみ ScenarioLlmTransport でスタブ、Embedder は FixedVectorEmbedder�
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -109,6 +110,7 @@ def integration_container(
         engine=engine,
         chroma_collection=chroma_collection,
         embedder=embedder,
+        vault_path=Path("/vault"),
     )
     _replace_transport(container, scenario_transport)
     try:

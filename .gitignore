@@ -34,3 +34,5 @@ data/
 
 # Playwright MCP
 .playwright-mcp/
+
+docs/study/

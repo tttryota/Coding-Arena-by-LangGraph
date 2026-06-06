@@ -1,3 +1,5 @@
+"""roadmap item の追加・移動・削除を扱う。"""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -46,6 +48,7 @@ def add_roadmap_item(
     store: RoadmapItemCrudStore,
     id_generator: RoadmapItemIdGenerator,
 ) -> RoadmapItemAddResult:
+    """指定位置へ roadmap item を追加する。"""
     roadmap = _find_roadmap(add_input.roadmap_id, store=store)
     items_by_id = {item.id: item for item in roadmap.items}
 
@@ -96,6 +99,7 @@ def move_roadmap_item(
     *,
     store: RoadmapItemCrudStore,
 ) -> RoadmapItemMoveResult:
+    """roadmap item を別の親・順序へ移動する。"""
     roadmap = _find_roadmap(move_input.roadmap_id, store=store)
     items_by_id = {item.id: item for item in roadmap.items}
     moving_item = _resolve_existing_item(
@@ -115,6 +119,7 @@ def move_roadmap_item(
         candidate_descendant_id=target_parent.id,
         items=roadmap.items,
     ):
+        # 自分自身や子孫の下へ入れると木構造が循環するので事前に拒否する。
         message = (
             "target parent must not be self or descendant: "
             f"roadmap_id={move_input.roadmap_id}, "
@@ -143,6 +148,7 @@ def delete_roadmap_item(
     *,
     store: RoadmapItemCrudStore,
 ) -> RoadmapItemDeleteResult:
+    """roadmap item とその子孫を削除する。"""
     roadmap = _find_roadmap(delete_input.roadmap_id, store=store)
     items_by_id = {item.id: item for item in roadmap.items}
     deleting_item = _resolve_existing_item(
@@ -155,6 +161,7 @@ def delete_roadmap_item(
         deleting_item.level == MAJOR_LEVEL
         and len(_list_siblings_for_parent(roadmap.items, None)) == MIN_ROOT_MAJOR_COUNT
     ):
+        # major を 0 件にすると roadmap の骨格が崩れるため、最後の 1 件は残す。
         message = (
             "last major must not be deleted: "
             f"roadmap_id={delete_input.roadmap_id}, item_id={deleting_item.id}"
@@ -188,6 +195,7 @@ def _find_roadmap(
     *,
     store: RoadmapItemCrudStore,
 ) -> RoadmapItemCrudRoadmapRecord:
+    """roadmap を取得し、store 例外を CRUD 用例外へ変換する。"""
     try:
         roadmap = store.find_roadmap(roadmap_id)
     except Exception as exception:
@@ -206,6 +214,7 @@ def _resolve_add_parent(
     items_by_id: dict[UUID, RoadmapItemCrudItem],
     store: RoadmapItemCrudStore,
 ) -> tuple[RoadmapItemCrudItem | None, RoadmapItemLevel]:
+    """追加先 parent と、新規 item に許可される level を決める。"""
     if parent_id is None:
         return None, MAJOR_LEVEL
     parent_item = items_by_id.get(parent_id)
@@ -229,6 +238,7 @@ def _resolve_move_parent(
     roadmap: RoadmapItemCrudRoadmapRecord,
     store: RoadmapItemCrudStore,
 ) -> RoadmapItemCrudItem | None:
+    """移動先 parent が level 規約を満たすか検証する。"""
     if target_parent_id is None:
         if moving_item.level != MAJOR_LEVEL:
             message = (
@@ -272,6 +282,7 @@ def _resolve_existing_item(
     items_by_id: dict[UUID, RoadmapItemCrudItem],
     store: RoadmapItemCrudStore,
 ) -> RoadmapItemCrudItem:
+    """snapshot 上に item が存在することを保証する。"""
     item = items_by_id.get(item_id)
     if item is not None:
         return item
@@ -286,6 +297,7 @@ def _raise_for_missing_reference(
     roadmap: RoadmapItemCrudRoadmapRecord,
     store: RoadmapItemCrudStore,
 ) -> NoReturn:
+    """snapshot と個別 lookup の差分から not found / cross-roadmap を判定する。"""
     try:
         found_item = store.find_item(item_id)
     except Exception as exception:
@@ -312,10 +324,12 @@ def _raise_for_missing_reference(
 
 
 def _build_snapshot_item_missing_message(*, roadmap_id: UUID, item_id: UUID) -> str:
+    """snapshot 不整合時の共通メッセージを組み立てる。"""
     return SNAPSHOT_ITEM_MISSING_ERROR.format(roadmap_id=roadmap_id, item_id=item_id)
 
 
 def _validate_title(title: str) -> None:
+    """空白タイトルを拒否する。"""
     if title.strip() == BLANK_TITLE:
         message = f"title must be non-blank: got {title!r}"
         raise RoadmapItemCrudInputError(message)
@@ -327,6 +341,7 @@ def _build_order_out_of_range_message(
     value: int,
     sibling_count: int,
 ) -> str:
+    """順序範囲エラーの文言を共通化する。"""
     return (
         f"{field_name} is out of range: "
         f"field_name={field_name}, "
@@ -337,6 +352,7 @@ def _build_order_out_of_range_message(
 
 
 def _resolve_optional_order(order: int | None, *, sibling_count: int) -> int:
+    """省略時は末尾追加とし、指定時は範囲検証を行う。"""
     if order is None:
         return sibling_count
     if order < MIN_ORDER_INDEX or order > sibling_count:

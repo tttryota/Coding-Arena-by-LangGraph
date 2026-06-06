@@ -81,6 +81,7 @@ def _await_lecture_input(state: CodingSessionState) -> dict[str, object]:
     if extra:
         msg = f"Resume payload contains disallowed keys: {extra}"
         raise ValueError(msg)
+    # 座学フェーズでは chat 入力に加えて practice 開始フラグだけを通す。
     return user_input
 
 
@@ -164,13 +165,23 @@ class CodingGraphDependencies:
 # ---------------------------------------------------------------------------
 
 
-def build_coding_graph(  # noqa: PLR0915
+def build_coding_graph(
     deps: CodingGraphDependencies,
     checkpointer: Any,
 ) -> Any:
     """全ノードとエッジを登録して CompiledStateGraph を返す。"""
     graph: StateGraph[CodingSessionState] = StateGraph(CodingSessionState)
+    _add_coding_nodes(graph, deps)
+    _add_coding_edges(graph)
 
+    return graph.compile(checkpointer=checkpointer)
+
+
+def _add_coding_nodes(
+    graph: StateGraph[CodingSessionState],
+    deps: CodingGraphDependencies,
+) -> None:
+    """graph にコーディングセッション用 node を登録する。"""
     graph.add_node(
         NODE_LECTURE_GENERATION,
         partial(generate_lecture, llm=deps.lecture_generation_llm),
@@ -203,13 +214,13 @@ def build_coding_graph(  # noqa: PLR0915
         NODE_CODE_EVALUATION,
         partial(evaluate_code, llm=deps.code_evaluation_llm),
     )
-
     graph.add_node(NODE_PROGRESS_UPDATE, _coding_progress_update)
 
-    # Entry point
+
+def _add_coding_edges(graph: StateGraph[CodingSessionState]) -> None:
+    """entry point と edge を登録する。"""
     graph.set_entry_point(NODE_LECTURE_GENERATION)
 
-    # Linear edges
     graph.add_edge(NODE_LECTURE_GENERATION, NODE_AWAIT_LECTURE_INPUT)
     graph.add_edge(NODE_LECTURE_CHAT_RESPONSE, NODE_AWAIT_LECTURE_INPUT)
     graph.add_edge(
@@ -219,7 +230,6 @@ def build_coding_graph(  # noqa: PLR0915
     graph.add_edge(NODE_CODING_CHAT_RESPONSE, NODE_AWAIT_CODING_INPUT)
     graph.add_edge(NODE_PROGRESS_UPDATE, END)
 
-    # Conditional edges
     graph.add_conditional_edges(
         NODE_AWAIT_LECTURE_INPUT,
         _route_lecture_input,
@@ -245,8 +255,6 @@ def build_coding_graph(  # noqa: PLR0915
         },
     )
 
-    return graph.compile(checkpointer=checkpointer)
-
 
 # ---------------------------------------------------------------------------
 # Transient LLM error
@@ -254,6 +262,8 @@ def build_coding_graph(  # noqa: PLR0915
 
 
 class TransientLlmNodeError(Exception):
+    """一過性 LLM エラー。checkpointer に状態が残っており再試行可能。"""
+
     def __init__(self, *, node_error: Exception, thread_id: str) -> None:
         self.node_error = node_error
         self.thread_id = thread_id
@@ -263,6 +273,7 @@ class TransientLlmNodeError(Exception):
 
 
 def _is_transient_llm_error(exc: Exception) -> bool:
+    """LLM 呼び出しの一時失敗だけを再試行対象として判定する。"""
     return getattr(exc, "error_code", None) == "llm_request_failed"
 
 
@@ -279,18 +290,21 @@ class CodingGraphRunner:
 
     @staticmethod
     def _validate_thread_id(thread_id: str) -> None:
+        """checkpointer のキーになる thread_id の空文字を防ぐ。"""
         if not thread_id:
             msg = "thread_id must not be empty"
             raise ValueError(msg)
 
-    def start_graph(
-        self, state: CodingSessionState, *, thread_id: str,
-    ) -> None:
-        self._validate_thread_id(thread_id)
+    @staticmethod
+    def _build_thread_config(thread_id: str) -> dict[str, dict[str, str]]:
+        return {"configurable": {"thread_id": thread_id}}
+
+    def _invoke_or_raise(self, payload: object, *, thread_id: str) -> None:
+        """graph 実行時の一過性 LLM エラー変換を共通化する。"""
         try:
             self._graph.invoke(
-                state,
-                config={"configurable": {"thread_id": thread_id}},
+                payload,
+                config=self._build_thread_config(thread_id),
             )
         except Exception as exc:
             if _is_transient_llm_error(exc):
@@ -298,31 +312,28 @@ class CodingGraphRunner:
                     node_error=exc, thread_id=thread_id,
                 ) from exc
             raise
+
+    def start_graph(
+        self, state: CodingSessionState, *, thread_id: str,
+    ) -> None:
+        """新規コーディングセッションを開始する。"""
+        self._validate_thread_id(thread_id)
+        self._invoke_or_raise(state, thread_id=thread_id)
 
     def resume_graph(
         self, user_input: dict[str, object], *, thread_id: str,
     ) -> None:
+        """一時停止中のコーディングセッションを再開する。"""
         self._validate_thread_id(thread_id)
         from langgraph.types import Command
 
-        try:
-            self._graph.invoke(
-                Command(resume=user_input),
-                config={"configurable": {"thread_id": thread_id}},
-            )
-        except Exception as exc:
-            if _is_transient_llm_error(exc):
-                raise TransientLlmNodeError(
-                    node_error=exc, thread_id=thread_id,
-                ) from exc
-            raise
+        self._invoke_or_raise(Command(resume=user_input), thread_id=thread_id)
 
     def get_state(self, *, thread_id: str) -> CodingSessionState:
+        """checkpointer から最新のコーディング状態を取得する。"""
         self._validate_thread_id(thread_id)
         try:
-            snapshot = self._graph.get_state(
-                {"configurable": {"thread_id": thread_id}},
-            )
+            snapshot = self._graph.get_state(self._build_thread_config(thread_id))
         except Exception as exc:
             msg = f"Failed to read checkpoint for thread_id={thread_id!r}"
             raise RuntimeError(msg) from exc

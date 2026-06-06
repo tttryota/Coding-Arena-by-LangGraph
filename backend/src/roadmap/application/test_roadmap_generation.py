@@ -1,3 +1,5 @@
+"""roadmap_generation の受付・再試行・保存失敗を検証する。"""
+
 from __future__ import annotations
 
 import json
@@ -79,6 +81,8 @@ _JOB_AND_ROADMAP_ID_FIELDS = frozenset({"job_id", "roadmap_id"})
 
 
 class _RecordingJobIdGenerator:
+    """生成順と呼び出し回数を観測できる job id generator。"""
+
     def __init__(
         self,
         generated_ids: list[UUID],
@@ -102,6 +106,8 @@ class _RecordingJobIdGenerator:
 
 
 class _RecordingScheduler:
+    """enqueue 呼び出しと失敗注入を行う scheduler double。"""
+
     def __init__(
         self,
         *,
@@ -125,6 +131,8 @@ class _RecordingScheduler:
 
 
 class _RecordingJobStore:
+    """job 状態更新の順序と内容を観測する store double。"""
+
     def __init__(
         self,
         *,

@@ -1,4 +1,4 @@
-"""DI container: Settings -> concrete instances."""
+"""アプリ全体で共有する依存オブジェクトを組み立てる。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,12 @@ if TYPE_CHECKING:
 
 
 class Container:
-    """Application-level DI container."""
+    """アプリ全体の依存を束ねるコンテナ。
+
+    router からはこのインスタンスだけを参照し、具体実装の選択はここに閉じ込める。
+    そうすることで API 層は「どの機能が使えるか」だけを判定すればよく、
+    具体クラスの import や初期化順序を意識しなくて済む。
+    """
 
     graph_runner: Any
     coding_graph_runner: Any
@@ -44,6 +49,9 @@ class Container:
         self.uuid_generator = UuidGenerator()
         self.executor = ThreadPoolExecutor(max_workers=2)
         try:
+            # 初期化順序は、下流の依存解決が読みやすいまとまりを優先する。
+            # 先に store を作っておくと、後段の graph / adapter 初期化が
+            # 「何を受け取るか」を追いやすい。
             self._init_quiz_stores()
             self._init_roadmap_stores()
             self._init_ingestion_stores()
@@ -55,10 +63,12 @@ class Container:
             self._init_scheduler()
             self._init_batch_adapters()
         except Exception:
+            # 一部初期化後に失敗しても executor を残さない。
             self.executor.shutdown(wait=False)
             raise
 
     def _init_quiz_stores(self) -> None:
+        """quiz セッションの永続化に必要な store 群を初期化する。"""
         from quiz.infrastructure.sql_progress_update_store import (
             SqlProgressUpdateStore,
         )
@@ -78,6 +88,7 @@ class Container:
         self.summary_test_result_store = SqlSummaryTestResultStore(self._engine)
 
     def _init_roadmap_stores(self) -> None:
+        """roadmap の一覧・生成ジョブ・手動 topic 管理を束ねる store を作る。"""
         from roadmap.infrastructure.in_memory_job_status_store import (
             InMemoryJobStatusStore,
         )
@@ -103,6 +114,7 @@ class Container:
         self.preset_reader = PresetTopicFileReader(self._preset_topics_path)
 
     def _init_ingestion_stores(self) -> None:
+        """ingestion の差分スナップショットと feedback の保存先を初期化する。"""
         from ingestion.infrastructure.sql_file_diff_snapshot_store import (
             SqlFileDiffSnapshotStore,
         )
@@ -114,6 +126,7 @@ class Container:
         self.diff_snapshot_store = SqlFileDiffSnapshotStore(self._engine)
 
     def _init_llm_clients(self) -> None:
+        """各ユースケース向けの LLM adapter を生成する。"""
         from ingestion.infrastructure.codex_ingestion_feedback_llm import (
             CodexIngestionFeedbackLlm,
         )
@@ -148,6 +161,7 @@ class Container:
         self.tag_classifier = CodexLlmTagClassifier(t)
 
     def _init_chroma_clients(self) -> None:
+        """Chroma を使う reader / writer を初期化する。"""
         from ingestion.infrastructure.chroma_chunk_store import (
             ChromaChunkStore,
             ChunkCollection,
@@ -164,6 +178,8 @@ class Container:
         self.chunk_store = ChromaChunkStore(cast("ChunkCollection", self._chroma))
         self.explanation_rag_client: Any | None = None
         if self._embedder is not None:
+            # explanation RAG は検索時に埋め込みが必要なので、
+            # embedder がない場合は graph 自体を組み上げない。
             self.explanation_rag_client = ChromaExplanationRagClient(
                 cast("ChromaQueryCollection", self._chroma),
                 cast("EmbeddingModel", self._embedder),
@@ -173,13 +189,16 @@ class Container:
         )
 
     def _init_graph_runner(self) -> None:
-        # MemorySaver: in-memory checkpointer。プロセス再起動で interrupt 中のセッションは失われる。
+        """通常 quiz 用の LangGraph 実行器を初期化する。"""
+        # MemorySaver はプロセス内保存なので、再起動をまたぐ復旧契約は持たせない。
         from langgraph.checkpoint.memory import MemorySaver
 
         from quiz.application.graph import QuizGraphRunner, build_graph
         from quiz.application.graph_types import GraphDependencies
 
         if self.explanation_rag_client is None:
+            # 補足説明ノードまで含む通常 quiz 全体を安全に提供できないため、
+            # runner を作らず router 側で 503 に寄せる。
             self.graph_runner = None
             return
         deps = GraphDependencies(
@@ -199,6 +218,7 @@ class Container:
         self.graph_runner = QuizGraphRunner(compiled)
 
     def _init_competitive(self) -> None:
+        """競プロセッション用の graph と永続化 store を初期化する。"""
         from langgraph.checkpoint.memory import MemorySaver
 
         from competitive.application.competitive_graph import (
@@ -230,6 +250,7 @@ class Container:
         self.competitive_graph_runner = CompetitiveGraphRunner(compiled)
 
     def _init_coding_graph(self) -> None:
+        """座学 + 練習のコーディングセッション用 graph を初期化する。"""
         from langgraph.checkpoint.memory import MemorySaver
 
         from quiz.application.coding_graph import (
@@ -260,6 +281,7 @@ class Container:
         self.coding_graph_runner = CodingGraphRunner(compiled)
 
     def _init_scheduler(self) -> None:
+        """roadmap 生成ジョブを別スレッドで流す実行器を用意する。"""
         from roadmap.infrastructure.thread_pool_scheduler import (
             ThreadPoolJobScheduler,
         )
@@ -270,6 +292,7 @@ class Container:
         )
 
     def _make_job_runner(self) -> Callable[[UUID, str], None]:
+        """scheduler に渡す roadmap 生成ジョブ本体を閉包で束ねる。"""
         from roadmap.application.roadmap_generation import (
             _run_roadmap_generation_job,
         )
@@ -292,6 +315,7 @@ class Container:
         return runner
 
     def _init_batch_adapters(self) -> None:
+        """ingestion 一括実行に必要な adapter 群を初期化する。"""
         from ingestion.infrastructure.batch_adapters import (
             ChunkSplitterAdapter,
             ChunkTaggerAdapter,
@@ -312,6 +336,8 @@ class Container:
             self.tag_classifier,
         )
         if self._embedder is not None:
+            # 埋め込み器がない環境でも feedback 閲覧は生かしたいので、
+            # ingestion trigger だけを無効化できるよう None を許容する。
             self.batch_embedder = EmbedderAdapter(cast("Any", self._embedder))
         else:
             self.batch_embedder = None
@@ -322,11 +348,13 @@ class Container:
         )
 
     def shutdown(self) -> None:
+        """アプリ終了時にバックグラウンド executor を停止する。"""
         self.executor.shutdown(wait=True)
 
 
 class _UtcClock:
     def now(self) -> str:
+        """UTC の現在時刻を ISO 8601 文字列で返す。"""
         return datetime.now(tz=UTC).isoformat()
 
 

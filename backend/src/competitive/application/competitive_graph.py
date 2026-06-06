@@ -96,7 +96,17 @@ def build_competitive_graph(
     graph: StateGraph[CompetitiveSessionState] = StateGraph(
         CompetitiveSessionState,
     )
+    _add_competitive_nodes(graph, deps)
+    _add_competitive_edges(graph)
 
+    return graph.compile(checkpointer=checkpointer)
+
+
+def _add_competitive_nodes(
+    graph: StateGraph[CompetitiveSessionState],
+    deps: CompetitiveGraphDependencies,
+) -> None:
+    """graph に競プロセッションの各 node を登録する。"""
     graph.add_node(
         NODE_THEME_SELECTION,
         partial(select_theme, reader=deps.theme_reader),
@@ -111,13 +121,14 @@ def build_competitive_graph(
         partial(evaluate_solution, llm=deps.solution_evaluation_llm),
     )
 
+
+def _add_competitive_edges(graph: StateGraph[CompetitiveSessionState]) -> None:
+    """entry point と edge を登録する。"""
     graph.set_entry_point(NODE_THEME_SELECTION)
     graph.add_edge(NODE_THEME_SELECTION, NODE_PROBLEM_GENERATION)
     graph.add_edge(NODE_PROBLEM_GENERATION, NODE_AWAIT_SUBMISSION)
     graph.add_edge(NODE_AWAIT_SUBMISSION, NODE_SOLUTION_EVALUATION)
     graph.add_edge(NODE_SOLUTION_EVALUATION, END)
-
-    return graph.compile(checkpointer=checkpointer)
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +146,7 @@ class TransientLlmNodeError(Exception):
 
 
 def _is_transient_llm_error(exc: Exception) -> bool:
+    """LLM 呼び出しの一時失敗だけを再試行対象として判定する。"""
     error_code = getattr(exc, "error_code", None)
     return error_code == "llm_request_failed"
 
@@ -152,19 +164,21 @@ class CompetitiveGraphRunner:
 
     @staticmethod
     def _validate_thread_id(thread_id: str) -> None:
+        """checkpointer のキーになる thread_id の空文字を防ぐ。"""
         if not thread_id:
             msg = "thread_id must not be empty"
             raise ValueError(msg)
 
-    def start_graph(
-        self, state: CompetitiveSessionState, *, thread_id: str,
-    ) -> None:
-        """セッション開始。interrupt で一時停止する。"""
-        self._validate_thread_id(thread_id)
+    @staticmethod
+    def _build_thread_config(thread_id: str) -> dict[str, dict[str, str]]:
+        return {"configurable": {"thread_id": thread_id}}
+
+    def _invoke_or_raise(self, payload: object, *, thread_id: str) -> None:
+        """graph 実行時の一過性 LLM エラー変換を共通化する。"""
         try:
             self._graph.invoke(
-                state,
-                config={"configurable": {"thread_id": thread_id}},
+                payload,
+                config=self._build_thread_config(thread_id),
             )
         except Exception as exc:
             if _is_transient_llm_error(exc):
@@ -172,6 +186,13 @@ class CompetitiveGraphRunner:
                     node_error=exc, thread_id=thread_id,
                 ) from exc
             raise
+
+    def start_graph(
+        self, state: CompetitiveSessionState, *, thread_id: str,
+    ) -> None:
+        """セッション開始。interrupt で一時停止する。"""
+        self._validate_thread_id(thread_id)
+        self._invoke_or_raise(state, thread_id=thread_id)
 
     def resume_graph(
         self, user_input: dict[str, object], *, thread_id: str,
@@ -180,25 +201,13 @@ class CompetitiveGraphRunner:
         self._validate_thread_id(thread_id)
         from langgraph.types import Command
 
-        try:
-            self._graph.invoke(
-                Command(resume=user_input),
-                config={"configurable": {"thread_id": thread_id}},
-            )
-        except Exception as exc:
-            if _is_transient_llm_error(exc):
-                raise TransientLlmNodeError(
-                    node_error=exc, thread_id=thread_id,
-                ) from exc
-            raise
+        self._invoke_or_raise(Command(resume=user_input), thread_id=thread_id)
 
     def get_state(self, *, thread_id: str) -> CompetitiveSessionState:
         """checkpointer から最新 state を取得する。"""
         self._validate_thread_id(thread_id)
         try:
-            snapshot = self._graph.get_state(
-                {"configurable": {"thread_id": thread_id}},
-            )
+            snapshot = self._graph.get_state(self._build_thread_config(thread_id))
         except Exception as exc:
             msg = f"Failed to read checkpoint for thread_id={thread_id!r}"
             raise RuntimeError(msg) from exc

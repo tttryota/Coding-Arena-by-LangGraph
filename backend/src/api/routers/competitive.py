@@ -1,4 +1,4 @@
-"""競プロクイズ API endpoints."""
+"""競プロセッションの開始・提出・取得を提供する。"""
 
 from __future__ import annotations
 
@@ -27,14 +27,19 @@ _HIDDEN_FIELDS = frozenset({
 
 
 class _StartSessionRequest(BaseModel):
+    """競プロセッション開始要求。"""
+
     theme_id: str | None = None
 
 
 class _SubmitAnswerRequest(BaseModel):
+    """競プロ回答提出要求。"""
+
     user_code: str = Field(min_length=1)
 
 
 def _container(request: Request) -> Container:
+    """request から共有 container を取り出す。"""
     c = getattr(request.app.state, "container", None)
     if c is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
@@ -42,6 +47,7 @@ def _container(request: Request) -> Container:
 
 
 def _require_runner(c: Container) -> CompetitiveGraphRunner:
+    """競プロ graph が有効な環境かを確認する。"""
     if c.competitive_graph_runner is None:
         raise HTTPException(
             status_code=503,
@@ -55,6 +61,7 @@ def _run_graph_start(
     state: dict[str, object],
     thread_id: str,
 ) -> None:
+    """競プロ graph の開始時例外を HTTP エラーへ変換する。"""
     from competitive.application.competitive_graph import TransientLlmNodeError
     from competitive.domain.competitive_types import CompetitiveError
 
@@ -71,6 +78,7 @@ def _run_graph_start(
 def _run_graph_resume(
     runner: CompetitiveGraphRunner, user_input: dict[str, object], thread_id: str,
 ) -> None:
+    """競プロ graph の再開時例外を HTTP エラーへ変換する。"""
     from competitive.application.competitive_graph import TransientLlmNodeError
     from competitive.domain.competitive_types import CompetitiveError
 
@@ -106,6 +114,7 @@ def list_sessions(request: Request) -> dict[str, object]:
     sessions = c.competitive_store.list_recent_sessions(limit=50)
     items = []
     for s in sessions:
+        # 一覧は score までを軽く返し、詳細の秘匿フィールドは含めない。
         details = c.competitive_store.get_session_details(s.id)
         item: dict[str, object] = {
             "session_id": s.id,
@@ -174,6 +183,7 @@ def _save_answer(
     state: Mapping[str, object],
     user_code: str,
 ) -> CompetitiveAnswerRecord:
+    """採点済み回答を保存し、二重提出だけは 409 に寄せる。"""
     from sqlalchemy.exc import IntegrityError
 
     try:
@@ -242,6 +252,7 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
         k: v for k, v in details.items()
         if k not in _HIDDEN_FIELDS
     }
+    # 非公開採点情報は永続化していても取得 API には出さない。
     response["session_id"] = response.pop("id", session_id)
     answer = c.competitive_store.find_answer_by_session(session_id)
     if answer is not None:

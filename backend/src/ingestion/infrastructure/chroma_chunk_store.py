@@ -1,3 +1,5 @@
+"""Chroma を使った chunk 永続化の入出力検証を担う。"""
+
 from __future__ import annotations
 
 import math
@@ -55,23 +57,25 @@ _MISSING = object()
 
 
 class ChunkStoreInputError(Exception):
-    pass
+    """呼び出し側入力が chunk store 契約を満たさない。"""
 
 
 class ChunkStoreDuplicateChunkIndexError(Exception):
-    pass
+    """同一 source_path 内で chunk_index が重複している。"""
 
 
 class ChunkStoreBackendError(Exception):
-    pass
+    """Chroma 呼び出し自体が失敗した。"""
 
 
 class ChunkStoreRecordFormatError(Exception):
-    pass
+    """Chroma から返ったレコードが保存契約を満たさない。"""
 
 
 @dataclass(frozen=True)
 class StoredChunkMetadata:
+    """保存済み chunk の metadata。"""
+
     source_path: str
     chunk_index: int
     headers: str
@@ -82,6 +86,8 @@ class StoredChunkMetadata:
 
 @dataclass(frozen=True)
 class StoredChunk:
+    """保存済み chunk 本体。"""
+
     id: str
     text: str
     embedding: list[float]
@@ -170,6 +176,8 @@ class _RawStoredChunk:
 
 
 class ChromaChunkStore:
+    """Chroma の生 API とアプリ契約の間を取り持つ。"""
+
     def __init__(self, collection: ChunkCollection) -> None:
         self._collection = collection
 
@@ -177,6 +185,7 @@ class ChromaChunkStore:
         self,
         upsert_input: ChunkStoreUpsertInput,
     ) -> ChunkStoreUpsertResult:
+        """chunk 群を検証して upsert する。"""
         source_path = _validate_source_path(
             upsert_input.source_path,
             operation=OPERATION_UPSERT,
@@ -189,6 +198,8 @@ class ChromaChunkStore:
             ),
         )
         if not validated_chunks:
+            # 空 chunk は成功扱いにしておくと、上位 batch が
+            # 「空ファイルの取り込み」と「保存失敗」を区別できる。
             logger.info(
                 EVENT_CHUNK_STORE_UPSERT_COMPLETED,
                 source_path=source_path,
@@ -255,6 +266,7 @@ class ChromaChunkStore:
         )
 
     def get_by_source_path(self, source_path: str) -> list[StoredChunk]:
+        """source_path に対応する保存済み chunk を取得する。"""
         validated_source_path = _validate_source_path(
             source_path,
             operation=OPERATION_GET,
@@ -291,6 +303,7 @@ class ChromaChunkStore:
         return stored_chunks
 
     def delete_by_source_path(self, source_path: str) -> ChunkStoreDeleteResult:
+        """source_path に対応する保存済み chunk を削除する。"""
         validated_source_path = _validate_source_path(
             source_path,
             operation=OPERATION_DELETE,
@@ -348,6 +361,7 @@ def _extract_deleted_count(
     *,
     source_path: str,
 ) -> int:
+    """delete 前の get 結果から削除件数を推定する。"""
     is_valid_result = isinstance(raw_result, dict) and isinstance(
         raw_result.get(IDS_KEY),
         list,
@@ -368,6 +382,7 @@ def _extract_deleted_count(
 
 
 def _validate_source_path(source_path: object, *, operation: str) -> str:
+    """source_path の基本契約を検証する。"""
     if not isinstance(source_path, str) or source_path == "":
         message = _build_input_validation_error_message(
             field_name=SOURCE_PATH_KEY,
@@ -384,6 +399,7 @@ def _validate_upsert_chunks(
     *,
     context: _InputValidationContext,
 ) -> list[_ValidatedChunk]:
+    """upsert 対象 chunk 群を検証する。"""
     if not isinstance(chunks, list):
         message = _build_input_validation_error_message(
             field_name="chunks",
@@ -403,6 +419,7 @@ def _validate_chunk(
     *,
     context: _InputValidationContext,
 ) -> _ValidatedChunk:
+    """chunk 1 件分を保存前に検証する。"""
     if not isinstance(chunk, ChunkStoreChunkInput):
         message = _build_input_validation_error_message(
             field_name="chunk",
@@ -458,6 +475,7 @@ def _validate_chunk_index(
     *,
     context: _InputValidationContext,
 ) -> int:
+    """chunk_index が非負整数かを検証する。"""
     if (
         not isinstance(chunk_index, int)
         or isinstance(chunk_index, bool)
@@ -474,6 +492,7 @@ def _validate_chunk_index(
 
 
 def _validate_chunk_text(text: object, *, context: _InputValidationContext) -> str:
+    """chunk 本文が空でない文字列かを検証する。"""
     if not isinstance(text, str) or text.strip() == "":
         message = _build_input_validation_error_message(
             field_name="text",
@@ -490,6 +509,7 @@ def _validate_embedding(
     *,
     context: _InputValidationContext,
 ) -> list[float]:
+    """埋め込みベクトルを float 配列へ正規化しつつ検証する。"""
     if not isinstance(embedding, list) or not embedding:
         message = _build_input_validation_error_message(
             field_name=EMBEDDINGS_KEY,
@@ -530,6 +550,7 @@ def _validate_string_field(
     field_name: str,
     context: _InputValidationContext,
 ) -> str:
+    """任意の文字列 metadata 項目を検証する。"""
     if not isinstance(value, str):
         message = _build_input_validation_error_message(
             field_name=field_name,
@@ -546,6 +567,7 @@ def _validate_tags(
     *,
     context: _InputValidationContext,
 ) -> list[str]:
+    """tags が list[str] 契約を満たすか検証する。"""
     if not isinstance(tags, list):
         message = _build_input_validation_error_message(
             field_name=TAGS_KEY,
@@ -571,6 +593,7 @@ def _ensure_embedding_dimensions_match(
     *,
     context: _InputValidationContext,
 ) -> None:
+    """同一 upsert batch 内の埋め込み次元ずれを防ぐ。"""
     if len(chunks) <= SINGLE_ITEM_COUNT:
         return
     expected_dimension = len(chunks[FIRST_ITEM_INDEX].embedding)
@@ -591,6 +614,7 @@ def _ensure_unique_chunk_indexes(
     *,
     source_path: str,
 ) -> None:
+    """同一 source_path 内で chunk_index が一意か検証する。"""
     seen_chunk_indexes: set[int] = set()
     for chunk in chunks:
         if chunk.chunk_index in seen_chunk_indexes:
@@ -606,6 +630,7 @@ def _ensure_unique_chunk_indexes(
 
 
 def _build_chunk_id(source_path: str, chunk_index: int) -> str:
+    """保存 ID を source_path + chunk_index から決定する。"""
     return f"{source_path}_{chunk_index}"
 
 
@@ -614,6 +639,7 @@ def _build_metadata_payload(
     source_path: str,
     chunk: _ValidatedChunk,
 ) -> _ChunkStoreMetadataPayload:
+    """validated chunk を Chroma 保存用 metadata へ変換する。"""
     return cast(
         "_ChunkStoreMetadataPayload",
         {
@@ -628,6 +654,7 @@ def _build_metadata_payload(
 
 
 def _build_source_path_where(source_path: str) -> _ChunkStoreSourcePathWhere:
+    """Chroma の where 条件を組み立てる。"""
     return cast("_ChunkStoreSourcePathWhere", {SOURCE_PATH_KEY: source_path})
 
 
@@ -637,6 +664,7 @@ def _build_backend_error_message(
     source_path: str,
     chunk_count: int | None = None,
 ) -> str:
+    """backend 例外を上位層向けメッセージに整形する。"""
     detail_parts = [f"{SOURCE_PATH_KEY}={source_path!r}"]
     if chunk_count is not None:
         detail_parts.append(f"chunk_count={chunk_count}")
@@ -649,6 +677,7 @@ def _normalize_raw_result(
     operation: str,
     source_path: str,
 ) -> list[StoredChunk]:
+    """Chroma の生結果を StoredChunk 一覧へ正規化する。"""
     validated_raw_result = _validate_raw_result(
         raw_result,
         operation=operation,
@@ -694,6 +723,7 @@ def _normalize_raw_result(
         )
 
     normalized_chunks: list[StoredChunk] = []
+    # record_index を保持しておくと、壊れたレコードをログから逆引きしやすい。
     for record_index, (chunk_id, document, embedding, metadata) in enumerate(
         zip(
             ids,
@@ -727,6 +757,7 @@ def _validate_raw_result(
     operation: str,
     source_path: str,
 ) -> _ChunkStoreRawResult:
+    """Chroma 生結果の外形だけを先に検証する。"""
     if not isinstance(raw_result, dict):
         message = _build_record_format_error_message(
             reason="raw backend result must be a dict",
@@ -747,6 +778,7 @@ def _extract_result_list(
     operation: str,
     source_path: str,
 ) -> list[object]:
+    """Chroma 生結果の各配列項目を取り出す。"""
     value = raw_result.get(key)
     if not isinstance(value, list):
         message = _build_record_format_error_message(
@@ -769,6 +801,7 @@ def _normalize_stored_chunk(
     *,
     context: _RecordValidationContext,
 ) -> StoredChunk:
+    """1 レコード分の生結果を StoredChunk へ正規化する。"""
     if not isinstance(raw_chunk.document, str) or raw_chunk.document.strip() == "":
         message = _build_record_format_error_message(
             reason="stored document must be a non-empty string",
@@ -796,6 +829,8 @@ def _normalize_stored_chunk(
         chunk_index=normalized_metadata.chunk_index,
     )
     if normalized_metadata.source_path != context.source_path:
+        # where 条件と保存 metadata が食い違う場合は、
+        # 誤った source_path のデータ混入を意味するため即失敗させる。
         message = _build_record_format_error_message(
             reason=REASON_STORED_SOURCE_PATH_MISMATCH,
             field_name=SOURCE_PATH_KEY,
@@ -825,6 +860,7 @@ def _validate_record_embedding(
     *,
     context: _RecordValidationContext,
 ) -> list[float]:
+    """保存済み埋め込みベクトルを検証しつつ float 配列へ正規化する。"""
     if not isinstance(embedding, list) or not embedding:
         message = _build_record_format_error_message(
             reason="stored embedding must be a non-empty list",
@@ -864,6 +900,7 @@ def _normalize_metadata(
     *,
     context: _RecordValidationContext,
 ) -> StoredChunkMetadata:
+    """保存済み metadata を検証して構造化する。"""
     validated_metadata = _validate_raw_metadata(
         metadata,
         context=context,
@@ -937,6 +974,7 @@ def _validate_raw_metadata(
     *,
     context: _RecordValidationContext,
 ) -> _ChunkStoreRawMetadata:
+    """保存済み metadata の外形だけを先に検証する。"""
     if not isinstance(metadata, dict):
         message = _build_record_format_error_message(
             reason="stored metadata must be a dict",
@@ -953,6 +991,7 @@ def _validate_record_source_path(
     *,
     context: _RecordValidationContext,
 ) -> str:
+    """保存済み source_path が非空文字列か検証する。"""
     if not isinstance(stored_source_path, str) or stored_source_path == "":
         message = _build_record_format_error_message(
             reason="stored source_path must be a non-empty string",
@@ -971,6 +1010,7 @@ def _validate_record_chunk_index(
     *,
     context: _RecordValidationContext,
 ) -> int:
+    """保存済み chunk_index が非負整数か検証する。"""
     if (
         not isinstance(chunk_index, int)
         or isinstance(chunk_index, bool)
@@ -994,6 +1034,7 @@ def _validate_record_string_field(
     field_name: str,
     context: _RecordValidationContext,
 ) -> str:
+    """保存済み文字列 metadata 項目を検証する。"""
     if not isinstance(value, str):
         message = _build_record_format_error_message(
             reason=f"stored {field_name} must be a string",
@@ -1010,6 +1051,7 @@ def _validate_record_tags(
     *,
     context: _RecordValidationContext,
 ) -> list[str]:
+    """保存済み tags が list[str] 契約を満たすか検証する。"""
     if not isinstance(tags, list):
         message = _build_record_format_error_message(
             reason="stored tags must be a list[str]",
@@ -1034,6 +1076,7 @@ def _with_input_chunk_index(
     context: _InputValidationContext,
     chunk_index: int,
 ) -> _InputValidationContext:
+    """入力検証文脈に chunk_index を付与する。"""
     return _InputValidationContext(
         operation=context.operation,
         source_path=context.source_path,
@@ -1047,6 +1090,7 @@ def _with_record_metadata(
     metadata_source_path: str | None = None,
     chunk_index: int | None = None,
 ) -> _RecordValidationContext:
+    """保存済みレコード検証文脈に metadata 情報を付与する。"""
     return _RecordValidationContext(
         operation=context.operation,
         source_path=context.source_path,
@@ -1066,6 +1110,7 @@ def _build_input_validation_error_message(
     value: object,
     context: _InputValidationContext,
 ) -> str:
+    """入力検証失敗の文脈付きメッセージを組み立てる。"""
     details = [f"field={field_name!r}", f"value={value!r}"]
     if context.source_path is not None:
         details.append(f"{SOURCE_PATH_KEY}={context.source_path!r}")
@@ -1080,6 +1125,7 @@ def _build_record_format_error_message(
     field_name: str | None = None,
     value: object = _MISSING,
 ) -> str:
+    """保存済みレコード不整合の文脈付きメッセージを組み立てる。"""
     details = [
         f"operation={context.operation!r}",
         f"{SOURCE_PATH_KEY}={context.source_path!r}",
@@ -1100,6 +1146,7 @@ def _build_record_format_error_message(
 
 
 def _get_vector_dimension(chunks: list[StoredChunk]) -> int | None:
+    """ログ出力用にベクトル次元を取り出す。"""
     if not chunks:
         return None
     return len(chunks[FIRST_ITEM_INDEX].embedding)

@@ -1,4 +1,4 @@
-"""Ingestion API endpoints."""
+"""ingestion の実行と feedback 閲覧 API を提供する。"""
 
 from __future__ import annotations
 
@@ -15,11 +15,14 @@ router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
 
 class _TriggerRequest(BaseModel):
+    """ingestion 実行要求。"""
+
     target_path: str
     trigger: str = "startup"
 
 
 def _container(request: Request) -> Container:
+    """request から共有 container を取り出す。"""
     c = getattr(request.app.state, "container", None)
     if c is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
@@ -30,6 +33,7 @@ def _container(request: Request) -> Container:
 def trigger_ingestion(
     body: _TriggerRequest, request: Request,
 ) -> dict[str, object]:
+    """vault 配下の markdown を一括取り込みする。"""
     from dataclasses import asdict
 
     from ingestion.application.batch_executor import BatchExecutionConfig, run_once
@@ -38,6 +42,8 @@ def trigger_ingestion(
 
     c = _container(request)
     if c.vault_path is None:
+        # feedback の閲覧は vault なしでも成立するため、
+        # trigger だけを明示的に止める。
         raise HTTPException(
             status_code=503,
             detail="Ingestion service unavailable: VAULT_PATH not configured",
@@ -77,6 +83,7 @@ def list_feedbacks(
     date_to: str | None = None,
     read_status: str = "all",
 ) -> dict[str, object]:
+    """feedback 一覧を条件付きで返す。"""
     from ingestion.application.feedback_listing import list_feedbacks as _list
     from ingestion.domain.feedback_listing_types import (
         FeedbackListingInputError,
@@ -103,6 +110,7 @@ def list_feedbacks(
 
 @router.put("/feedbacks/{feedback_id}/read")
 def mark_as_read(feedback_id: UUID, request: Request) -> dict[str, object]:
+    """feedback を既読に更新する。"""
     from datetime import UTC, datetime
 
     from ingestion.application.feedback_listing import mark_feedback_as_read
@@ -121,6 +129,7 @@ def mark_as_read(feedback_id: UUID, request: Request) -> dict[str, object]:
 
 
 def _serialize_feedback(item: object) -> dict[str, object]:
+    """feedback の返却形を API 契約にそろえる。"""
     rid = getattr(item, "roadmap_item_id", None)
     return {
         "id": str(getattr(item, "id", "")),

@@ -66,7 +66,7 @@ VALID_ROADMAP_JSON = json.dumps(
 
 
 class _NoOpGraphRunner:
-    """テスト用: start_graph / resume_graph を no-op にする。"""
+    """graph 自体の挙動を切り離し、session lifecycle だけを見たいケース用。"""
 
     def __init__(self, *, get_state_result: dict | None = None) -> None:
         self._get_state_result = get_state_result or {}
@@ -91,7 +91,7 @@ def _create_roadmap_and_get_detail_item_id(
     client: TestClient,
     scenario_transport: ScenarioLlmTransport,
 ) -> str:
-    """ロードマップを生成して detail アイテムの ID を返す。"""
+    """quiz シナリオ共通の detail item を 1 つ生成して返す。"""
     import time
 
     scenario_transport.set_sequential_responses([VALID_ROADMAP_JSON])
@@ -106,7 +106,7 @@ def _create_roadmap_and_get_detail_item_id(
         time.sleep(0.1)
 
     tree = client.get(f"/roadmaps/{job['roadmap_id']}").json()
-    # 基礎 → 中項目 → 詳細項目
+    # シナリオ側では常に最下層 item を使うため、構造を固定して取り出す。
     return tree["items"][0]["children"][0]["children"][0]["id"]
 
 

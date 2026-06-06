@@ -122,14 +122,24 @@ def _route_by_roadmap_item_level(state: SessionState) -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_graph(  # noqa: PLR0915
+def build_graph(
     deps: GraphDependencies,
     checkpointer: Any = None,
 ) -> Any:
     """全ノードとエッジを登録して CompiledStateGraph を返す。"""
     graph: StateGraph[SessionState] = StateGraph(SessionState)
+    _add_quiz_nodes(graph, deps)
+    _add_quiz_edges(graph)
 
-    # ノード登録: functools.partial で Protocol 依存を束縛
+    return graph.compile(checkpointer=checkpointer)
+
+
+def _add_quiz_nodes(
+    graph: StateGraph[SessionState],
+    deps: GraphDependencies,
+) -> None:
+    """graph に quiz の各 node を登録する。"""
+    # node 登録を一か所に集めておくと、docs とコードの対応を追いやすい。
     graph.add_node(
         NODE_QUESTION_SET_DESIGN,
         partial(design_question_set, llm_client=deps.question_set_design_llm),
@@ -176,17 +186,17 @@ def build_graph(  # noqa: PLR0915
         ),
     )
 
-    # エントリポイント
+
+def _add_quiz_edges(graph: StateGraph[SessionState]) -> None:
+    """graph の entry point と edge を登録する。"""
     graph.set_entry_point(NODE_QUESTION_SET_DESIGN)
 
-    # 線形エッジ
     graph.add_edge(NODE_QUESTION_SET_DESIGN, NODE_QUESTION_DELIVERY)
     graph.add_edge(NODE_QUESTION_DELIVERY, NODE_AWAIT_INPUT)
     graph.add_edge(NODE_CHAT_RESPONSE, NODE_AWAIT_INPUT)
     graph.add_edge(NODE_EXPLANATION_GENERATION, NODE_QUESTION_DELIVERY)
     graph.add_edge(NODE_SUMMARY_TEST_RECORD, END)
 
-    # 条件付きエッジ
     graph.add_conditional_edges(
         NODE_AWAIT_INPUT,
         _route_by_input_source,
@@ -221,8 +231,6 @@ def build_graph(  # noqa: PLR0915
         },
     )
 
-    return graph.compile(checkpointer=checkpointer)
-
 
 # ---------------------------------------------------------------------------
 # Transient LLM error detection
@@ -255,36 +263,34 @@ class QuizGraphRunner:
     def __init__(self, compiled_graph: Any) -> None:
         self._graph = compiled_graph
 
+    @staticmethod
+    def _build_thread_config(thread_id: str) -> dict[str, dict[str, str]]:
+        return {"configurable": {"thread_id": thread_id}}
+
+    def _invoke_or_raise(self, payload: object, *, thread_id: str) -> None:
+        """graph 実行時の一過性 LLM エラー変換を共通化する。"""
+        try:
+            self._graph.invoke(payload, config=self._build_thread_config(thread_id))
+        except Exception as exc:
+            if _is_transient_llm_error(exc):
+                raise TransientLlmNodeError(
+                    node_error=exc, thread_id=thread_id,
+                ) from exc
+            raise
+
     def start_graph(self, state: SessionState, *, thread_id: str) -> None:
         """新規セッション用にグラフを開始する。
 
         invoke() は interrupt() でグラフが一時停止した場合、例外を送出せず
         interrupt 時点の state を返す。返り値は不要 (checkpointer が state を保持する)。
         """
-        try:
-            self._graph.invoke(state, config={"configurable": {"thread_id": thread_id}})
-        except Exception as exc:
-            if _is_transient_llm_error(exc):
-                raise TransientLlmNodeError(
-                    node_error=exc, thread_id=thread_id,
-                ) from exc
-            raise
+        self._invoke_or_raise(state, thread_id=thread_id)
 
     def resume_graph(self, user_input: dict[str, object], *, thread_id: str) -> None:
         """再開セッション用にグラフを続行する。Command(resume=...) で入力を渡す。"""
         from langgraph.types import Command
 
-        try:
-            self._graph.invoke(
-                Command(resume=user_input),
-                config={"configurable": {"thread_id": thread_id}},
-            )
-        except Exception as exc:
-            if _is_transient_llm_error(exc):
-                raise TransientLlmNodeError(
-                    node_error=exc, thread_id=thread_id,
-                ) from exc
-            raise
+        self._invoke_or_raise(Command(resume=user_input), thread_id=thread_id)
 
     def retry_graph(self, *, thread_id: str) -> None:
         """前回失敗したノードから再実行する。
@@ -292,16 +298,7 @@ class QuizGraphRunner:
         LangGraph の checkpointer に失敗前の state が残っているため、
         invoke(None) で失敗ノードから再実行できる。
         """
-        try:
-            self._graph.invoke(
-                None, config={"configurable": {"thread_id": thread_id}},
-            )
-        except Exception as exc:
-            if _is_transient_llm_error(exc):
-                raise TransientLlmNodeError(
-                    node_error=exc, thread_id=thread_id,
-                ) from exc
-            raise
+        self._invoke_or_raise(None, thread_id=thread_id)
 
     def get_state(self, *, thread_id: str) -> SessionState:
         """checkpointer から thread_id に対応するグラフの最新 state を取得する。"""
@@ -309,9 +306,7 @@ class QuizGraphRunner:
             msg = "thread_id must not be empty"
             raise ValueError(msg)
         try:
-            snapshot = self._graph.get_state(
-                {"configurable": {"thread_id": thread_id}},
-            )
+            snapshot = self._graph.get_state(self._build_thread_config(thread_id))
         except Exception as exc:
             msg = f"Failed to read checkpoint for thread_id={thread_id!r}"
             raise RuntimeError(msg) from exc

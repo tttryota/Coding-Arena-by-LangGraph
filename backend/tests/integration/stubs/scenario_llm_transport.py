@@ -97,11 +97,13 @@ class ScenarioLlmTransport:
         self._records.clear()
 
     def _resolve_response(self, messages: list[CodexMessage]) -> str:
+        """設定済みモードに応じてレスポンス決定戦略を切り替える。"""
         if self._pattern_rules:
             return self._resolve_pattern(messages)
         return self._resolve_sequential()
 
     def _resolve_sequential(self) -> str:
+        """呼び出し順に応答を返す。"""
         if self._call_index >= len(self._sequential_responses):
             msg = (
                 f"Sequential responses exhausted: "
@@ -114,6 +116,7 @@ class ScenarioLlmTransport:
         return response
 
     def _resolve_pattern(self, messages: list[CodexMessage]) -> str:
+        """直近 user メッセージに基づいてパターンマッチする。"""
         user_content = self._extract_user_content(messages)
         for rule in self._pattern_rules:
             if rule.pattern in user_content:
@@ -122,6 +125,7 @@ class ScenarioLlmTransport:
         raise NoPatternMatchError(msg)
 
     def _extract_user_content(self, messages: list[CodexMessage]) -> str:
+        """最新の user メッセージ本文だけを抜き出す。"""
         for msg in reversed(messages):
             if msg.role == "user":
                 return msg.content

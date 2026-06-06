@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """アプリ終了時にコンテナの後始末だけを担う。"""
     yield
     container = getattr(app.state, "container", None)
     if container is not None and hasattr(container, "shutdown"):
@@ -24,6 +25,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app(container: Container | None = None) -> FastAPI:
+    """router を束ねた FastAPI アプリを生成する。
+
+    container を差し込める形にしておくことで、実運用では本物の依存を使い、
+    テストでは差し替え済みの container をそのまま注入できる。
+    """
     app = FastAPI(title="Obsidian RAG Quiz", lifespan=_lifespan)
     if container is not None:
         app.state.container = container

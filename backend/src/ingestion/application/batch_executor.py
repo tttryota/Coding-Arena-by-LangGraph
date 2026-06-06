@@ -1,3 +1,5 @@
+"""vault 配下の markdown を差分ベースで取り込む実行器。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -58,6 +60,8 @@ class _TaggedChunk:
 
 @dataclass(frozen=True)
 class BatchExecutionConfig:
+    """1 回分の ingestion 実行に必要な依存一式。"""
+
     target_path: str
     diff_detector: FileDiffDetector
     markdown_loader: VaultMarkdownLoader
@@ -70,6 +74,8 @@ class BatchExecutionConfig:
 
 @dataclass
 class _SummaryState:
+    """実行中に集計する中間サマリー。"""
+
     trigger: BatchTrigger
     new_count: int
     updated_count: int
@@ -105,6 +111,8 @@ class _SummaryState:
 
 @dataclass(frozen=True)
 class _FailureContext:
+    """失敗記録に必要な最小文脈。"""
+
     source_path: str
     action: FailedFileAction
     step: FailedFileStep
@@ -112,6 +120,8 @@ class _FailureContext:
 
 @dataclass
 class _CapturedException:
+    """例外を集約して batch を継続させるための簡易コンテキスト。"""
+
     exception: Exception | None = None
 
     def __enter__(self) -> _CapturedException:
@@ -135,6 +145,7 @@ def run_once(
     *,
     trigger: BatchTrigger,
 ) -> BatchRunSummary:
+    """1 回分の ingestion batch を実行する。"""
     if not config.target_path:
         message = "target_path must not be empty"
         raise BatchSchedulerConfigError(message)
@@ -146,6 +157,7 @@ def _run_batch(
     *,
     trigger: BatchTrigger,
 ) -> BatchRunSummary:
+    """想定外例外を failed summary に畳み込んで batch を終了させる。"""
     try:
         return _run_batch_inner(config, trigger=trigger)
     except Exception:
@@ -164,6 +176,7 @@ def _run_batch_inner(
     *,
     trigger: BatchTrigger,
 ) -> BatchRunSummary:
+    """差分検出から削除・追加・更新処理までを順に実行する。"""
     logger.info(
         "ingestion_batch_started",
         trigger=trigger,
@@ -219,6 +232,7 @@ def _delete_removed_file(
     summary_state: _SummaryState,
     source_path: str,
 ) -> None:
+    """削除済みファイルに対応する chunk を消す。"""
     if (
         _run_step(
             lambda: config.chunk_store.delete_by_source_path(source_path),
@@ -246,6 +260,7 @@ def _ingest_new_file(
     summary_state: _SummaryState,
     source_path: str,
 ) -> None:
+    """新規ファイルを chunk 化して保存する。"""
     prepared_chunks = _prepare_chunks(
         config,
         summary_state,
@@ -266,21 +281,7 @@ def _ingest_new_file(
 
     upsert_result = _run_step(
         lambda: config.chunk_store.upsert_chunks(
-            ChunkStoreUpsertInput(
-                source_path=source_path,
-                chunks=[
-                    ChunkStoreChunkInput(
-                        chunk_index=chunk.chunk_index,
-                        text=chunk.text,
-                        embedding=embedding,
-                        headers=chunk.headers,
-                        tags=chunk.tags,
-                        created_at=EMPTY_TIMESTAMP_PLACEHOLDER,
-                        updated_at=EMPTY_TIMESTAMP_PLACEHOLDER,
-                    )
-                    for chunk, embedding in prepared_chunks
-                ],
-            ),
+            _build_upsert_input(source_path, prepared_chunks),
         ),
         summary_state=summary_state,
         failure=_FailureContext(
@@ -307,6 +308,7 @@ def _ingest_updated_file(
     summary_state: _SummaryState,
     source_path: str,
 ) -> None:
+    """更新ファイルを再取り込みする。"""
     prepared_chunks = _prepare_chunks(
         config,
         summary_state,
@@ -342,21 +344,7 @@ def _ingest_updated_file(
 
     upsert_result = _run_step(
         lambda: config.chunk_store.upsert_chunks(
-            ChunkStoreUpsertInput(
-                source_path=source_path,
-                chunks=[
-                    ChunkStoreChunkInput(
-                        chunk_index=chunk.chunk_index,
-                        text=chunk.text,
-                        embedding=embedding,
-                        headers=chunk.headers,
-                        tags=chunk.tags,
-                        created_at=EMPTY_TIMESTAMP_PLACEHOLDER,
-                        updated_at=EMPTY_TIMESTAMP_PLACEHOLDER,
-                    )
-                    for chunk, embedding in prepared_chunks
-                ],
-            ),
+            _build_upsert_input(source_path, prepared_chunks),
         ),
         summary_state=summary_state,
         failure=_FailureContext(
@@ -383,6 +371,7 @@ def _invoke_post_ingestion_hook(
     source_path: str,
     prepared_chunks: list[tuple[_TaggedChunk, list[float]]],
 ) -> None:
+    """後処理 hook があれば chunk 内容を通知する。"""
     if config.post_ingestion_hook is None:
         return
     chunk_data = [(chunk.chunk_index, chunk.text) for chunk, _ in prepared_chunks]
@@ -405,6 +394,7 @@ def _prepare_chunks(
     source_path: str,
     action: FailedFileAction,
 ) -> list[tuple[_TaggedChunk, list[float]]] | None:
+    """load -> split -> tag -> embed を実行し、保存直前の形へ整える。"""
     markdown_text = _run_step(
         lambda: config.markdown_loader.load(source_path),
         summary_state=summary_state,
@@ -472,12 +462,35 @@ def _prepare_chunks(
     )
 
 
+def _build_upsert_input(
+    source_path: str,
+    prepared_chunks: list[tuple[_TaggedChunk, list[float]]],
+) -> ChunkStoreUpsertInput:
+    """保存直前の chunk 群を chunk store 入力へ変換する。"""
+    return ChunkStoreUpsertInput(
+        source_path=source_path,
+        chunks=[
+            ChunkStoreChunkInput(
+                chunk_index=chunk.chunk_index,
+                text=chunk.text,
+                embedding=embedding,
+                headers=chunk.headers,
+                tags=chunk.tags,
+                created_at=EMPTY_TIMESTAMP_PLACEHOLDER,
+                updated_at=EMPTY_TIMESTAMP_PLACEHOLDER,
+            )
+            for chunk, embedding in prepared_chunks
+        ],
+    )
+
+
 def _build_prepared_chunks(
     split_results: list[ChunkSplitResult],
     *,
     tagging_results: list[ChunkTaggingResult],
     embedding_results: list[ChunkEmbeddingResult],
 ) -> list[tuple[_TaggedChunk, list[float]]]:
+    """split / tag / embed 結果を chunk index 基準で束ねる。"""
     tags_by_index = {
         result.chunk_index: list(result.tags) for result in tagging_results
     }
@@ -499,6 +512,7 @@ def _build_prepared_chunks(
 
 
 def _detect_diff(config: BatchExecutionConfig) -> FileDiffResult | None:
+    """差分検出失敗を logger に残して None へ変換する。"""
     with _CapturedException() as captured:
         result = config.diff_detector.detect(config.target_path)
     if captured.exception is not None:
@@ -518,6 +532,7 @@ def _run_step[TResult](
     summary_state: _SummaryState | None,
     failure: _FailureContext | None,
 ) -> TResult | None:
+    """例外を failure 記録へ落として処理継続する共通実行 helper。"""
     with _CapturedException() as captured_exception:
         result = operation()
     if captured_exception.exception is not None:
@@ -537,6 +552,7 @@ def _record_failure(
     failure: _FailureContext,
     exception: Exception,
 ) -> None:
+    """ファイル単位失敗を summary と logger に反映する。"""
     summary_state.failed_files.append(
         FailedFileSummary(
             source_path=failure.source_path,
@@ -560,6 +576,7 @@ def _log_file_completed(
     action: FailedFileAction,
     stored_chunk_count: int,
 ) -> None:
+    """ファイル単位成功ログを出す。"""
     logger.info(
         "ingestion_batch_file_completed",
         source_path=source_path,
@@ -569,6 +586,7 @@ def _log_file_completed(
 
 
 def _has_no_diff(diff_result: FileDiffResult) -> bool:
+    """差分が 1 件もないかを判定する。"""
     return (
         diff_result.new_count == NO_DIFF_COUNT
         and diff_result.updated_count == NO_DIFF_COUNT
@@ -581,6 +599,7 @@ def _build_empty_summary(
     *,
     trigger: BatchTrigger,
 ) -> BatchRunSummary:
+    """差分なしなどで即終了する空サマリーを返す。"""
     return BatchRunSummary(
         status=status,
         trigger=trigger,
@@ -597,10 +616,12 @@ def _build_empty_summary(
 
 
 def _build_failed_summary(trigger: BatchTrigger) -> BatchRunSummary:
+    """想定外失敗用の空サマリーを返す。"""
     return _build_empty_summary(FAILED_STATUS, trigger=trigger)
 
 
 def _log_batch_completed(summary: BatchRunSummary) -> None:
+    """batch 完了ログを一か所に集約する。"""
     logger.info(
         "ingestion_batch_completed",
         status=summary.status,

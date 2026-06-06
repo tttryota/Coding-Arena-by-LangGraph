@@ -1,4 +1,4 @@
-"""Roadmap API endpoints."""
+"""roadmap の参照・生成・編集 API を提供する。"""
 
 from __future__ import annotations
 
@@ -15,10 +15,14 @@ router = APIRouter(prefix="/roadmaps", tags=["roadmaps"])
 
 
 class _GenerateRequest(BaseModel):
+    """roadmap 生成要求。"""
+
     topic: str
 
 
 class _AddItemRequest(BaseModel):
+    """item 追加要求。"""
+
     parent_id: UUID | None = None
     title: str
     description: str
@@ -26,15 +30,20 @@ class _AddItemRequest(BaseModel):
 
 
 class _RegisterTopicRequest(BaseModel):
+    """topic 手動登録要求。"""
+
     name: str
 
 
 class _MoveItemRequest(BaseModel):
+    """item 移動要求。"""
+
     target_parent_id: UUID | None = None
     target_order: int
 
 
 def _container(request: Request) -> Container:
+    """request から共有 container を取り出す。"""
     c = getattr(request.app.state, "container", None)
     if c is None:
         raise HTTPException(status_code=503, detail="Service not initialized")
@@ -43,6 +52,7 @@ def _container(request: Request) -> Container:
 
 @router.get("")
 def list_roadmaps(request: Request) -> dict[str, object]:
+    """保存済み roadmap の一覧を返す。"""
     from dataclasses import asdict
 
     from roadmap.application.roadmap_retrieval import list_roadmaps as _list
@@ -54,6 +64,7 @@ def list_roadmaps(request: Request) -> dict[str, object]:
 
 @router.get("/topics")
 def list_topics(request: Request) -> dict[str, object]:
+    """preset / ノート / 手動登録をマージした topic 候補を返す。"""
     from roadmap.application.topic_listing import list_topic_candidates
 
     c = _container(request)
@@ -70,6 +81,7 @@ def list_topics(request: Request) -> dict[str, object]:
 def register_topic(
     body: _RegisterTopicRequest, request: Request,
 ) -> dict[str, object]:
+    """手動 topic を登録する。"""
     from roadmap.application.topic_listing import register_manual_topic
     from roadmap.domain.topic_listing_types import TopicListingEmptyTopicNameError
 
@@ -90,6 +102,7 @@ def register_topic(
 
 @router.get("/{roadmap_id}")
 def get_roadmap(roadmap_id: UUID, request: Request) -> dict[str, object]:
+    """roadmap 詳細を返す。"""
     from dataclasses import asdict
 
     from roadmap.application.roadmap_retrieval import get_roadmap as _get
@@ -107,6 +120,7 @@ def get_roadmap(roadmap_id: UUID, request: Request) -> dict[str, object]:
 def generate_roadmap(
     body: _GenerateRequest, request: Request,
 ) -> dict[str, object]:
+    """roadmap 生成ジョブを受け付ける。"""
     from roadmap.application.roadmap_generation import request_roadmap_generation
     from roadmap.domain.roadmap_generation_types import (
         RoadmapGenerationInputError,
@@ -130,6 +144,7 @@ def generate_roadmap(
 
 @router.get("/generate/{job_id}")
 def get_generation_job(job_id: UUID, request: Request) -> dict[str, object]:
+    """生成ジョブの状態を返す。"""
     from roadmap.domain.roadmap_generation_types import (
         RoadmapGenerationJobNotFoundError,
     )
@@ -149,6 +164,7 @@ def move_item(
     body: _MoveItemRequest,
     request: Request,
 ) -> dict[str, object]:
+    """item を別の親・並び順へ移動する。"""
     from roadmap.application.roadmap_item_crud import move_roadmap_item
     from roadmap.domain.roadmap_item_crud_types import (
         RoadmapItemCrudInputError,
@@ -180,6 +196,7 @@ def add_item(
     body: _AddItemRequest,
     request: Request,
 ) -> dict[str, object]:
+    """item を追加する。"""
     from roadmap.application.roadmap_item_crud import add_roadmap_item
     from roadmap.domain.roadmap_item_crud_types import (
         RoadmapItemAddInput,
@@ -213,6 +230,7 @@ def delete_item(
     item_id: UUID,
     request: Request,
 ) -> dict[str, object]:
+    """item とその子孫を削除する。"""
     from roadmap.application.roadmap_item_crud import delete_roadmap_item
     from roadmap.domain.roadmap_item_crud_types import (
         RoadmapItemCrudInputError,
@@ -237,6 +255,7 @@ def delete_item(
 
 
 def _serialize_candidate(candidate: object) -> dict[str, object]:
+    """topic 候補の返却形を API 契約にそろえる。"""
     return {
         "name": getattr(candidate, "name", ""),
         "source": getattr(candidate, "source", ""),
@@ -245,6 +264,7 @@ def _serialize_candidate(candidate: object) -> dict[str, object]:
 
 
 def _serialize_crud_item(item: object) -> dict[str, object]:
+    """CRUD 結果の item を JSON 互換形に変換する。"""
     return {
         "id": str(getattr(item, "id", "")),
         "roadmap_id": str(getattr(item, "roadmap_id", "")),
@@ -258,4 +278,5 @@ def _serialize_crud_item(item: object) -> dict[str, object]:
 
 
 def _str_or_none(value: object) -> str | None:
+    """UUID 互換値を API 応答用に文字列化する。"""
     return str(value) if value is not None else None

@@ -1,3 +1,5 @@
+"""roadmap 生成ジョブの受付・実行・検証を担う。"""
+
 from __future__ import annotations
 
 import json
@@ -83,6 +85,7 @@ def request_roadmap_generation(
     scheduler: RoadmapGenerationJobScheduler,
     job_store: RoadmapGenerationJobStatusStore,
 ) -> RoadmapGenerationAccepted:
+    """roadmap 生成ジョブを受け付けて queue へ載せる。"""
     if topic.strip() == "":
         logger.warning(
             EVENT_INPUT_REJECTED,
@@ -114,6 +117,7 @@ def get_roadmap_generation_job(
     *,
     job_store: RoadmapGenerationJobStatusStore,
 ) -> RoadmapGenerationJobStatus:
+    """job id に対応する roadmap 生成状態を返す。"""
     return job_store.get_job(job_id)
 
 
@@ -126,6 +130,7 @@ def _run_roadmap_generation_job(  # noqa: PLR0913
     job_store: RoadmapGenerationJobStatusStore,
     clock: RoadmapGenerationClock,
 ) -> None:
+    """バックグラウンドで roadmap 生成から保存までを実行する。"""
     job_store.mark_running(job_id)
     logger.info(EVENT_JOB_STARTED, job_id=job_id, topic=topic)
 
@@ -172,6 +177,7 @@ def _generate_validated_roadmap(
     *,
     llm_client: RoadmapGenerationLlmClient,
 ) -> ValidatedRoadmapGeneration:
+    """LLM 応答を再試行つきで取得し、保存可能な形まで検証する。"""
     for attempt in range(1, _MAX_TOTAL_ATTEMPTS + 1):
         try:
             raw_response = llm_client.generate_roadmap_json(topic)
@@ -179,6 +185,8 @@ def _generate_validated_roadmap(
             return _validate_generation_payload(parsed, expected_topic=topic)
         except RoadmapGenerationLlmResponseError as exception:
             if attempt < _MAX_TOTAL_ATTEMPTS:
+                # JSON 不正や schema 不一致は再試行で改善する余地があるため、
+                # transport 失敗とは分けてここで吸収する。
                 logger.warning(
                     EVENT_LLM_RETRY,
                     job_id=job_id,
@@ -192,6 +200,7 @@ def _generate_validated_roadmap(
 
 
 def _parse_json(raw_response: str) -> Any:
+    """LLM の生レスポンスを JSON として解釈する。"""
     try:
         return json.loads(raw_response)
     except json.JSONDecodeError as exception:
@@ -204,6 +213,7 @@ def _validate_generation_payload(
     *,
     expected_topic: str,
 ) -> ValidatedRoadmapGeneration:
+    """LLM 応答の全体構造を検証し、保存用型へ変換する。"""
     if not isinstance(payload, dict):
         message = "LLM response root must be an object"
         raise RoadmapGenerationSchemaValidationError(message)
@@ -244,6 +254,7 @@ def _validate_item_payload(
     *,
     context: _ItemValidationContext,
 ) -> ValidatedRoadmapGenerationItem:
+    """roadmap item を期待 level つきで再帰的に検証する。"""
     path = context.path
     if not isinstance(payload, dict):
         _raise_schema_validation(f"{path} must be an object")
@@ -293,6 +304,7 @@ def _validate_object_fields(
     required_fields: frozenset[str],
     path: str,
 ) -> None:
+    """必須項目と余分な項目をまとめて検証する。"""
     missing_fields = sorted(required_fields - set(payload))
     if missing_fields:
         missing = ", ".join(missing_fields)
@@ -307,6 +319,7 @@ def _validate_object_fields(
 def _to_persistence_item(
     item: ValidatedRoadmapGenerationItem,
 ) -> RoadmapItemInput:
+    """検証済み item を persistence 層の入力型へ写す。"""
     return RoadmapItemInput(
         title=item.title,
         description=item.description,
@@ -321,6 +334,7 @@ def _mark_failed_and_log(
     *,
     job_store: RoadmapGenerationJobStatusStore,
 ) -> None:
+    """job を失敗状態へ更新し、運用ログを残す。"""
     job_store.mark_failed(job_id, failure.error_code, failure.error_message)
     logger.exception(
         EVENT_JOB_FAILED,
@@ -336,6 +350,7 @@ def _save_generated_roadmap(
     clock: RoadmapGenerationClock,
     persistence: RoadmapGenerationPersistencePort,
 ) -> RoadmapSaveResult:
+    """検証済み roadmap を persistence 層へ保存する。"""
     roadmap_input = RoadmapSaveInput(
         topic=generation.topic,
         items=[_to_persistence_item(item) for item in generation.items],
@@ -345,6 +360,7 @@ def _save_generated_roadmap(
 
 
 def _validate_root_topic(topic: Any, *, expected_topic: str) -> str:
+    """root topic が要求 topic と一致するか検証する。"""
     if not isinstance(topic, str):
         _raise_schema_validation(
             f"root.topic must be a string: got {type(topic).__name__}",
@@ -358,6 +374,7 @@ def _validate_root_topic(topic: Any, *, expected_topic: str) -> str:
 
 
 def _validate_root_items(items: Any) -> list[Any]:
+    """root items が major 2件固定の構造を満たすか検証する。"""
     if not isinstance(items, list):
         _raise_schema_validation(
             f"root.items must be a list: got {type(items).__name__}",
@@ -376,6 +393,7 @@ def _validate_item_title(
     expected_title: str | None,
     path: str,
 ) -> str:
+    """item title の存在と、必要なら固定タイトル契約を検証する。"""
     if not isinstance(title, str):
         _raise_schema_validation(f"{path}.title must be a string: got {title!r}")
     if expected_title is not None and title != expected_title:
@@ -386,6 +404,7 @@ def _validate_item_title(
 
 
 def _validate_item_description(description: Any, *, path: str) -> str:
+    """item description の存在を検証する。"""
     if not isinstance(description, str):
         _raise_schema_validation(
             f"{path}.description must be a string: got {type(description).__name__}",
@@ -398,6 +417,7 @@ def _validate_item_level(
     *,
     context: _ItemValidationContext,
 ) -> RoadmapGenerationItemLevel:
+    """parent との関係を含めて item level を検証する。"""
     if not isinstance(level, str) or level not in _ALLOWED_LEVELS:
         _raise_schema_validation(
             f"{context.path}.level must be one of {sorted(_ALLOWED_LEVELS)!r}: got {level!r}",
@@ -417,6 +437,7 @@ def _validate_item_children(
     level: RoadmapGenerationItemLevel,
     path: str,
 ) -> list[Any]:
+    """children の容器型と detail item の空配列契約を検証する。"""
     if not isinstance(children, list):
         _raise_schema_validation(f"{path}.children must be a list: got {children!r}")
     if level == "detail" and children != []:
@@ -430,6 +451,7 @@ def _validate_child_items(
     parent_level: RoadmapGenerationItemLevel,
     path: str,
 ) -> list[ValidatedRoadmapGenerationItem]:
+    """親 level から導かれる次 level で子 item 群を検証する。"""
     next_level = _next_level_for(parent_level)
     return [
         _validate_item_payload(
@@ -445,6 +467,7 @@ def _validate_child_items(
 
 
 def _next_level_for(level: RoadmapGenerationItemLevel) -> RoadmapGenerationItemLevel:
+    """親 level から子 level を導く。"""
     next_level = _NEXT_LEVEL_BY_PARENT[level]
     if next_level is None:
         message = f"next level missing for non-detail level: {level!r}"
@@ -455,6 +478,7 @@ def _next_level_for(level: RoadmapGenerationItemLevel) -> RoadmapGenerationItemL
 def _llm_response_failure_details(
     exception: RoadmapGenerationLlmResponseError,
 ) -> _FailureDetails:
+    """LLM 応答不正を job failure 詳細へ正規化する。"""
     error_code: RoadmapGenerationFailureCode
     if isinstance(exception, RoadmapGenerationJsonParseError):
         error_code = "llm_json_parse_failed"
@@ -467,6 +491,7 @@ def _exception_failure_details(
     error_code: RoadmapGenerationFailureCode,
     exception: Exception,
 ) -> _FailureDetails:
+    """例外を job store とログ用の failure 情報へ変換する。"""
     return _FailureDetails(
         error_code=error_code,
         error_message=str(exception),
@@ -475,6 +500,7 @@ def _exception_failure_details(
 
 
 def _raise_schema_validation(message: str) -> NoReturn:
+    """schema 検証失敗を統一例外へ寄せる。"""
     raise RoadmapGenerationSchemaValidationError(message)
 
 

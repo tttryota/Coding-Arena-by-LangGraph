@@ -135,4 +135,6 @@ def _replace_transport(container: object, transport: object) -> None:
     for attr_name in dir(container):
         obj = getattr(container, attr_name, None)
         if obj is not None and hasattr(obj, "_transport"):
+            # adapter 自体は本物を使い、transport だけ差し替えることで
+            # prompt 組み立てと JSON 検証の実コードをそのまま通す。
             obj._transport = transport

@@ -1,3 +1,5 @@
+"""quiz セッションの開始・再開・完了を束ねる。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -96,7 +98,12 @@ def start_session(
     input: StartSessionInput,  # noqa: A002
     **dependency_arguments: Unpack[_StartSessionDependencyArguments],
 ) -> StartSessionResult:
-    """新規セッションを開始する。in_progress 既存時は再開を促す。"""
+    """新規セッションを開始する。
+
+    同じ roadmap item に in_progress セッションがあれば新規作成せず、
+    既存セッションの再開を促す。重複開始を避けることで、
+    graph 側の checkpointer と DB の履歴が食い違いにくくなる。
+    """
     session_store = dependency_arguments["session_store"]
     item_reader = dependency_arguments["item_reader"]
     graph_runner = dependency_arguments["graph_runner"]
@@ -183,6 +190,8 @@ def resume_session(
     )
 
     context = _load_resume_session_context(input.session_id, dependencies)
+    # 履歴ロード自体は graph に渡さないが、再開前に失敗させることで
+    # 「DB では回答履歴が壊れているのに graph だけ進む」状態を防ぐ。
     _load_answer_history_or_raise(context, dependencies.answer_store)
 
     _resume_graph_or_raise(
@@ -260,6 +269,7 @@ def _build_session_state(
     is_resumed: bool,
     answers: list[QuizAnswerRecord] | None = None,
 ) -> SessionState:
+    """graph 開始に必要な最小状態を組み立てる。"""
     state: SessionState = {
         "session_id": session_id,
         "roadmap_item_id": roadmap_item.id,
@@ -279,6 +289,7 @@ def _format_lifecycle_error_message(
     roadmap_item_id: str,
     session_id: str | None = None,
 ) -> str:
+    """セッション開始・再開エラーの文言に共通の文脈を付ける。"""
     context = [f"roadmap_item_id={roadmap_item_id}"]
     if session_id is not None:
         context.insert(0, f"session_id={session_id}")
@@ -286,6 +297,7 @@ def _format_lifecycle_error_message(
 
 
 def _to_answer_record(answer: QuizAnswerRecordLike) -> QuizAnswerRecord:
+    """store 返却値を graph 側の回答履歴形式へそろえる。"""
     return {
         "question_number": answer.question_number,
         "question_text": answer.question_text,
@@ -298,6 +310,7 @@ def _to_answer_record(answer: QuizAnswerRecordLike) -> QuizAnswerRecord:
 
 
 def _to_quiz_answer_type(answer_type: str) -> QuizAnswerType:
+    """保存済み回答型を graph が理解する Literal へ変換する。"""
     if answer_type in _QUIZ_ANSWER_TYPE_VALUES:
         return cast("QuizAnswerType", answer_type)
     message = f"invalid quiz answer type: {answer_type}"
@@ -305,6 +318,7 @@ def _to_quiz_answer_type(answer_type: str) -> QuizAnswerType:
 
 
 def _to_roadmap_item_state_source(roadmap_item: object) -> _RoadmapItemStateSource:
+    """reader の返却値から graph 開始に必要な項目だけを抜き出す。"""
     source = cast("_RoadmapItemSourceLike", roadmap_item)
     return _RoadmapItemStateSource(
         id=source.id,
@@ -315,6 +329,7 @@ def _to_roadmap_item_state_source(roadmap_item: object) -> _RoadmapItemStateSour
 
 
 def _to_session_source(session: object) -> _SessionSourceLike:
+    """store の返却値を最小限の Protocol へ狭める。"""
     return cast("_SessionSourceLike", session)
 
 
@@ -322,6 +337,7 @@ def _load_resume_session_context(
     session_id: str,
     dependencies: _ResumeSessionDependencies,
 ) -> _ResumeSessionContext:
+    """再開に必要な session と roadmap item をまとめて取得する。"""
     session = _to_session_source(
         dependencies.session_store.find_session(session_id),
     )
@@ -335,6 +351,7 @@ def _load_answer_history_or_raise(
     context: _ResumeSessionContext,
     answer_store: QuizAnswerStore,
 ) -> list[QuizAnswerRecord]:
+    """回答履歴を読み込み、失敗時は lifecycle 用エラーへ変換する。"""
     try:
         return [
             _to_answer_record(answer)
@@ -359,6 +376,7 @@ def _load_answer_history_or_raise(
 
 
 def _build_resume_graph_input(input: ResumeSessionInput) -> dict[str, object]:  # noqa: A002
+    """resume_graph に渡す payload を組み立てる。"""
     return {
         "user_input": input.user_input,
         "input_source": input.input_source,
@@ -373,6 +391,7 @@ def _start_session_graph_or_raise(
     item_reader: RoadmapItemReader,
     dependencies: _StartGraphDependencies,
 ) -> None:
+    """新規セッション作成後に graph を開始し、失敗時は DB を巻き戻す。"""
     session_source = _to_session_source(session)
     try:
         roadmap_item = _to_roadmap_item_state_source(
@@ -385,6 +404,8 @@ def _start_session_graph_or_raise(
         )
         dependencies.graph_runner.start_graph(state, thread_id=session_source.id)
     except Exception as exception:
+        # graph 開始失敗後に空の in_progress セッションだけ残すと、
+        # 次回開始時に誤って「再開可能」と判定されるため必ず cleanup する。
         try:
             dependencies.session_store.discard_session(session_source.id)
         except Exception as cleanup_exception:
@@ -437,6 +458,9 @@ def _resume_graph_or_raise(
             roadmap_item_id=roadmap_item_id,
         )
     except InvalidUpdateError:
+        # interrupt がすでに消化済みのときは resume ではなく retry が正しい。
+        # ここで retry に寄せると、一過性 LLM エラー後の再試行と
+        # 同じ復旧経路にまとめられる。
         _retry_graph_or_raise(
             graph_runner,
             session_id=session_id,
@@ -479,6 +503,7 @@ def _raise_transient_resume_error(
     session_id: str,
     roadmap_item_id: str,
 ) -> None:
+    """再試行可能な LLM 失敗を lifecycle 用エラーへ変換する。"""
     logger.warning(
         _RESUME_TRANSIENT_LLM_EVENT,
         session_id=session_id,
@@ -501,6 +526,7 @@ def _raise_resume_llm_start_error(
     session_id: str,
     roadmap_item_id: str,
 ) -> None:
+    """再開失敗を lifecycle 用エラーへ変換する。"""
     logger.exception(
         _RESUME_LLM_START_FAILED_EVENT,
         session_id=session_id,
@@ -524,6 +550,7 @@ def _log_start_failure(
     error_code: str,
     exception: Exception,
 ) -> None:
+    """開始失敗時の共通ログを出す。"""
     logger.exception(
         _START_FAILED_EVENT,
         roadmap_item_id=roadmap_item_id,

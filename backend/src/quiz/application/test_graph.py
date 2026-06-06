@@ -34,17 +34,17 @@ if TYPE_CHECKING:
 
 
 def _routing_state(**fields: object) -> SessionState:
-    """Build a minimal SessionState for routing function tests."""
+    """ルーティング関数が読む項目だけを持つ最小状態を作る。"""
     return fields  # type: ignore[return-value]
 
 
 def _build_test_graph():
-    """Build a compiled graph with stub dependencies for structure tests."""
+    """構造検証専用の compiled graph を最小依存で組み立てる。"""
     from quiz.application.graph import build_graph
     from quiz.application.graph_types import GraphDependencies
 
     class _NoopStub:
-        """Stub that returns empty list/string/int for any Protocol method."""
+        """Protocol 呼び出しをすべて無害化する最小スタブ。"""
 
         def __getattr__(self, name: str):
             def _noop(*_args: object, **_kw: object) -> object:
@@ -75,7 +75,7 @@ def compiled_graph():
 
 
 def _graph_edge_targets(compiled_graph: object, source: str) -> set[str]:
-    """Get all target node names for edges from a given source node."""
+    """指定 node から伸びる edge の到達先一覧を返す。"""
     draw = compiled_graph.get_graph()  # type: ignore[union-attr]
     return {e.target for e in draw.edges if e.source == source}
 

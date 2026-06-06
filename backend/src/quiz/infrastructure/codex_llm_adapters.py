@@ -52,6 +52,7 @@ type JsonObject = dict[str, object]
 
 
 def _validate_str(value: object, field: str) -> str:
+    """LLM 応答の文字列項目を検証する。"""
     if not isinstance(value, str):
         msg = f"{field} must be str, got {type(value).__name__}"
         raise TypeError(msg)
@@ -59,6 +60,7 @@ def _validate_str(value: object, field: str) -> str:
 
 
 def _validate_int(value: object, field: str) -> int:
+    """LLM 応答の整数項目を検証する。"""
     if isinstance(value, bool) or not isinstance(value, int):
         msg = f"{field} must be int, got {type(value).__name__}"
         raise TypeError(msg)
@@ -66,6 +68,7 @@ def _validate_int(value: object, field: str) -> int:
 
 
 def _validate_score(value: object, field: str) -> int:
+    """score を 0..100 の契約で検証する。"""
     score = _validate_int(value, field)
     if score < 0 or score > 100:
         msg = f"{field} must be 0-100, got {score}"
@@ -74,6 +77,7 @@ def _validate_score(value: object, field: str) -> int:
 
 
 def _error_code_for(exc: Exception) -> str:
+    """下位例外を各 Protocol が期待する error_code に畳み込む。"""
     if isinstance(exc, CodexTransportHttpError):
         return "llm_request_failed"
     if isinstance(exc, (CodexTransportResponseError, json.JSONDecodeError, KeyError)):
@@ -84,6 +88,7 @@ def _error_code_for(exc: Exception) -> str:
 
 
 def _validate_confirmation_point(item: object) -> ConfirmationPoint:
+    """確認ポイント 1 件分の JSON 形を検証する。"""
     if not isinstance(item, dict):
         msg = f"confirmation point must be dict, got {type(item).__name__}"
         raise TypeError(msg)
@@ -101,6 +106,7 @@ def _validate_confirmation_point(item: object) -> ConfirmationPoint:
 
 
 def _validate_deepdive_point(item: object) -> DeepdivePointDraft:
+    """深掘り確認ポイント 1 件分の JSON 形を検証する。"""
     if not isinstance(item, dict):
         msg = f"deepdive point must be dict, got {type(item).__name__}"
         raise TypeError(msg)
@@ -119,6 +125,7 @@ def _parse_json_object(text: str) -> JsonObject:
     """LLM レスポンスから JSON を抽出してパースする。"""
     cleaned = text.strip()
     if cleaned.startswith("```"):
+        # モデルが code fence を付けても呼び出し側の契約は壊さない。
         lines = cleaned.split("\n")
         lines = lines[1:]
         if lines and lines[-1].strip() == "```":
@@ -132,10 +139,12 @@ def _parse_json_object(text: str) -> JsonObject:
 
 
 def _parse_json(text: str) -> JsonObject:
+    """JSON object を返す簡易ラッパー。"""
     return _parse_json_object(text)
 
 
 def _validate_answer_type(value: object) -> Literal["textarea", "code"]:
+    """LLM が返した answer_type を許可値で検証する。"""
     answer_type = _validate_str(value, "answer_type")
     if answer_type not in _VALID_ANSWER_TYPES:
         msg = f"invalid answer_type from LLM: {answer_type}"
@@ -146,6 +155,7 @@ def _validate_answer_type(value: object) -> Literal["textarea", "code"]:
 def _validate_input_type(
     value: object,
 ) -> Literal["answer", "question", "explanation_request"]:
+    """LLM が返した input_type を許可値で検証する。"""
     input_type = _validate_str(value, "input_type")
     if input_type not in _VALID_INPUT_TYPES:
         msg = f"invalid input_type from LLM: {input_type}"
@@ -156,6 +166,7 @@ def _validate_input_type(
 def _validate_next_action(
     value: object,
 ) -> Literal["next", "deepdive", "complete"]:
+    """LLM が返した next_action を許可値で検証する。"""
     next_action = _validate_str(value, "next_action")
     if next_action not in _VALID_NEXT_ACTIONS:
         msg = f"invalid next_action from LLM: {next_action}"
@@ -164,6 +175,7 @@ def _validate_next_action(
 
 
 def _answers_to_text(answers: list[QuizAnswerRecord]) -> str:
+    """過去回答を prompt に埋め込みやすい監査用テキストへ整形する。"""
     if not answers:
         return "(過去の回答なし)"
     parts = []

@@ -1,18 +1,44 @@
-# AGENT Rules
+# プロジェクト概要
+Obsidian × RAG × LangGraph 理解度チェックシステム。
+個人学習用。技術理解の深化が目的。
 
-このリポジトリで作業するエージェントは、以下の Git 運用ルールに従うこと。
+# アーキテクチャ
+- backend/: Python (FastAPI + LangGraph + LangChain)
+- frontend/: TypeScript (React + Vite + shadcn/ui + TanStack Query + Zustand)
 
-## Commit / Push
+# 技術制約
+- LLM: Codex（app-server経由）
+- Embedding: multilingual-e5-large（ローカル）
+- VectorDB: ChromaDB（ローカル永続化）
+- LangGraphのステートは SessionState を基本とする
 
-- コミットは適切な作業単位で実施してよい。不要にまとめすぎないこと。
-- 1コミット1目的を守り、無関係な変更を混ぜないこと。
-- 既存の未追跡ファイルや別作業の差分は、今回の目的に関係しない限りコミットに含めないこと。
-- コミットメッセージは `prefix: 変更内容` 形式にすること。
-- 必要な確認が取れている変更については、コミット後そのまま `push` まで実施してよい。
-- `push` は現在の作業ブランチに対して行い、無関係な変更を載せないこと。
+# ディレクトリ規約
+- backend/{機能}/domain/             ドメイン層（Protocol定義、DTO、純粋ロジック。I/Oなし）
+- backend/{機能}/application/        アプリケーション層（オーケストレーション。Protocol経由でI/O）
+- backend/{機能}/infrastructure/     インフラ層（concrete実装。直接I/O）
+- backend/infrastructure/            横断基盤（RDB, config, logging）
+- frontend/src/features/{機能}/      機能単位グルーピング（コンポーネント・フック・テスト共存）
+- frontend/src/components/           横断コンポーネント（layout/, common/, ui/）
+- frontend/src/lib/                  UI非関連ユーティリティ
+- テスト: コロケーション方式
+  - backend: ソースと同ディレクトリに test_*.py
+  - frontend: ソースと同ディレクトリに *.test.ts / *.test.tsx（vitest）
 
-## Commit Message
+# コーディング規約
+- Python: ruff でフォーマット・リント
+- TypeScript: ESLint + Prettier
+- 型アノテーション必須（Python: mypy --strict, TS: strict mode）
 
-- 利用可能な prefix 例: `feat`, `update`, `fix`, `refactor`, `docs`, `test`, `chore`
-- 例: `docs: ハーネス設定ファイルの探索順を更新`
+# コミット規約
+- メッセージ形式: `prefix: 変更内容`
+  - prefix例: feat, update, fix, refactor, docs, test, chore
+  - 例: `docs: logs/README.mdを追加してログディレクトリの目的を記載`
+  - 例: `fix: チャンク分割で空ファイル時にクラッシュする問題を修正`
+- 1コミット1目的。複数の目的を混ぜない
+- 1ファイルに複数目的の変更が混在した場合は `git add -p` でhunk単位に分割してコミットする
 
+# 禁止事項
+- 外部APIキーのハードコード
+- tests/ 以外のファイル削除を自律的に行わない
+- 設計書にない機能の追加
+- 既存テストを削除・無効化しない

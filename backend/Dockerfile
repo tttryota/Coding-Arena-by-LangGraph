@@ -14,4 +14,4 @@ RUN uv sync --frozen --no-dev
 COPY . .
 COPY data/algo_themes.json /opt/fixtures/algo_themes.json
 
-CMD ["sh", "-c", "uv run --frozen --no-dev alembic upgrade head && uv run --frozen --no-dev uvicorn dev_server:app --host 0.0.0.0 --port 8001"]
+CMD ["sh", "-c", "uv run --frozen --no-dev alembic upgrade head && uv run --frozen --no-dev uvicorn --app-dir src dev_server:app --host 0.0.0.0 --port 8001"]

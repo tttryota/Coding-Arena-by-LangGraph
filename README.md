@@ -1,6 +1,9 @@
-# Obsidian
-
-Obsidian Vault を取り込み、学習用のクイズやロードマップ機能を提供するアプリケーションです。構成は `FastAPI + ChromaDB + SQLite + React/Vite` です。
+# 概要
+codex app-serverをベースとしたLangGraph問題生成フローによってコーディング学習を実施できるprogate的ローカルアプリケーションです。（モデルはsparkがおすすめです。sparkでもちょっと待ちます）
+ロードマップでテーマを選択してロードマップを生成することで、テーマを体系的に学習できます。コーディングがメインです。
+また、競プロ的なアルゴリズム学習セクションを特設してテーマごとに選択できるようになっています。
+オプションとして、Obsidianの/study配下にノートを作成すると、ベクトルとして取り込み、RAGとして参照してフィードバックをくれるオマケもあります。
+構成は `FastAPI + ChromaDB + SQLite + React/Vite` です。
 
 ## リポジトリ構成
 
@@ -55,6 +58,8 @@ VAULT_PATH=/absolute/path/to/your/obsidian/vault
 
 ### Docker Compose で起動
 
+backend コンテナはホストの `~/.codex` を `/root/.codex` にマウントして、その認証情報を使います。ホストで `codex` に未ログインの場合は、先にログインしてください。
+
 ```bash
 docker compose up --build
 ```
@@ -93,7 +98,7 @@ set -a
 source ../.env
 set +a
 uv run alembic upgrade head
-uv run uvicorn dev_server:app --reload --host 0.0.0.0 --port 8001
+uv run uvicorn --app-dir src dev_server:app --reload --host 0.0.0.0 --port 8001
 ```
 
 3. フロントエンドを起動
@@ -147,4 +152,5 @@ pnpm run build
 
 - Docker 起動時、バックエンドコンテナは起動時に Alembic migration を自動実行します
 - SQLite は `data/app.db`、ChromaDB は `data/chromadb/` に保存されます
+- backend コンテナはホストの `~/.codex` を共有します
 - Vault は Docker では `/vault` に読み取り専用でマウントされます

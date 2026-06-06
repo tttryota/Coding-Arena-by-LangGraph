@@ -6,6 +6,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./data/huggingface:/root/.cache/huggingface
+      - ${HOME}/.codex:/root/.codex
       - ${VAULT_PATH}:/vault:ro
     depends_on:
       - chromadb

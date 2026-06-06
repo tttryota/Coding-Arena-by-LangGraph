@@ -69,8 +69,8 @@ allowed-confusables = ["（", "）", "？"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/test_*.py" = ["S101", "N", "PLR0915", "PLR0913", "ARG"]
-"shared/**" = ["S101"]
-"roadmap/domain/roadmap_retrieval_types.pyi" = ["A002"]
+"src/shared/**" = ["S101"]
+"src/roadmap/domain/roadmap_retrieval_types.pyi" = ["A002"]
 
 [tool.ruff.lint.pylint]
 max-args = 4             # review-criteria: 引数4つ以内
@@ -88,7 +88,7 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 explicit_package_bases = true
-mypy_path = "."
+mypy_path = "src"
 plugins = ["pydantic.mypy"]
 exclude = [
     "(^|/)test_.*\\.py$",
@@ -97,7 +97,7 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["."]
-norecursedirs = ["shared", ".venv", "__pycache__", ".mypy_cache", ".ruff_cache", ".git", "data", "docs"]
-pythonpath = ["."]
+testpaths = ["src", "tests/integration"]
+norecursedirs = [".venv", "__pycache__", ".mypy_cache", ".ruff_cache", ".git", "data", "docs"]
+pythonpath = ["src", "."]
 addopts = "--import-mode=importlib"

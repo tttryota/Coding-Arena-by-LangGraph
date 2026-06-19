@@ -2,6 +2,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type {
   CompetitiveAnswerResponse,
+  CompetitiveChatMessage,
+  CompetitiveQuestionResponse,
   CompetitiveSessionListResponse,
   CompetitiveSessionResponse,
   CompetitiveStartResponse,
@@ -65,6 +67,25 @@ export function useSubmitAnswer(sessionId: string) {
         },
       );
       return res.json() as Promise<CompetitiveAnswerResponse>;
+    },
+  });
+}
+
+export function useAskQuestion(sessionId: string) {
+  return useMutation({
+    mutationFn: async (body: {
+      user_input: string;
+      history: CompetitiveChatMessage[];
+    }) => {
+      const res = await apiFetch(
+        `/algorithm-quiz/sessions/${sessionId}/question`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      return res.json() as Promise<CompetitiveQuestionResponse>;
     },
   });
 }

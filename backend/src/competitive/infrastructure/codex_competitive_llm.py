@@ -15,6 +15,7 @@ import structlog
 
 from competitive.domain.competitive_types import (
     ProblemGenerationError,
+    QuestionResponseError,
     SolutionEvaluationError,
 )
 from infrastructure.llm.codex_transport import (
@@ -25,6 +26,7 @@ from infrastructure.llm.codex_transport import (
 )
 
 if TYPE_CHECKING:
+    from competitive.application.question_response_types import CompetitiveChatMessage
     from competitive.domain.competitive_types import (
         ProblemExample,
         ProgrammingLanguage,
@@ -33,7 +35,9 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-_JSON_INSTRUCTION = "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
+_JSON_INSTRUCTION = (
+    "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
+)
 _COMPETITIVE_MODEL = "gpt-5.3-codex-spark"
 _LANGUAGES: list[ProgrammingLanguage] = ["python", "typescript"]
 
@@ -104,7 +108,8 @@ def _validate_rubric_item(item: object) -> RubricItem:
         "criterion": _validate_str(item.get("criterion"), "rubric.criterion"),
         "points": _validate_int(item.get("points"), "rubric.points"),
         "description": _validate_str(
-            item.get("description"), "rubric.description",
+            item.get("description"),
+            "rubric.description",
         ),
     }
 
@@ -116,10 +121,12 @@ def _validate_rubric_score_item(item: object) -> RubricScoreItem:
     return {
         "criterion": _validate_str(item.get("criterion"), "rubric_score.criterion"),
         "points_awarded": _validate_int(
-            item.get("points_awarded"), "rubric_score.points_awarded",
+            item.get("points_awarded"),
+            "rubric_score.points_awarded",
         ),
         "points_max": _validate_int(
-            item.get("points_max"), "rubric_score.points_max",
+            item.get("points_max"),
+            "rubric_score.points_max",
         ),
     }
 
@@ -134,11 +141,13 @@ def _rebuild_rubric_scores(
     for r in grading_rubric:
         awarded = score_map.get(r["criterion"], 0)
         awarded = min(max(awarded, 0), r["points"])
-        rubric_scores.append({
-            "criterion": r["criterion"],
-            "points_awarded": awarded,
-            "points_max": r["points"],
-        })
+        rubric_scores.append(
+            {
+                "criterion": r["criterion"],
+                "points_awarded": awarded,
+                "points_max": r["points"],
+            },
+        )
 
 
 def _validate_rubric_scores_consistency(
@@ -174,6 +183,15 @@ def _validate_rubric_scores_consistency(
 def _pick_language() -> ProgrammingLanguage:
     """Python または TypeScript をランダムに選択する。"""
     return random.choice(_LANGUAGES)  # noqa: S311
+
+
+def _history_to_text(history: list[CompetitiveChatMessage]) -> str:
+    if not history:
+        return "なし"
+    return "\n".join(
+        f"{'ユーザー' if item['role'] == 'user' else 'アシスタント'}: {item['content']}"
+        for item in history
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +241,8 @@ def _validate_problem_response(
 ) -> ProblemGenerationResult:
     """LLM レスポンスを検証して ProblemGenerationResult を構築する。"""
     problem_statement = _validate_str(
-        data["problem_statement"], "problem_statement",
+        data["problem_statement"],
+        "problem_statement",
     )
     input_format = _validate_str(data["input_format"], "input_format")
     output_format = _validate_str(data["output_format"], "output_format")
@@ -233,7 +252,8 @@ def _validate_problem_response(
         msg = f"examples must have >= 2 items, got {len(examples)}"
         raise ValueError(msg)
     reference_solution = _validate_str(
-        data["reference_solution"], "reference_solution",
+        data["reference_solution"],
+        "reference_solution",
     )
     grading_rubric = [_validate_rubric_item(r) for r in data["grading_rubric"]]
     if len(grading_rubric) < 3:
@@ -298,15 +318,16 @@ class CodexCompetitiveProblemGenerationLlm:
             "}"
         )
         user = (
-            f"テーマ: {theme_label}\n"
-            f"カテゴリ: {theme_category}\n"
-            f"出題言語: {language}"
+            f"テーマ: {theme_label}\nカテゴリ: {theme_category}\n出題言語: {language}"
         )
         try:
-            raw = self._transport.call(model=_COMPETITIVE_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_COMPETITIVE_MODEL,
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             return _validate_problem_response(_parse_json(raw), language)
         except ProblemGenerationError:
             raise
@@ -384,8 +405,7 @@ class CodexCompetitiveSolutionEvaluationLlm:
             for r in grading_rubric
         )
         examples_text = "\n".join(
-            f"入力:\n{e['input']}\n出力:\n{e['output']}"
-            for e in examples
+            f"入力:\n{e['input']}\n出力:\n{e['output']}" for e in examples
         )
         system = (
             "あなたは競技プログラミングの採点AIです。\n"
@@ -422,22 +442,23 @@ class CodexCompetitiveSolutionEvaluationLlm:
             f"ユーザーの解答:\n{user_code}"
         )
         try:
-            raw = self._transport.call(model=_COMPETITIVE_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_COMPETITIVE_MODEL,
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json(raw)
             rubric_scores = [
-                _validate_rubric_score_item(rs)
-                for rs in data["rubric_scores"]
+                _validate_rubric_score_item(rs) for rs in data["rubric_scores"]
             ]
             _validate_rubric_scores_consistency(
-                rubric_scores, grading_rubric,
+                rubric_scores,
+                grading_rubric,
             )
             reported_score = _validate_score(data["score"], "score")
-            computed_score = sum(
-                rs["points_awarded"] for rs in rubric_scores
-            )
+            computed_score = sum(rs["points_awarded"] for rs in rubric_scores)
             score = min(max(computed_score, 0), 100)
             if reported_score != score:
                 logger.warning(
@@ -449,10 +470,12 @@ class CodexCompetitiveSolutionEvaluationLlm:
                 score=score,
                 feedback=_validate_str(data["feedback"], "feedback"),
                 time_complexity=_validate_str(
-                    data["time_complexity"], "time_complexity",
+                    data["time_complexity"],
+                    "time_complexity",
                 ),
                 space_complexity=_validate_str(
-                    data["space_complexity"], "space_complexity",
+                    data["space_complexity"],
+                    "space_complexity",
                 ),
                 improvement_suggestions=_validate_str(
                     data["improvement_suggestions"],
@@ -469,8 +492,78 @@ class CodexCompetitiveSolutionEvaluationLlm:
             ) from exc
 
 
+class CodexCompetitiveQuestionResponseLlm:
+    """競プロ問題に対する質問へヒントまたは解説を返す LLM アダプタ。"""
+
+    def __init__(self, transport: CodexLlmTransport) -> None:
+        self._transport = transport
+
+    def generate_chat_response(  # noqa: PLR0913
+        self,
+        *,
+        problem_statement: str,
+        input_format: str,
+        output_format: str,
+        constraints: str,
+        examples: list[ProblemExample],
+        programming_language: ProgrammingLanguage,
+        user_input: str,
+        history: list[CompetitiveChatMessage],
+    ) -> str:
+        examples_text = "\n".join(
+            f"入力:\n{e['input']}\n出力:\n{e['output']}" for e in examples
+        )
+        history_text = _history_to_text(history)
+        system = (
+            "あなたは競技プログラミングのメンターAIです。\n"
+            "与えられた問題について、ユーザーの質問に日本語で簡潔かつ正確に答えてください。\n"
+            "- 問題文・制約・入出力例の範囲で説明してください\n"
+            "- 箇条書きや短い段落で読みやすくしてください\n"
+            "- まだ未提出です。正解コード、完成済みの実装、直接的な解法の言い切りは避けてください\n"
+            "- ヒント、考える観点、落とし穴、計算量の考え方に留めてください\n"
+        )
+        system += (
+            f"\n{_JSON_INSTRUCTION}\n"
+            "形式:\n"
+            "{\n"
+            '  "chat_response_text": "質問への応答"\n'
+            "}"
+        )
+        user = (
+            f"問題文:\n{problem_statement}\n\n"
+            f"入力形式:\n{input_format}\n\n"
+            f"出力形式:\n{output_format}\n\n"
+            f"制約:\n{constraints}\n\n"
+            f"入出力例:\n{examples_text}\n\n"
+            f"出題言語: {programming_language}\n\n"
+            f"会話履歴:\n{history_text}\n\n"
+        )
+        user += f"ユーザーの質問:\n{user_input}"
+        try:
+            raw = self._transport.call(
+                model=_COMPETITIVE_MODEL,
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
+            data = _parse_json(raw)
+            return _validate_str(
+                data["chat_response_text"],
+                "chat_response_text",
+            )
+        except QuestionResponseError:
+            raise
+        except Exception as exc:
+            raise QuestionResponseError(
+                error_code=_error_code_for(exc),
+                message=f"question response generation failed: {exc}",
+            ) from exc
+
+
 __all__ = [
     "CodexCompetitiveProblemGenerationLlm",
+    "CodexCompetitiveQuestionResponseLlm",
     "CodexCompetitiveSolutionEvaluationLlm",
     "ProblemGenerationResult",
     "RubricScoreItem",

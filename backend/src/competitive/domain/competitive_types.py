@@ -103,6 +103,10 @@ class SolutionEvaluationError(CompetitiveError):
     """解答評価の失敗。"""
 
 
+class QuestionResponseError(CompetitiveError):
+    """問題への質問応答生成の失敗。"""
+
+
 __all__ = [
     "AlgoTheme",
     "CompetitiveError",
@@ -111,6 +115,7 @@ __all__ = [
     "ProblemExample",
     "ProblemGenerationError",
     "ProgrammingLanguage",
+    "QuestionResponseError",
     "RubricItem",
     "SolutionEvaluationError",
     "ThemeSelectionError",

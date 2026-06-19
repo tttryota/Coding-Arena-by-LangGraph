@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { Routes, Route } from "react-router-dom";
 import { renderWithProviders, mockJsonResponse } from "@/test-utils";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -97,7 +97,12 @@ const codingPracticeDetail: SessionDetailResponse = {
     lecture_content: "配列操作の基礎について...",
     lecture_phase_active: false,
     confirmation_points: [
-      { id: "cp-1", content: "map関数", start_format: "rewrite", end_format: "implement" },
+      {
+        id: "cp-1",
+        content: "map関数",
+        start_format: "rewrite",
+        end_format: "implement",
+      },
     ],
     current_point_index: 0,
     current_question_text: "以下のコードを書き換えてください",
@@ -151,14 +156,27 @@ describe("QuizSessionPage", () => {
     renderPage();
 
     expect(
-      await screen.findByText(
-        "TypeScriptのstring型について説明してください",
-      ),
+      await screen.findByText("TypeScriptのstring型について説明してください"),
     ).toBeInTheDocument();
     expect(screen.getByText("回答する")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /解説して/ }),
     ).toBeInTheDocument();
+  });
+
+  it("文章回答欄ではTabでインデントしない", async () => {
+    mockSuccess();
+    renderPage();
+
+    const textarea = (await screen.findByPlaceholderText(
+      "回答を入力してください",
+    )) as HTMLTextAreaElement;
+
+    fireEvent.change(textarea, { target: { value: "文字列です" } });
+    textarea.setSelectionRange(0, 0);
+    fireEvent.keyDown(textarea, { key: "Tab" });
+
+    expect(textarea.value).toBe("文字列です");
   });
 
   it("完了セッションはサマリーフェーズを表示する", async () => {
@@ -222,7 +240,29 @@ describe("QuizSessionPage", () => {
     expect(screen.getByText("const arr = [1, 2, 3];")).toBeInTheDocument();
     expect(screen.getByText("回答する")).toBeInTheDocument();
     // Coding sessions should not show explain button
-    expect(screen.queryByRole("button", { name: /解説して/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /解説して/ }),
+    ).not.toBeInTheDocument();
+    const textarea = screen.getByPlaceholderText("コードを入力してください");
+    expect(textarea.className).toContain("[min-height:320px]");
+  });
+
+  it("コーディングセッション: TabとShift+Tabでインデントできる", async () => {
+    mockSuccess(codingPracticeDetail);
+    renderPage("coding-2");
+
+    const textarea = (await screen.findByPlaceholderText(
+      "コードを入力してください",
+    )) as HTMLTextAreaElement;
+
+    fireEvent.change(textarea, { target: { value: "const value = 1;" } });
+    textarea.setSelectionRange(0, 0);
+    fireEvent.keyDown(textarea, { key: "Tab" });
+    expect(textarea.value).toBe("  const value = 1;");
+
+    textarea.setSelectionRange(0, textarea.value.length);
+    fireEvent.keyDown(textarea, { key: "Tab", shiftKey: true });
+    expect(textarea.value).toBe("const value = 1;");
   });
 
   it("コーディングセッション: フィードバックフェーズを表示する", async () => {
@@ -250,7 +290,12 @@ describe("QuizSessionPage", () => {
         current_question_text: "次の穴埋め問題",
         total_questions_asked: 2,
         confirmation_points: [
-          { id: "cp-1", content: "map関数", start_format: "rewrite", end_format: "implement" },
+          {
+            id: "cp-1",
+            content: "map関数",
+            start_format: "rewrite",
+            end_format: "implement",
+          },
         ],
         current_point_index: 0,
       },
@@ -292,7 +337,12 @@ describe("QuizSessionPage", () => {
         current_question_text: "バグを修正してください",
         total_questions_asked: 2,
         confirmation_points: [
-          { id: "cp-1", content: "map関数", start_format: "rewrite", end_format: "implement" },
+          {
+            id: "cp-1",
+            content: "map関数",
+            start_format: "rewrite",
+            end_format: "implement",
+          },
         ],
         current_point_index: 0,
       },
@@ -303,11 +353,19 @@ describe("QuizSessionPage", () => {
       },
     });
 
-    expect(await screen.findByText("もう少し頑張りましょう")).toBeInTheDocument();
+    expect(
+      await screen.findByText("もう少し頑張りましょう"),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("40").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("スコアが基準に達しませんでした。")).toBeInTheDocument(); // notice card title
-    expect(screen.getByRole("button", { name: "次の問題へ" })).toBeInTheDocument();
+    expect(
+      screen.getByText("スコアが基準に達しませんでした。"),
+    ).toBeInTheDocument(); // notice card title
+    expect(
+      screen.getByRole("button", { name: "次の問題へ" }),
+    ).toBeInTheDocument();
     // retry専用ボタンは削除済み — 通知カードは残るがボタンとしては存在しない
-    expect(screen.queryByRole("button", { name: "もう一度挑戦" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "もう一度挑戦" }),
+    ).not.toBeInTheDocument();
   });
 });

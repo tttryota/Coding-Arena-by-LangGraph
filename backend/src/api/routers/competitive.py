@@ -13,17 +13,27 @@ if TYPE_CHECKING:
 
     from api.dependencies import Container
     from competitive.application.competitive_graph import CompetitiveGraphRunner
-    from competitive.domain.competitive_types import CompetitiveSessionState
+    from competitive.application.question_response_types import (
+        CompetitiveChatMessage,
+        QuestionResponseLlmClient,
+    )
+    from competitive.domain.competitive_types import (
+        CompetitiveSessionState,
+        ProblemExample,
+        ProgrammingLanguage,
+    )
     from competitive.infrastructure.sql_competitive_store import (
         CompetitiveAnswerRecord,
     )
 
 router = APIRouter(prefix="/algorithm-quiz", tags=["competitive"])
 
-_HIDDEN_FIELDS = frozenset({
-    "reference_solution",
-    "grading_rubric",
-})
+_HIDDEN_FIELDS = frozenset(
+    {
+        "reference_solution",
+        "grading_rubric",
+    },
+)
 
 
 class _StartSessionRequest(BaseModel):
@@ -36,6 +46,20 @@ class _SubmitAnswerRequest(BaseModel):
     """競プロ回答提出要求。"""
 
     user_code: str = Field(min_length=1)
+
+
+class _CompetitiveChatMessage(BaseModel):
+    """競プロ質問のローカル会話履歴。"""
+
+    role: str
+    content: str = Field(min_length=1)
+
+
+class _QuestionRequest(BaseModel):
+    """競プロ問題への質問要求。"""
+
+    user_input: str = Field(min_length=1)
+    history: list[_CompetitiveChatMessage] = Field(default_factory=list)
 
 
 def _container(request: Request) -> Container:
@@ -54,6 +78,27 @@ def _require_runner(c: Container) -> CompetitiveGraphRunner:
             detail="Competitive service unavailable",
         )
     return cast("CompetitiveGraphRunner", c.competitive_graph_runner)
+
+
+def _require_question_llm(c: Container) -> QuestionResponseLlmClient:
+    """競プロ質問応答 LLM が有効な環境かを確認する。"""
+    llm = getattr(c, "competitive_question_llm", None)
+    if llm is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Competitive question service unavailable",
+        )
+    return cast("QuestionResponseLlmClient", llm)
+
+
+def _question_error_to_http(exc: Exception) -> HTTPException:
+    """競プロ質問 API のエラーを HTTP ステータスへ変換する。"""
+    error_code = getattr(exc, "error_code", None)
+    if error_code == "llm_request_failed":
+        return HTTPException(status_code=503, detail=str(exc))
+    if error_code == "llm_response_parse_failed":
+        return HTTPException(status_code=502, detail=str(exc))
+    return HTTPException(status_code=503, detail=str(exc))
 
 
 def _run_graph_start(
@@ -76,7 +121,9 @@ def _run_graph_start(
 
 
 def _run_graph_resume(
-    runner: CompetitiveGraphRunner, user_input: dict[str, object], thread_id: str,
+    runner: CompetitiveGraphRunner,
+    user_input: dict[str, object],
+    thread_id: str,
 ) -> None:
     """競プロ graph の再開時例外を HTTP エラーへ変換する。"""
     from competitive.application.competitive_graph import TransientLlmNodeError
@@ -135,7 +182,8 @@ def list_sessions(request: Request) -> dict[str, object]:
 
 @router.post("/sessions", status_code=201)
 def start_session(
-    request: Request, body: _StartSessionRequest | None = None,
+    request: Request,
+    body: _StartSessionRequest | None = None,
 ) -> dict[str, object]:
     """セッションを開始する。テーマ未指定時は学習順で次のテーマを選択。"""
     c = _container(request)
@@ -195,13 +243,15 @@ def _save_answer(
             time_complexity=cast("str", state.get("time_complexity", "")),
             space_complexity=cast("str", state.get("space_complexity", "")),
             improvement_suggestions=cast(
-                "str", state.get("improvement_suggestions", ""),
+                "str",
+                state.get("improvement_suggestions", ""),
             ),
             rubric_scores_json=cast("str", state.get("rubric_scores_json", "[]")),
         )
     except IntegrityError as exc:
         raise HTTPException(
-            status_code=409, detail="Answer already submitted",
+            status_code=409,
+            detail="Answer already submitted",
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -209,7 +259,9 @@ def _save_answer(
 
 @router.post("/sessions/{session_id}/answer")
 def submit_answer(
-    session_id: str, body: _SubmitAnswerRequest, request: Request,
+    session_id: str,
+    body: _SubmitAnswerRequest,
+    request: Request,
 ) -> dict[str, object]:
     """コードを提出して採点する。"""
     c = _container(request)
@@ -225,7 +277,8 @@ def submit_answer(
         state = runner.get_state(thread_id=session_id)
     except LookupError as exc:
         raise HTTPException(
-            status_code=404, detail="Session not found",
+            status_code=404,
+            detail="Session not found",
         ) from exc
 
     answer = _save_answer(c, session_id, state, body.user_code)
@@ -237,6 +290,53 @@ def submit_answer(
         "space_complexity": answer.space_complexity,
         "improvement_suggestions": answer.improvement_suggestions,
         "rubric_scores_json": answer.rubric_scores_json,
+        "reference_solution": state.get("reference_solution", ""),
+    }
+
+
+@router.post("/sessions/{session_id}/question")
+def ask_question(
+    session_id: str,
+    body: _QuestionRequest,
+    request: Request,
+) -> dict[str, object]:
+    """問題への質問に答える。採点や状態更新は行わない。"""
+    from competitive.domain.competitive_types import CompetitiveError
+
+    c = _container(request)
+    llm = _require_question_llm(c)
+    try:
+        details = c.competitive_store.get_session_details(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Session not found") from exc
+    if details.get("status") == "completed":
+        raise HTTPException(
+            status_code=409,
+            detail="Questions are unavailable after completion",
+        )
+    history = cast(
+        "list[CompetitiveChatMessage]",
+        [item.model_dump() for item in body.history],
+    )
+    try:
+        chat_response_text = llm.generate_chat_response(
+            problem_statement=cast("str", details["problem_statement"]),
+            input_format=cast("str", details["input_format"]),
+            output_format=cast("str", details["output_format"]),
+            constraints=cast("str", details["constraints"]),
+            examples=cast("list[ProblemExample]", details["examples"]),
+            programming_language=cast(
+                "ProgrammingLanguage",
+                details["programming_language"],
+            ),
+            user_input=body.user_input,
+            history=history,
+        )
+    except CompetitiveError as exc:
+        raise _question_error_to_http(exc) from exc
+    return {
+        "session_id": session_id,
+        "chat_response_text": chat_response_text,
     }
 
 
@@ -248,10 +348,7 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
         details = c.competitive_store.get_session_details(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Session not found") from exc
-    response = {
-        k: v for k, v in details.items()
-        if k not in _HIDDEN_FIELDS
-    }
+    response = {k: v for k, v in details.items() if k not in _HIDDEN_FIELDS}
     # 非公開採点情報は永続化していても取得 API には出さない。
     response["session_id"] = response.pop("id", session_id)
     answer = c.competitive_store.find_answer_by_session(session_id)

@@ -183,6 +183,17 @@ export interface CompetitiveAnswerResponse {
   space_complexity: string;
   improvement_suggestions: string;
   rubric_scores_json: string;
+  reference_solution: string;
+}
+
+export interface CompetitiveChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface CompetitiveQuestionResponse {
+  session_id: string;
+  chat_response_text: string;
 }
 
 export interface CompetitiveSessionResponse {

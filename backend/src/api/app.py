@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 
-from api.routers import competitive, ingestion, quiz, roadmap
+from api.routers import competitive, ingestion, quiz, roadmap, sql_dojo
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -37,6 +37,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(roadmap.router)
     app.include_router(ingestion.router)
     app.include_router(competitive.router)
+    app.include_router(sql_dojo.router)
     return app
 
 

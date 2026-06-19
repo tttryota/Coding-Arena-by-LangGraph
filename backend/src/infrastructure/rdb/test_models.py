@@ -29,6 +29,8 @@ EXPECTED_TABLES = {
     "competitive_sessions",
     "competitive_answers",
     "algo_themes",
+    "sql_dojo_sessions",
+    "sql_dojo_answers",
 }
 
 

@@ -233,6 +233,56 @@ class CompetitiveAnswer(Base):
     )
 
 
+class SqlDojoSession(Base):
+    __tablename__ = "sql_dojo_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    theme_family: Mapped[str] = mapped_column(String, nullable=False)
+    difficulty: Mapped[str] = mapped_column(String, nullable=False)
+    dialect: Mapped[str] = mapped_column(String, nullable=False)
+    theme_title: Mapped[str] = mapped_column(String, nullable=False)
+    business_domain: Mapped[str] = mapped_column(String, nullable=False)
+    target_skill: Mapped[str] = mapped_column(String, nullable=False)
+    problem_statement: Mapped[str] = mapped_column(Text, nullable=False)
+    schema_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    sample_data_json: Mapped[str] = mapped_column(Text, nullable=False)
+    expected_focus: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_sql: Mapped[str] = mapped_column(Text, nullable=False)
+    grading_contract_json: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    answer: Mapped["SqlDojoAnswer | None"] = relationship(
+        "SqlDojoAnswer",
+        back_populates="session",
+        uselist=False,
+    )
+
+
+class SqlDojoAnswer(Base):
+    __tablename__ = "sql_dojo_answers"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("sql_dojo_sessions.id"),
+        nullable=False,
+        unique=True,
+    )
+    answer_text: Mapped[str] = mapped_column(Text, nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    feedback: Mapped[str] = mapped_column(Text, nullable=False)
+    rule_breakdown_json: Mapped[str] = mapped_column(Text, nullable=False)
+    improvement_suggestions: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    session: Mapped["SqlDojoSession"] = relationship(
+        "SqlDojoSession",
+        back_populates="answer",
+    )
+
+
 class AlgoThemeModel(Base):
     __tablename__ = "algo_themes"
 

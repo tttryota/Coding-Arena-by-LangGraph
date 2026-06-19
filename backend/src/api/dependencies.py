@@ -31,6 +31,8 @@ class Container:
     coding_graph_runner: Any
     competitive_graph_runner: Any
     competitive_question_llm: Any
+    sql_dojo_feedback_llm: Any
+    sql_dojo_question_llm: Any
     batch_embedder: Any
 
     def __init__(  # noqa: PLR0913, PLR0915
@@ -60,6 +62,7 @@ class Container:
             self._init_chroma_clients()
             self._init_graph_runner()
             self._init_competitive()
+            self._init_sql_dojo()
             self._init_coding_graph()
             self._init_scheduler()
             self._init_batch_adapters()
@@ -253,6 +256,20 @@ class Container:
         )
         compiled = build_competitive_graph(deps, checkpointer=MemorySaver())
         self.competitive_graph_runner = CompetitiveGraphRunner(compiled)
+
+    def _init_sql_dojo(self) -> None:
+        """SQL道場のテーマバンク・store・LLM を初期化する。"""
+        from sql_dojo.infrastructure.codex_sql_dojo_llm import (
+            CodexSqlDojoFeedbackLlm,
+            CodexSqlDojoQuestionLlm,
+        )
+        from sql_dojo.infrastructure.sql_sql_dojo_store import SqlSqlDojoStore
+        from sql_dojo.infrastructure.sql_theme_bank import SqlThemeBank
+
+        self.sql_theme_bank = SqlThemeBank()
+        self.sql_dojo_store = SqlSqlDojoStore(self._engine)
+        self.sql_dojo_feedback_llm = CodexSqlDojoFeedbackLlm(self.transport)
+        self.sql_dojo_question_llm = CodexSqlDojoQuestionLlm(self.transport)
 
     def _init_coding_graph(self) -> None:
         """座学 + 練習のコーディングセッション用 graph を初期化する。"""

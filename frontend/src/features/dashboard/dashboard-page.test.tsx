@@ -102,6 +102,8 @@ function mockSuccess(
       return mockJsonResponse(feedbacks);
     if (path === "/algorithm-quiz/sessions")
       return mockJsonResponse({ sessions: [] });
+    if (path === "/sql-dojo/sessions")
+      return mockJsonResponse({ sessions: [] });
     throw new Error(`Unexpected path: ${path}`);
   });
 }
@@ -142,6 +144,7 @@ describe("DashboardPage", () => {
     expect(screen.getByText("学習中のロードマップ")).toBeInTheDocument();
     // 未読フィードバック
     expect(screen.getByText("未読フィードバック")).toBeInTheDocument();
+    expect(screen.getByText("SQL道場(直近)")).toBeInTheDocument();
   });
 
   /*

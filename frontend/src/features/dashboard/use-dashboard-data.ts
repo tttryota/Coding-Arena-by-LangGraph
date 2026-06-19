@@ -3,12 +3,14 @@ import { useQuery, useQueries } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useRoadmaps } from "@/features/roadmap/use-roadmaps";
 import { useCompetitiveSessions } from "@/features/competitive/use-competitive";
+import { useSqlDojoSessions } from "@/features/sql-dojo/use-sql-dojo";
 import type {
   RoadmapListItem,
   RoadmapTree,
   RoadmapTreeNode,
   FeedbackListItem,
   FeedbackListResponse,
+  SqlDojoSessionListItem,
 } from "@/types/api";
 
 // ---------------------------------------------------------------------------
@@ -47,9 +49,26 @@ export interface CompetitiveActivity {
   createdAt: string;
 }
 
-export type ActivityItem = QuizActivity | FeedbackActivity | CompetitiveActivity;
+export interface SqlDojoActivity {
+  kind: "sql_dojo";
+  sessionId: string;
+  themeTitle: string;
+  score: number;
+  createdAt: string;
+}
+
+export type ActivityItem =
+  | QuizActivity
+  | FeedbackActivity
+  | CompetitiveActivity
+  | SqlDojoActivity;
 
 export interface CompetitiveStats {
+  totalCount: number | null;
+  avgScore: number | null;
+}
+
+export interface SqlDojoStats {
   totalCount: number | null;
   avgScore: number | null;
 }
@@ -57,6 +76,7 @@ export interface CompetitiveStats {
 export interface DashboardData {
   stats: DashboardStats | null;
   competitiveStats: CompetitiveStats;
+  sqlDojoStats: SqlDojoStats;
   roadmaps: RoadmapListItem[];
   totalRoadmapCount: number;
   activity: ActivityItem[];
@@ -118,6 +138,7 @@ export function useDashboardData(): DashboardData {
 
   // 3. Competitive sessions (for activity timeline)
   const competitiveQuery = useCompetitiveSessions();
+  const sqlDojoQuery = useSqlDojoSessions();
 
   // 4. Unread feedbacks (provides both total_count for stat card and items
   //    for activity timeline). Key uses "feedbacks" prefix so that
@@ -140,18 +161,24 @@ export function useDashboardData(): DashboardData {
   const allDetailsLoaded =
     roadmapIds.length === 0 || detailQueries.every((q) => !q.isLoading);
   const isLoading =
-    roadmapList.isLoading || !allDetailsLoaded || feedbacksQuery.isLoading || competitiveQuery.isLoading;
+    roadmapList.isLoading ||
+    !allDetailsLoaded ||
+    feedbacksQuery.isLoading ||
+    competitiveQuery.isLoading ||
+    sqlDojoQuery.isLoading;
   const isError =
     roadmapList.isError ||
     detailQueries.some((q) => q.isError) ||
     feedbacksQuery.isError ||
-    competitiveQuery.isError;
+    competitiveQuery.isError ||
+    sqlDojoQuery.isError;
   const isEmpty =
     !roadmapList.isLoading && roadmapItems.length === 0 && !roadmapList.isError;
   const errorUpdatedAt = Math.max(
     roadmapList.errorUpdatedAt,
     feedbacksQuery.errorUpdatedAt,
     competitiveQuery.errorUpdatedAt,
+    sqlDojoQuery.errorUpdatedAt,
     ...detailQueries.map((q) => q.errorUpdatedAt),
   );
 
@@ -174,6 +201,10 @@ export function useDashboardData(): DashboardData {
   const competitiveSessions = useMemo(
     () => competitiveQuery.data?.sessions ?? [],
     [competitiveQuery.data],
+  );
+  const sqlDojoSessions = useMemo(
+    () => sqlDojoQuery.data?.sessions ?? [],
+    [sqlDojoQuery.data],
   );
 
   // Stats
@@ -282,11 +313,22 @@ export function useDashboardData(): DashboardData {
         createdAt: s.created_at,
       }));
 
+    const sqlDojoItems: SqlDojoActivity[] = sqlDojoSessions
+      .filter((s: SqlDojoSessionListItem) => s.status === "completed" && s.score != null)
+      .map((s: SqlDojoSessionListItem) => ({
+        kind: "sql_dojo" as const,
+        sessionId: s.session_id,
+        themeTitle: s.theme_title,
+        score: s.score!,
+        createdAt: s.created_at,
+      }));
+
     // Merge by timestamp descending
     const merged: ActivityItem[] = [
       ...quizItems,
       ...feedbackActivities,
       ...competitiveItems,
+      ...sqlDojoItems,
     ];
     merged.sort((a, b) => {
       const getTime = (item: ActivityItem) => {
@@ -297,7 +339,7 @@ export function useDashboardData(): DashboardData {
     });
 
     return merged.slice(0, ACTIVITY_LIMIT);
-  }, [detailTrees, unreadFeedbackItems, competitiveSessions]);
+  }, [detailTrees, unreadFeedbackItems, competitiveSessions, sqlDojoSessions]);
 
   // Refetch all
   const refetch = useCallback(() => {
@@ -307,7 +349,8 @@ export function useDashboardData(): DashboardData {
     }
     void feedbacksQuery.refetch();
     void competitiveQuery.refetch();
-  }, [roadmapList, detailQueries, feedbacksQuery, competitiveQuery]);
+    void sqlDojoQuery.refetch();
+  }, [roadmapList, detailQueries, feedbacksQuery, competitiveQuery, sqlDojoQuery]);
 
   const competitiveStats = useMemo<CompetitiveStats>(() => {
     if (competitiveQuery.isLoading || !competitiveQuery.data) {
@@ -327,9 +370,28 @@ export function useDashboardData(): DashboardData {
     };
   }, [competitiveQuery.isLoading, competitiveQuery.data]);
 
+  const sqlDojoStats = useMemo<SqlDojoStats>(() => {
+    if (sqlDojoQuery.isLoading || !sqlDojoQuery.data) {
+      return { totalCount: null, avgScore: null };
+    }
+    const sessions = sqlDojoQuery.data.sessions;
+    const completed = sessions.filter((s) => s.status === "completed");
+    return {
+      totalCount: sessions.length,
+      avgScore:
+        completed.length > 0
+          ? Math.round(
+              completed.reduce((sum, s) => sum + (s.score ?? 0), 0) /
+                completed.length,
+            )
+          : null,
+    };
+  }, [sqlDojoQuery.isLoading, sqlDojoQuery.data]);
+
   return {
     stats,
     competitiveStats,
+    sqlDojoStats,
     roadmaps,
     totalRoadmapCount,
     activity,

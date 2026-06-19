@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   X,
   Swords,
+  Database,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { scoreLevel } from "@/lib/score";
@@ -27,6 +28,7 @@ export function DashboardPage() {
   const {
     stats,
     competitiveStats,
+    sqlDojoStats,
     roadmaps,
     totalRoadmapCount,
     activity,
@@ -52,7 +54,7 @@ export function DashboardPage() {
 
   // Stat card rendering — shared between loaded and empty states
   const statCards = stats && (
-    <div className="grid grid-cols-5 gap-4 max-[1180px]:grid-cols-2">
+    <div className="grid grid-cols-6 gap-4 max-[1280px]:grid-cols-3 max-[780px]:grid-cols-2">
       <StatCard
         icon={Map}
         label="学習中のロードマップ"
@@ -92,6 +94,19 @@ export function DashboardPage() {
             ? "読み込み中"
             : competitiveStats.avgScore != null
               ? `平均 ${competitiveStats.avgScore} 点`
+            : "未挑戦"
+        }
+      />
+      <StatCard
+        icon={Database}
+        label="SQL道場(直近)"
+        value={sqlDojoStats.totalCount ?? "—"}
+        onClick={() => navigate("/sql-dojo")}
+        hint={
+          sqlDojoStats.totalCount == null
+            ? "読み込み中"
+            : sqlDojoStats.avgScore != null
+              ? `平均 ${sqlDojoStats.avgScore} 点`
               : "未挑戦"
         }
       />
@@ -117,8 +132,8 @@ export function DashboardPage() {
         {/* Loading skeleton */}
         {showSkeleton && (
           <>
-            <div className="grid grid-cols-5 gap-4 max-[1180px]:grid-cols-2">
-              {[0, 1, 2, 3, 4].map((i) => (
+            <div className="grid grid-cols-6 gap-4 max-[1280px]:grid-cols-3 max-[780px]:grid-cols-2">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
                 <StatSkeleton key={i} />
               ))}
             </div>

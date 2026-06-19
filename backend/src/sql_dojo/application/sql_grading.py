@@ -162,16 +162,36 @@ def _index_details(parsed: exp.Expression) -> SqlDojoIndexRequirement:
 
 
 def _extract_explain_parts(raw_sql: str) -> tuple[str, set[str]]:
-    pattern = re.compile(r"^\s*EXPLAIN\s*(?:\((?P<options>[^)]*)\))?\s*(?P<query>.+)$", re.IGNORECASE | re.DOTALL)
+    pattern = re.compile(
+        r"^\s*EXPLAIN\s*(?:\((?P<options>[^)]*)\))?\s*(?P<query>.+)$",
+        re.IGNORECASE | re.DOTALL,
+    )
     matched = pattern.match(raw_sql)
     if matched is None:
         return raw_sql, set()
+    grouped_options = matched.group("options")
+    if grouped_options is not None:
+        options = {
+            _normalize_identifier(part).upper()
+            for part in grouped_options.split(",")
+            if part.strip()
+        }
+        return matched.group("query").strip(), options
+
+    query = matched.group("query").strip()
+    statement_keyword = re.search(
+        r"\b(WITH|SELECT|INSERT|UPDATE|DELETE|CREATE)\b",
+        query,
+        re.IGNORECASE,
+    )
+    if statement_keyword is None:
+        return query, set()
     options = {
         _normalize_identifier(part).upper()
-        for part in (matched.group("options") or "").split(",")
+        for part in query[:statement_keyword.start()].split()
         if part.strip()
     }
-    return matched.group("query").strip(), options
+    return query[statement_keyword.start():].strip(), options
 
 
 def _add_rule(  # noqa: PLR0913

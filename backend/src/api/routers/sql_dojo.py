@@ -160,6 +160,8 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
                 "improvement_suggestions": answer.improvement_suggestions,
             },
         )
+    if response["status"] == "completed":
+        response["reference_sql"] = details["reference_sql"]
     return response
 
 

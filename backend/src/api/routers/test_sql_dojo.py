@@ -32,6 +32,31 @@ class _FakeSqlThemeBank:
         difficulty: str,
         theme_family: str | None = None,
     ) -> dict[str, object]:
+        if theme_family == "plan-reading":
+            return {
+                "family": "plan-reading",
+                "difficulty": difficulty,
+                "dialect": "postgresql",
+                "theme_title": "実行計画を確認する SQL を書く",
+                "business_domain": "Marketplace",
+                "target_skill": "EXPLAIN",
+                "problem_statement": "実行計画を確認してください",
+                "schema_markdown": "events(id bigint, account_id bigint, created_at timestamptz)",
+                "sample_data_json": '[{"table":"events","rows":8200000}]',
+                "expected_focus": "EXPLAIN ANALYZE, BUFFERS",
+                "reference_sql": (
+                    "EXPLAIN (ANALYZE, BUFFERS) "
+                    "SELECT * FROM events "
+                    "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+                ),
+                "grading_contract": {
+                    "statement_kind": "explain",
+                    "required_tables": ["events"],
+                    "required_predicate_columns": ["account_id", "created_at"],
+                    "require_explain": True,
+                    "required_explain_options": ["ANALYZE", "BUFFERS"],
+                },
+            }
         return {
             "family": theme_family or "join-basics",
             "difficulty": difficulty,
@@ -213,6 +238,7 @@ class TestGetSession:
 
         assert resp.status_code == 200
         assert resp.json()["feedback"] == "良い観点です"
+        assert resp.json()["reference_sql"] == "SELECT 1"
 
 
 class TestListSessions:
@@ -268,3 +294,26 @@ class TestAskQuestion:
         )
 
         assert resp.status_code == 502
+
+
+class TestPlanReadingAnswer:
+    def test_accepts_bare_explain_analyze(self) -> None:
+        client = _make_client()
+        session_id = client.post(
+            "/sql-dojo/sessions",
+            json={"difficulty": "advanced", "theme_family": "plan-reading"},
+        ).json()["session_id"]
+
+        resp = client.post(
+            f"/sql-dojo/sessions/{session_id}/answer",
+            json={
+                "user_sql": (
+                    "EXPLAIN ANALYZE BUFFERS "
+                    "SELECT * FROM events "
+                    "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+                ),
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["reference_sql"].startswith("EXPLAIN")

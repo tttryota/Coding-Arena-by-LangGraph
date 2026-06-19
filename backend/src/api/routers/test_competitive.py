@@ -308,7 +308,7 @@ class TestGetSession:
         data = resp.json()
         assert data["score"] == 85
         assert data["feedback"] == "良い解答です"
-        assert "reference_solution" not in data
+        assert data["reference_solution"] == "def solve(): pass"
 
     def test_hides_reference_solution_until_completed(self) -> None:
         client = _make_client()

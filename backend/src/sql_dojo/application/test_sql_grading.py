@@ -17,7 +17,7 @@ def _rules(rule_breakdown_json: str) -> list[dict[str, object]]:
 def test_grades_select_query_with_join_aggregate_and_limit() -> None:
     result = grade_sql_answer(
         (
-            "SELECT c.id, c.name, COUNT(o.id) AS shipped_order_count "
+            "SELECT c.id, c.name, COUNT(*) AS shipped_order_count "
             "FROM customers AS c "
             "INNER JOIN orders AS o ON o.customer_id = c.id "
             "WHERE o.status = 'shipped' "
@@ -33,7 +33,7 @@ def test_grades_select_query_with_join_aggregate_and_limit() -> None:
             ],
             "required_predicate_columns": ["status"],
             "required_group_by_columns": ["id", "name"],
-            "required_aggregates": [{"function": "COUNT", "column": "id"}],
+            "required_aggregates": [{"function": "COUNT", "column": "*"}],
             "required_order_by": [{"column": "shipped_order_count", "direction": "DESC"}],
             "required_limit": 5,
             "prohibited_patterns": ["implicit_join"],
@@ -59,6 +59,46 @@ def test_grades_explain_query() -> None:
     result = grade_sql_answer(
         (
             "EXPLAIN (ANALYZE, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_bare_explain_analyze_query() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN ANALYZE "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_bare_explain_analyze_buffers_query() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN ANALYZE BUFFERS "
             "SELECT * FROM events "
             "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
         ),

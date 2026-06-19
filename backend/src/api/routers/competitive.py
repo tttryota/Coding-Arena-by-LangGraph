@@ -367,7 +367,7 @@ def ask_question(
 
 @router.get("/sessions/{session_id}")
 def get_session(session_id: str, request: Request) -> dict[str, object]:
-    """セッション状態を取得する(reference_solution/rubricは除外)。"""
+    """セッション状態を取得する(reference_solution は completed 時のみ返す)。"""
     c = _container(request)
     try:
         details = c.competitive_store.get_session_details(session_id)
@@ -384,4 +384,6 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
         response["space_complexity"] = answer.space_complexity
         response["improvement_suggestions"] = answer.improvement_suggestions
         response["rubric_scores_json"] = answer.rubric_scores_json
+    if response.get("status") == "completed":
+        response["reference_solution"] = details.get("reference_solution", "")
     return response

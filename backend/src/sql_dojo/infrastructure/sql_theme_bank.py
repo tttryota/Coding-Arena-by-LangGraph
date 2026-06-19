@@ -68,7 +68,7 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 expected_focus="INNER JOIN, COUNT, WHERE, GROUP BY, ORDER BY, LIMIT",
                 reference_sql=(
                     "SELECT c.id AS customer_id, c.name AS customer_name, "
-                    "COUNT(o.id) AS shipped_order_count "
+                    "COUNT(*) AS shipped_order_count "
                     "FROM customers AS c "
                     "INNER JOIN orders AS o ON o.customer_id = c.id "
                     "WHERE o.status = 'shipped' "
@@ -84,7 +84,7 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                     ],
                     "required_predicate_columns": ["status"],
                     "required_group_by_columns": ["id", "name"],
-                    "required_aggregates": [{"function": "COUNT", "column": "id"}],
+                    "required_aggregates": [{"function": "COUNT", "column": "*"}],
                     "required_order_by": [{"column": "shipped_order_count", "direction": "DESC"}],
                     "required_limit": 5,
                     "prohibited_patterns": ["implicit_join"],

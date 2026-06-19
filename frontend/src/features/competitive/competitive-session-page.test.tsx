@@ -34,6 +34,7 @@ const completedSession: CompetitiveSessionResponse = {
   space_complexity: "O(1)",
   improvement_suggestions: "境界条件の整理を明示するとさらに読みやすいです",
   rubric_scores_json: "[]",
+  reference_solution: "def solve():\n    return 42",
 };
 
 const submitResult: CompetitiveAnswerResponse = {
@@ -168,7 +169,7 @@ describe("CompetitiveSessionPage", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("完了済みセッション再訪では正解コードと質問パネルを表示しない", async () => {
+  it("完了済みセッション再訪では正解コードを復元し、質問パネルを表示しない", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.endsWith("/api/algorithm-quiz/sessions/sess-1")) {
@@ -180,7 +181,8 @@ describe("CompetitiveSessionPage", () => {
     renderPage();
 
     expect(await screen.findByText("結果: 二分探索")).toBeInTheDocument();
-    expect(screen.queryByText("正解コード")).not.toBeInTheDocument();
+    expect(screen.getByText("正解コード")).toBeInTheDocument();
+    expect(screen.getByText(/def solve\(\):/)).toBeInTheDocument();
     expect(screen.queryByText("問題への質問")).not.toBeInTheDocument();
   });
 

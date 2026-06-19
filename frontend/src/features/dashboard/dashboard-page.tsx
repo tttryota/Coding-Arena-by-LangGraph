@@ -90,7 +90,9 @@ export function DashboardPage() {
         value={competitiveStats.totalCount ?? "—"}
         onClick={() => navigate("/algorithm-quiz")}
         hint={
-          competitiveStats.totalCount == null
+          competitiveStats.isError
+            ? "取得失敗"
+            : competitiveStats.totalCount == null
             ? "読み込み中"
             : competitiveStats.avgScore != null
               ? `平均 ${competitiveStats.avgScore} 点`
@@ -103,7 +105,9 @@ export function DashboardPage() {
         value={sqlDojoStats.totalCount ?? "—"}
         onClick={() => navigate("/sql-dojo")}
         hint={
-          sqlDojoStats.totalCount == null
+          sqlDojoStats.isError
+            ? "取得失敗"
+            : sqlDojoStats.totalCount == null
             ? "読み込み中"
             : sqlDojoStats.avgScore != null
               ? `平均 ${sqlDojoStats.avgScore} 点`

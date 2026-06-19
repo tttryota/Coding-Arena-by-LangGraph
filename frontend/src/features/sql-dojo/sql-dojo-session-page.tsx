@@ -80,7 +80,7 @@ export function SqlDojoSessionPage() {
           rule_breakdown_json: restored.rule_breakdown_json ?? "[]",
           improvement_suggestions:
             restored.improvement_suggestions ?? "",
-          reference_sql: "",
+          reference_sql: restored.reference_sql ?? "",
         });
       }
     }
@@ -207,9 +207,9 @@ export function SqlDojoSessionPage() {
             </div>
             <div>
               <h4 className="mb-1 font-semibold text-sm">サンプルデータ規模</h4>
-              <pre className="rounded bg-muted p-2 text-xs">
-                {session.sample_data_json}
-              </pre>
+              <div className="max-w-full overflow-x-auto rounded bg-muted p-2">
+                <pre className="text-xs">{session.sample_data_json}</pre>
+              </div>
             </div>
             <div>
               <h4 className="mb-1 font-semibold text-sm">着眼点</h4>
@@ -225,7 +225,12 @@ export function SqlDojoSessionPage() {
             <CardTitle>SQL</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            <label htmlFor="sql-dojo-answer" className="font-semibold text-sm">
+              SQL を入力
+            </label>
             <Textarea
+              id="sql-dojo-answer"
+              aria-label="SQL を入力"
               value={sqlDraft}
               onChange={(e) => setSqlDraft(e.target.value)}
               placeholder="PostgreSQL で 1 文を書いてください"
@@ -265,7 +270,12 @@ export function SqlDojoSessionPage() {
                 ))
               )}
             </div>
+            <label htmlFor="sql-dojo-question" className="font-semibold text-sm">
+              ヒントを質問
+            </label>
             <Textarea
+              id="sql-dojo-question"
+              aria-label="ヒントを質問"
               value={chatDraft}
               onChange={(e) => setChatDraft(e.target.value)}
               placeholder="JOIN の組み方、どの句から書くべきか、インデックス観点などを質問できます"
@@ -323,16 +333,16 @@ function SqlDojoResult({
           </div>
           <div>
             <h4 className="mb-1 font-semibold text-sm">ルール判定</h4>
-            <pre className="rounded bg-muted p-3 text-xs">
-              {result.rule_breakdown_json}
-            </pre>
+            <div className="max-w-full overflow-x-auto rounded bg-muted p-3">
+              <pre className="text-xs">{result.rule_breakdown_json}</pre>
+            </div>
           </div>
           {result.reference_sql && (
             <div>
               <h4 className="mb-1 font-semibold text-sm">参考 SQL</h4>
-              <pre className="rounded bg-muted p-3 text-xs">
-                {result.reference_sql}
-              </pre>
+              <div className="max-w-full overflow-x-auto rounded bg-muted p-3">
+                <pre className="text-xs">{result.reference_sql}</pre>
+              </div>
             </div>
           )}
         </CardContent>

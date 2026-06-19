@@ -226,6 +226,7 @@ export interface CompetitiveSessionResponse {
   space_complexity?: string;
   improvement_suggestions?: string;
   rubric_scores_json?: string;
+  reference_solution?: string;
 }
 
 export interface CompetitiveSessionListItem {
@@ -290,6 +291,7 @@ export interface SqlDojoSessionResponse extends SqlDojoStartResponse {
   feedback?: string;
   rule_breakdown_json?: string;
   improvement_suggestions?: string;
+  reference_sql?: string;
 }
 
 export interface SqlDojoSessionListItem {

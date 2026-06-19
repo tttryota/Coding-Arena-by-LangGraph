@@ -93,7 +93,7 @@ export function CompetitiveSessionPage() {
           space_complexity: restored.space_complexity ?? "",
           improvement_suggestions: restored.improvement_suggestions ?? "",
           rubric_scores_json: restored.rubric_scores_json ?? "[]",
-          reference_solution: "",
+          reference_solution: restored.reference_solution ?? "",
         });
       }
     }

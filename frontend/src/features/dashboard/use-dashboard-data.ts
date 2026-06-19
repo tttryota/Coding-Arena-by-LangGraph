@@ -66,11 +66,13 @@ export type ActivityItem =
 export interface CompetitiveStats {
   totalCount: number | null;
   avgScore: number | null;
+  isError: boolean;
 }
 
 export interface SqlDojoStats {
   totalCount: number | null;
   avgScore: number | null;
+  isError: boolean;
 }
 
 export interface DashboardData {
@@ -163,22 +165,16 @@ export function useDashboardData(): DashboardData {
   const isLoading =
     roadmapList.isLoading ||
     !allDetailsLoaded ||
-    feedbacksQuery.isLoading ||
-    competitiveQuery.isLoading ||
-    sqlDojoQuery.isLoading;
+    feedbacksQuery.isLoading;
   const isError =
     roadmapList.isError ||
     detailQueries.some((q) => q.isError) ||
-    feedbacksQuery.isError ||
-    competitiveQuery.isError ||
-    sqlDojoQuery.isError;
+    feedbacksQuery.isError;
   const isEmpty =
     !roadmapList.isLoading && roadmapItems.length === 0 && !roadmapList.isError;
   const errorUpdatedAt = Math.max(
     roadmapList.errorUpdatedAt,
     feedbacksQuery.errorUpdatedAt,
-    competitiveQuery.errorUpdatedAt,
-    sqlDojoQuery.errorUpdatedAt,
     ...detailQueries.map((q) => q.errorUpdatedAt),
   );
 
@@ -353,8 +349,11 @@ export function useDashboardData(): DashboardData {
   }, [roadmapList, detailQueries, feedbacksQuery, competitiveQuery, sqlDojoQuery]);
 
   const competitiveStats = useMemo<CompetitiveStats>(() => {
+    if (competitiveQuery.isError && !competitiveQuery.data) {
+      return { totalCount: null, avgScore: null, isError: true };
+    }
     if (competitiveQuery.isLoading || !competitiveQuery.data) {
-      return { totalCount: null, avgScore: null };
+      return { totalCount: null, avgScore: null, isError: false };
     }
     const sessions = competitiveQuery.data.sessions;
     const completed = sessions.filter((s) => s.status === "completed");
@@ -367,12 +366,16 @@ export function useDashboardData(): DashboardData {
                 completed.length,
             )
           : null,
+      isError: false,
     };
-  }, [competitiveQuery.isLoading, competitiveQuery.data]);
+  }, [competitiveQuery.isError, competitiveQuery.isLoading, competitiveQuery.data]);
 
   const sqlDojoStats = useMemo<SqlDojoStats>(() => {
+    if (sqlDojoQuery.isError && !sqlDojoQuery.data) {
+      return { totalCount: null, avgScore: null, isError: true };
+    }
     if (sqlDojoQuery.isLoading || !sqlDojoQuery.data) {
-      return { totalCount: null, avgScore: null };
+      return { totalCount: null, avgScore: null, isError: false };
     }
     const sessions = sqlDojoQuery.data.sessions;
     const completed = sessions.filter((s) => s.status === "completed");
@@ -385,8 +388,9 @@ export function useDashboardData(): DashboardData {
                 completed.length,
             )
           : null,
+      isError: false,
     };
-  }, [sqlDojoQuery.isLoading, sqlDojoQuery.data]);
+  }, [sqlDojoQuery.isError, sqlDojoQuery.isLoading, sqlDojoQuery.data]);
 
   return {
     stats,

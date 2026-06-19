@@ -32,6 +32,7 @@ const completedSession: SqlDojoSessionResponse = {
   feedback: "良い観点です",
   rule_breakdown_json: "[]",
   improvement_suggestions: "JOIN 条件を確認してください",
+  reference_sql: "SELECT 1",
 };
 
 const submitResult: SqlDojoAnswerResponse = {
@@ -94,8 +95,8 @@ describe("SqlDojoSessionPage", () => {
     renderPage();
 
     expect(await screen.findByText("問題文です")).toBeInTheDocument();
-    const chatTextarea = screen.getByPlaceholderText(
-      "JOIN の組み方、どの句から書くべきか、インデックス観点などを質問できます",
+    const chatTextarea = screen.getByLabelText(
+      "ヒントを質問",
     ) as HTMLTextAreaElement;
     fireEvent.change(chatTextarea, {
       target: { value: "どこから考える？" },
@@ -124,8 +125,8 @@ describe("SqlDojoSessionPage", () => {
 
     renderPage();
 
-    const sqlTextarea = (await screen.findByPlaceholderText(
-      "PostgreSQL で 1 文を書いてください",
+    const sqlTextarea = (await screen.findByLabelText(
+      "SQL を入力",
     )) as HTMLTextAreaElement;
     fireEvent.change(sqlTextarea, { target: { value: "SELECT 1" } });
     fireEvent.click(screen.getByRole("button", { name: "提出" }));
@@ -135,7 +136,7 @@ describe("SqlDojoSessionPage", () => {
     expect(screen.getByText(/SELECT 1/)).toBeInTheDocument();
   });
 
-  it("完了済みセッション再訪では結果を表示する", async () => {
+  it("完了済みセッション再訪では結果と参考 SQL を表示する", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.endsWith("/api/sql-dojo/sessions/sql-1")) {
@@ -147,6 +148,24 @@ describe("SqlDojoSessionPage", () => {
     renderPage();
 
     expect(await screen.findByText("結果: 顧客別注文件数")).toBeInTheDocument();
+    expect(screen.getByText("参考 SQL")).toBeInTheDocument();
+    expect(screen.getByText(/SELECT 1/)).toBeInTheDocument();
     expect(screen.queryByText("問題への質問")).not.toBeInTheDocument();
+  });
+
+  it("結果表示のコードブロックは横スクロール可能", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/sql-dojo/sessions/sql-1")) {
+        return mockJsonResponse(completedSession);
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderPage();
+
+    await screen.findByText("結果: 顧客別注文件数");
+    const sqlBlock = screen.getByText(/SELECT 1/).closest("div");
+    expect(sqlBlock?.className).toContain("overflow-x-auto");
   });
 });

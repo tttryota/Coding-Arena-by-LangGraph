@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +39,20 @@ export function CompetitivePage() {
     () => languagesQuery.data?.languages ?? [],
     [languagesQuery.data?.languages],
   );
+  const selectedLanguage =
+    languages.find((item) => item.id === programmingLanguage) ?? null;
+  const resolvedLanguage = selectedLanguage ?? languages[0] ?? null;
+  const selectValue = resolvedLanguage?.id ?? programmingLanguage;
+  const canStart = !languagesQuery.isLoading &&
+    !languagesQuery.isError &&
+    resolvedLanguage != null &&
+    !startMutation.isPending;
+
+  useEffect(() => {
+    if (resolvedLanguage && resolvedLanguage.id !== programmingLanguage) {
+      window.localStorage.setItem(STORAGE_KEY, resolvedLanguage.id);
+    }
+  }, [programmingLanguage, resolvedLanguage]);
 
   const { phaseGroups, nextThemeId, nextThemeLabel } = useMemo(() => {
     if (!data?.themes) return { phaseGroups: [], nextThemeId: null as string | null, nextThemeLabel: null as string | null };
@@ -52,28 +66,22 @@ export function CompetitivePage() {
     return { phaseGroups: groups, nextThemeId: next?.id ?? null, nextThemeLabel: next?.label ?? null };
   }, [data]);
 
-  const selectedLanguage =
-    languages.find((item) => item.id === programmingLanguage) ??
-    languages[0] ?? {
-      id: programmingLanguage,
-      label: programmingLanguage,
-      editor_placeholder: `// ${programmingLanguage} で解答を書いてください`,
-      enabled_order: 0,
-    };
+  const handleLanguageChange = (value: string) => {
+    setProgrammingLanguage(value);
+    window.localStorage.setItem(STORAGE_KEY, value);
+  };
 
   const handleStart = async (themeId?: string, label?: string) => {
+    if (!resolvedLanguage) {
+      return;
+    }
     setGeneratingTarget(label ?? nextThemeLabel ?? "");
     try {
       const result = await startMutation.mutateAsync({
         themeId,
-        programmingLanguage:
-          selectedLanguage?.id ?? programmingLanguage,
+        programmingLanguage: resolvedLanguage.id,
       });
       setSession(result);
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        selectedLanguage?.id ?? programmingLanguage,
-      );
       navigate(`/algorithm-quiz/${result.session_id}`);
     } catch {
       // TanStack Query handles error state
@@ -91,6 +99,12 @@ export function CompetitivePage() {
       {isError && (
         <div className="rounded-md bg-destructive/10 p-4 text-destructive">
           テーマの読み込みに失敗しました。
+        </div>
+      )}
+
+      {languagesQuery.isError && (
+        <div className="rounded-md bg-destructive/10 p-4 text-destructive">
+          出題言語の取得に失敗したため開始できません。
         </div>
       )}
 
@@ -112,9 +126,9 @@ export function CompetitivePage() {
             <select
               aria-label="出題言語"
               className="rounded-md border border-border bg-card px-3 py-2 text-sm"
-              value={programmingLanguage}
-              onChange={(e) => setProgrammingLanguage(e.target.value)}
-              disabled={languagesQuery.isLoading || startMutation.isPending}
+              value={selectValue}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              disabled={languagesQuery.isLoading || languagesQuery.isError || startMutation.isPending}
             >
               {languages.map((language: CompetitiveLanguageOption) => (
                 <option key={language.id} value={language.id}>
@@ -125,7 +139,7 @@ export function CompetitivePage() {
             <Button
               size="sm"
               onClick={() => handleStart()}
-              disabled={startMutation.isPending}
+              disabled={!canStart}
             >
               <Play className="mr-1.5 h-3.5 w-3.5" />
               {nextThemeLabel ? `次: ${nextThemeLabel}` : "挑戦する"}
@@ -146,15 +160,18 @@ export function CompetitivePage() {
                         variant={theme.attempt_count > 0 ? "secondary" : "outline"}
                         className={[
                           "py-1.5 px-3 text-sm",
+                          canStart
+                            ? "cursor-pointer hover:bg-accent"
+                            : "opacity-50",
                           startMutation.isPending
                             ? "opacity-50"
-                            : "cursor-pointer hover:bg-accent",
+                            : "",
                           theme.id === nextThemeId
                             ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
                             : "",
                         ].join(" ")}
                         onClick={() =>
-                          !startMutation.isPending && handleStart(theme.id, theme.label)
+                          canStart && handleStart(theme.id, theme.label)
                         }
                       >
                         <span className="mr-1.5 text-[11px] text-muted-foreground">

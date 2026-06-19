@@ -7,6 +7,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from competitive.domain.competitive_types import QuestionResponseError
 
 # ---------------------------------------------------------------------------
 # Fake dependencies
@@ -16,10 +17,24 @@ from api.app import create_app
 class _FakeThemeReader:
     def list_themes(self) -> list[dict[str, object]]:
         return [
-            {"id": "algo-001", "category": "探索", "label": "二分探索",
-             "display_order": 0, "attempt_count": 0, "best_score": None, "last_attempted_at": None},
-            {"id": "algo-002", "category": "グラフ", "label": "DFS",
-             "display_order": 1, "attempt_count": 0, "best_score": None, "last_attempted_at": None},
+            {
+                "id": "algo-001",
+                "category": "探索",
+                "label": "二分探索",
+                "display_order": 0,
+                "attempt_count": 0,
+                "best_score": None,
+                "last_attempted_at": None,
+            },
+            {
+                "id": "algo-002",
+                "category": "グラフ",
+                "label": "DFS",
+                "display_order": 1,
+                "attempt_count": 0,
+                "best_score": None,
+                "last_attempted_at": None,
+            },
         ]
 
     def pick_next(self) -> dict[str, str]:
@@ -32,9 +47,13 @@ class _FakeThemeReader:
 class _FakeGraphRunner:
     def __init__(self) -> None:
         self._state: dict[str, Any] = {}
+        self.resume_calls = 0
 
     def start_graph(
-        self, state: dict[str, Any], *, thread_id: str,
+        self,
+        state: dict[str, Any],
+        *,
+        thread_id: str,
     ) -> None:
         self._state = {
             **state,
@@ -54,8 +73,12 @@ class _FakeGraphRunner:
         }
 
     def resume_graph(
-        self, user_input: dict[str, Any], *, thread_id: str,
+        self,
+        user_input: dict[str, Any],
+        *,
+        thread_id: str,
     ) -> None:
+        self.resume_calls += 1
         self._state.update(user_input)
         self._state["status"] = "completed"
         self._state["score"] = 85
@@ -84,6 +107,7 @@ class _FakeSessionRecord:
 
 class _FakeAnswerRecord:
     def __init__(self) -> None:
+        self.answer_text = "def solve(): return 42"
         self.score = 85
         self.feedback = "良い解答です"
         self.time_complexity = "O(log N)"
@@ -92,14 +116,27 @@ class _FakeAnswerRecord:
         self.rubric_scores_json = "[]"
 
 
+class _FakeQuestionLlm:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self.error: QuestionResponseError | None = None
+
+    def generate_chat_response(self, **kwargs: Any) -> str:
+        if self.error is not None:
+            raise self.error
+        self.calls.append(kwargs)
+        return "提出前のヒントです"
+
+
 class _FakeCompetitiveStore:
     def __init__(self) -> None:
         self._sessions: dict[str, dict[str, Any]] = {}
         self._answer: _FakeAnswerRecord | None = None
+        self.save_answer_calls = 0
 
     def create_session(self, **kwargs: Any) -> _FakeSessionRecord:
         sid = kwargs.get("session_id", "fake-id")
-        self._sessions[sid] = kwargs
+        self._sessions[sid] = {**kwargs, "status": "in_progress"}
         return _FakeSessionRecord(sid)
 
     def get_session_details(self, session_id: str) -> dict[str, Any]:
@@ -113,7 +150,8 @@ class _FakeCompetitiveStore:
         }
 
     def find_answer_by_session(
-        self, session_id: str,
+        self,
+        session_id: str,
     ) -> _FakeAnswerRecord | None:
         return self._answer
 
@@ -121,7 +159,11 @@ class _FakeCompetitiveStore:
         return [_FakeSessionRecord(sid) for sid in self._sessions]
 
     def save_answer_and_complete(self, **kwargs: Any) -> _FakeAnswerRecord:
+        self.save_answer_calls += 1
         self._answer = _FakeAnswerRecord()
+        session = self._sessions.get(kwargs["session_id"])
+        if session is not None:
+            session["status"] = "completed"
         return self._answer
 
 
@@ -130,6 +172,7 @@ class _FakeContainer:
         self.algo_theme_reader = _FakeThemeReader()
         self.competitive_graph_runner = _FakeGraphRunner()
         self.competitive_store = _FakeCompetitiveStore()
+        self.competitive_question_llm = _FakeQuestionLlm()
 
 
 def _make_client() -> TestClient:
@@ -197,6 +240,7 @@ class TestSubmitAnswer:
         data = resp.json()
         assert data["score"] == 85
         assert data["feedback"] == "良い解答です"
+        assert data["reference_solution"] == "def solve(): pass"
 
     def test_empty_code_rejected(self) -> None:
         client = _make_client()
@@ -242,6 +286,17 @@ class TestGetSession:
         data = resp.json()
         assert data["score"] == 85
         assert data["feedback"] == "良い解答です"
+        assert "reference_solution" not in data
+
+    def test_hides_reference_solution_until_completed(self) -> None:
+        client = _make_client()
+        start_resp = client.post("/algorithm-quiz/sessions")
+        session_id = start_resp.json()["session_id"]
+
+        resp = client.get(f"/algorithm-quiz/sessions/{session_id}")
+
+        assert resp.status_code == 200
+        assert "reference_solution" not in resp.json()
 
 
 class TestListSessions:
@@ -264,3 +319,90 @@ class TestListSessions:
         assert resp.status_code == 200
         data = resp.json()
         assert data["sessions"] == []
+
+
+class TestAskQuestion:
+    def test_returns_hint_without_submitting_answer(self) -> None:
+        client = _make_client()
+        start_resp = client.post("/algorithm-quiz/sessions")
+        session_id = start_resp.json()["session_id"]
+        container = client.app.state.container
+
+        resp = client.post(
+            f"/algorithm-quiz/sessions/{session_id}/question",
+            json={
+                "user_input": "どこから考えればいい？",
+                "history": [{"role": "user", "content": "制約が重い？"}],
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["chat_response_text"] == "提出前のヒントです"
+        assert container.competitive_store.save_answer_calls == 0
+        assert container.competitive_graph_runner.resume_calls == 0
+        assert container.competitive_store.get_session_details(session_id)[
+            "status"
+        ] == ("in_progress")
+        assert "reference_solution" not in container.competitive_question_llm.calls[0]
+
+    def test_returns_409_when_session_completed(self) -> None:
+        client = _make_client()
+        start_resp = client.post("/algorithm-quiz/sessions")
+        session_id = start_resp.json()["session_id"]
+        client.post(
+            f"/algorithm-quiz/sessions/{session_id}/answer",
+            json={"user_code": "def solve(): return 42"},
+        )
+
+        resp = client.post(
+            f"/algorithm-quiz/sessions/{session_id}/question",
+            json={"user_input": "どこが違う？", "history": []},
+        )
+
+        assert resp.status_code == 409
+
+    def test_returns_404_for_unknown_session(self) -> None:
+        client = _make_client()
+
+        resp = client.post(
+            "/algorithm-quiz/sessions/00000000-0000-0000-0000-000000000000/question",
+            json={"user_input": "ヒントください", "history": []},
+        )
+
+        assert resp.status_code == 404
+
+    def test_returns_503_for_transient_llm_failure(self) -> None:
+        client = _make_client()
+        start_resp = client.post("/algorithm-quiz/sessions")
+        session_id = start_resp.json()["session_id"]
+        client.app.state.container.competitive_question_llm.error = (
+            QuestionResponseError(
+                error_code="llm_request_failed",
+                message="temporary upstream failure",
+            )
+        )
+
+        resp = client.post(
+            f"/algorithm-quiz/sessions/{session_id}/question",
+            json={"user_input": "ヒントください", "history": []},
+        )
+
+        assert resp.status_code == 503
+
+    def test_returns_502_for_llm_parse_failure(self) -> None:
+        client = _make_client()
+        start_resp = client.post("/algorithm-quiz/sessions")
+        session_id = start_resp.json()["session_id"]
+        client.app.state.container.competitive_question_llm.error = (
+            QuestionResponseError(
+                error_code="llm_response_parse_failed",
+                message="invalid structured output",
+            )
+        )
+
+        resp = client.post(
+            f"/algorithm-quiz/sessions/{session_id}/question",
+            json={"user_input": "ヒントください", "history": []},
+        )
+
+        assert resp.status_code == 502

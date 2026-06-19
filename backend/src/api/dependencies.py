@@ -30,6 +30,7 @@ class Container:
     graph_runner: Any
     coding_graph_runner: Any
     competitive_graph_runner: Any
+    competitive_question_llm: Any
     batch_embedder: Any
 
     def __init__(  # noqa: PLR0913, PLR0915
@@ -228,6 +229,7 @@ class Container:
         )
         from competitive.infrastructure.codex_competitive_llm import (
             CodexCompetitiveProblemGenerationLlm,
+            CodexCompetitiveQuestionResponseLlm,
             CodexCompetitiveSolutionEvaluationLlm,
         )
         from competitive.infrastructure.sql_algo_theme_reader import (
@@ -241,6 +243,9 @@ class Container:
         self.competitive_store = SqlCompetitiveStore(self._engine)
         problem_llm = CodexCompetitiveProblemGenerationLlm(self.transport)
         eval_llm = CodexCompetitiveSolutionEvaluationLlm(self.transport)
+        self.competitive_question_llm = CodexCompetitiveQuestionResponseLlm(
+            self.transport,
+        )
         deps = CompetitiveGraphDependencies(
             theme_reader=self.algo_theme_reader,
             problem_generation_llm=problem_llm,
@@ -271,7 +276,8 @@ class Container:
             lecture_generation_llm=CodexLectureGenerationLlm(t),
             lecture_chat_response_llm=CodexLectureChatResponseLlm(t),
             coding_problem_set_design_llm=cast(
-                "Any", CodexCodingProblemSetDesignLlm(t),
+                "Any",
+                CodexCodingProblemSetDesignLlm(t),
             ),
             coding_problem_delivery_llm=CodexCodingProblemDeliveryLlm(t),
             coding_chat_response_llm=CodexLectureChatResponseLlm(t),

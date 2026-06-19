@@ -9,6 +9,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MarkdownContent } from "@/components/common/markdown-content";
+import {
+  applyTextareaIndent,
+  restoreTextareaSelection,
+} from "@/lib/textarea-indent";
 import { ChatBubble } from "./chat-bubble";
 import type { SessionState, CodingDifficultyType } from "@/types/api";
 
@@ -44,7 +48,10 @@ const FORMAT_LABELS: Record<CodingDifficultyType, string> = {
   implement: "実装",
 };
 
-const FORMAT_COLORS: Record<CodingDifficultyType, { text: string; bg: string }> = {
+const FORMAT_COLORS: Record<
+  CodingDifficultyType,
+  { text: string; bg: string }
+> = {
   rewrite: { text: "#34d399", bg: "rgb(52 211 153 / 0.12)" },
   fill_blank: { text: "#38bdf8", bg: "rgb(56 189 248 / 0.12)" },
   bug_fix: { text: "#fb923c", bg: "rgb(251 146 60 / 0.12)" },
@@ -77,11 +84,32 @@ export function QuestionPhase({
     ? "コードを入力してください"
     : "回答を入力してください";
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && hasDraft && !isSubmitting) {
+  const handleAnswerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      (e.metaKey || e.ctrlKey) &&
+      e.key === "Enter" &&
+      hasDraft &&
+      !isSubmitting
+    ) {
       e.preventDefault();
       onSubmitAnswer(answerDraft);
     }
+  };
+
+  const handleCodeKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const nextState = applyTextareaIndent(
+        answerDraft,
+        e.currentTarget.selectionStart,
+        e.currentTarget.selectionEnd,
+        { outdent: e.shiftKey },
+      );
+      onAnswerDraftChange(nextState.value);
+      restoreTextareaSelection(e.currentTarget, nextState);
+      return;
+    }
+    handleAnswerKeyDown(e);
   };
 
   const handleChatKeyDown = (e: React.KeyboardEvent) => {
@@ -163,10 +191,10 @@ export function QuestionPhase({
             </div>
             <textarea
               ref={textareaRef}
-              className="block w-full resize-y bg-transparent px-4 py-3.5 font-mono text-[13px] leading-relaxed text-[#e2e8f0] outline-none [min-height:240px] [tab-size:2] placeholder:text-[rgb(100_116_139/0.6)]"
+              className="block w-full resize-y bg-transparent px-4 py-3.5 font-mono text-[13px] leading-relaxed text-[#e2e8f0] outline-none [min-height:320px] [tab-size:2] placeholder:text-[rgb(100_116_139/0.6)]"
               value={answerDraft}
               onChange={(e) => onAnswerDraftChange(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={handleCodeKeyDown}
               placeholder={placeholder}
               spellCheck={false}
               disabled={isSubmitting}
@@ -178,7 +206,7 @@ export function QuestionPhase({
             className="w-full resize-y rounded-md border border-input bg-background px-4 py-3.5 font-sans text-sm leading-relaxed text-foreground outline-none transition-[border-color,box-shadow] duration-150 [min-height:152px] placeholder:text-[rgb(148_163_184/0.5)] focus:border-ring focus:shadow-[0_0_0_2px_rgb(59_130_246/0.25)]"
             value={answerDraft}
             onChange={(e) => onAnswerDraftChange(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={handleAnswerKeyDown}
             placeholder={placeholder}
             disabled={isSubmitting}
             rows={6}

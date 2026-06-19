@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
+from competitive.domain.languages import CompetitiveLanguageOption
+
 
 class AlgoTheme(TypedDict):
     """アルゴリズムテーマのプリセットデータ。"""
@@ -41,7 +43,7 @@ class RubricItem(TypedDict):
 
 
 CompetitiveSessionStatus = Literal["in_progress", "completed"]
-ProgrammingLanguage = Literal["python", "typescript"]
+ProgrammingLanguage = str
 
 
 class CompetitiveSessionState(TypedDict, total=False):
@@ -110,6 +112,7 @@ class QuestionResponseError(CompetitiveError):
 __all__ = [
     "AlgoTheme",
     "CompetitiveError",
+    "CompetitiveLanguageOption",
     "CompetitiveSessionState",
     "CompetitiveSessionStatus",
     "ProblemExample",

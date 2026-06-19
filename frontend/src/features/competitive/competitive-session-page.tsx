@@ -19,6 +19,14 @@ import {
 } from "./use-competitive";
 import type { CompetitiveChatMessage } from "@/types/api";
 
+function codePlaceholder(language: string) {
+  const placeholders: Record<string, string> = {
+    python: "# Python で解答を書いてください",
+    typescript: "// TypeScript で解答を書いてください",
+  };
+  return placeholders[language] ?? `// ${language} で解答を書いてください`;
+}
+
 export function CompetitiveSessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -274,11 +282,7 @@ export function CompetitiveSessionPage() {
               value={codeDraft}
               onChange={(e) => setCodeDraft(e.target.value)}
               onKeyDown={handleCodeKeyDown}
-              placeholder={
-                session.programming_language === "typescript"
-                  ? "// TypeScript で解答を書いてください"
-                  : "# Python で解答を書いてください"
-              }
+              placeholder={codePlaceholder(session.programming_language)}
               className="font-mono min-h-[320px] [tab-size:2]"
             />
             <Button

@@ -157,6 +157,17 @@ export interface ThemesResponse {
   themes: AlgoTheme[];
 }
 
+export interface CompetitiveLanguageOption {
+  id: string;
+  label: string;
+  editor_placeholder: string;
+  enabled_order: number;
+}
+
+export interface CompetitiveLanguagesResponse {
+  languages: CompetitiveLanguageOption[];
+}
+
 export interface ProblemExample {
   input: string;
   output: string;
@@ -167,7 +178,7 @@ export interface CompetitiveStartResponse {
   theme_id: string;
   theme_label: string;
   theme_category: string;
-  programming_language: "python" | "typescript";
+  programming_language: string;
   problem_statement: string;
   input_format: string;
   output_format: string;
@@ -201,7 +212,7 @@ export interface CompetitiveSessionResponse {
   theme_id: string;
   theme_label: string;
   theme_category: string;
-  programming_language: "python" | "typescript";
+  programming_language: string;
   problem_statement: string;
   input_format: string;
   output_format: string;
@@ -222,7 +233,7 @@ export interface CompetitiveSessionListItem {
   theme_id: string;
   theme_label: string;
   theme_category: string;
-  programming_language: "python" | "typescript";
+  programming_language: string;
   status: "in_progress" | "completed";
   created_at: string;
   score?: number;
@@ -230,6 +241,75 @@ export interface CompetitiveSessionListItem {
 
 export interface CompetitiveSessionListResponse {
   sessions: CompetitiveSessionListItem[];
+}
+
+// --- SQL Dojo (GET/POST /sql-dojo/*) ---
+
+export type SqlDojoDifficulty = "beginner" | "intermediate" | "advanced";
+
+export interface SqlDojoThemeSummary {
+  family: string;
+  difficulty: SqlDojoDifficulty;
+  business_domain: string;
+  target_skill: string;
+  title: string;
+}
+
+export interface SqlDojoCatalogResponse {
+  difficulties: SqlDojoDifficulty[];
+  themes: SqlDojoThemeSummary[];
+}
+
+export interface SqlDojoStartResponse {
+  session_id: string;
+  theme_family: string;
+  difficulty: SqlDojoDifficulty;
+  dialect: "postgresql";
+  theme_title: string;
+  business_domain: string;
+  target_skill: string;
+  problem_statement: string;
+  schema_markdown: string;
+  sample_data_json: string;
+  expected_focus: string;
+}
+
+export interface SqlDojoAnswerResponse {
+  session_id: string;
+  score: number;
+  feedback: string;
+  rule_breakdown_json: string;
+  improvement_suggestions: string;
+  reference_sql: string;
+}
+
+export interface SqlDojoSessionResponse extends SqlDojoStartResponse {
+  status: "in_progress" | "completed";
+  created_at: string;
+  score?: number;
+  feedback?: string;
+  rule_breakdown_json?: string;
+  improvement_suggestions?: string;
+}
+
+export interface SqlDojoSessionListItem {
+  session_id: string;
+  theme_family: string;
+  difficulty: SqlDojoDifficulty;
+  dialect: "postgresql";
+  theme_title: string;
+  status: "in_progress" | "completed";
+  created_at: string;
+  score?: number;
+}
+
+export interface SqlDojoSessionListResponse {
+  sessions: SqlDojoSessionListItem[];
+}
+
+export interface SqlDojoQuestionResponse {
+  session_id: string;
+  chat_response_text: string;
 }
 
 // --- Coding Session State (from coding graph) ---

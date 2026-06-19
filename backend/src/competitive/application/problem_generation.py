@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from competitive.domain.competitive_types import ProblemGenerationError
+from competitive.domain.languages import default_language, is_supported_language
 
 if TYPE_CHECKING:
     from competitive.application.problem_generation_types import (
@@ -25,9 +26,20 @@ def generate_problem(
     """テーマに基づいて問題を生成する。"""
     theme_label = state["algo_theme_label"]
     theme_category = state["algo_theme_category"]
+    programming_language = state.get("programming_language", default_language())
+    if not is_supported_language(programming_language):
+        msg = f"Unsupported programming_language: {programming_language}"
+        raise ProblemGenerationError(
+            error_code="invalid_language",
+            message=msg,
+        )
 
     try:
-        result = llm.generate_problem(theme_label, theme_category)
+        result = llm.generate_problem(
+            theme_label,
+            theme_category,
+            programming_language,
+        )
     except ProblemGenerationError:
         logger.exception(
             "problem generation failed",
@@ -35,11 +47,10 @@ def generate_problem(
         )
         raise
 
-    valid_languages = {"python", "typescript"}
-    if result.programming_language not in valid_languages:
+    if not is_supported_language(result.programming_language):
         msg = (
             f"Invalid programming_language: {result.programming_language}, "
-            f"expected one of {valid_languages}"
+            "expected one of registered languages"
         )
         raise ProblemGenerationError(
             error_code="invalid_language", message=msg,

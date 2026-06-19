@@ -18,6 +18,7 @@ from competitive.domain.competitive_types import (
     SolutionEvaluationError,
     ThemeSelectionError,
 )
+from competitive.domain.languages import list_supported_languages
 
 _COMPETITIVE_SESSION_STATE_KEYS = (
     "session_id",
@@ -52,7 +53,7 @@ _EXPECTED_FIELD_TYPES: dict[str, str] = {
     "algo_theme_id": "str",
     "algo_theme_label": "str",
     "algo_theme_category": "str",
-    "programming_language": "Literal",
+    "programming_language": "str",
     "problem_statement": "str",
     "input_format": "str",
     "output_format": "str",
@@ -122,8 +123,14 @@ def test_competitive_session_status_literal_values() -> None:
 
 
 def test_programming_language_literal_values() -> None:
-    """ProgrammingLanguage の Literal 値が正しいこと。"""
-    assert get_args(ProgrammingLanguage) == ("python", "typescript")
+    """ProgrammingLanguage は str エイリアスとして扱う。"""
+    assert ProgrammingLanguage is str
+
+
+def test_supported_languages_registry() -> None:
+    """言語レジストリが公開順に返ること。"""
+    languages = list_supported_languages()
+    assert [item["id"] for item in languages] == ["python", "typescript"]
 
 
 def test_exception_hierarchy() -> None:

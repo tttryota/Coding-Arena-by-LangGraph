@@ -6,8 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Play } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { GeneratingDialog } from "@/components/common/generating-dialog";
-import { useThemes, useStartSession } from "./use-competitive";
+import {
+  useCompetitiveLanguages,
+  useThemes,
+  useStartSession,
+} from "./use-competitive";
 import { useCompetitiveStore } from "./use-competitive-store";
+import type { CompetitiveLanguageOption } from "@/types/api";
+
+const STORAGE_KEY = "competitive-programming-language";
 
 const PHASES = [
   { label: "基礎", min: 0, max: 19 },
@@ -19,10 +26,19 @@ const PHASES = [
 
 export function CompetitivePage() {
   const { data, isLoading, isError } = useThemes();
+  const languagesQuery = useCompetitiveLanguages();
   const startMutation = useStartSession();
   const { setSession } = useCompetitiveStore();
   const navigate = useNavigate();
   const [generatingTarget, setGeneratingTarget] = useState("");
+  const [programmingLanguage, setProgrammingLanguage] = useState(
+    () => window.localStorage.getItem(STORAGE_KEY) ?? "python",
+  );
+
+  const languages = useMemo(
+    () => languagesQuery.data?.languages ?? [],
+    [languagesQuery.data?.languages],
+  );
 
   const { phaseGroups, nextThemeId, nextThemeLabel } = useMemo(() => {
     if (!data?.themes) return { phaseGroups: [], nextThemeId: null as string | null, nextThemeLabel: null as string | null };
@@ -36,11 +52,28 @@ export function CompetitivePage() {
     return { phaseGroups: groups, nextThemeId: next?.id ?? null, nextThemeLabel: next?.label ?? null };
   }, [data]);
 
+  const selectedLanguage =
+    languages.find((item) => item.id === programmingLanguage) ??
+    languages[0] ?? {
+      id: programmingLanguage,
+      label: programmingLanguage,
+      editor_placeholder: `// ${programmingLanguage} で解答を書いてください`,
+      enabled_order: 0,
+    };
+
   const handleStart = async (themeId?: string, label?: string) => {
     setGeneratingTarget(label ?? nextThemeLabel ?? "");
     try {
-      const result = await startMutation.mutateAsync(themeId);
+      const result = await startMutation.mutateAsync({
+        themeId,
+        programmingLanguage:
+          selectedLanguage?.id ?? programmingLanguage,
+      });
       setSession(result);
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        selectedLanguage?.id ?? programmingLanguage,
+      );
       navigate(`/algorithm-quiz/${result.session_id}`);
     } catch {
       // TanStack Query handles error state
@@ -76,6 +109,19 @@ export function CompetitivePage() {
         <div className="space-y-6">
           <div className="flex items-center gap-4">
             <h1 className="text-2xl font-bold">競プロクイズ</h1>
+            <select
+              aria-label="出題言語"
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm"
+              value={programmingLanguage}
+              onChange={(e) => setProgrammingLanguage(e.target.value)}
+              disabled={languagesQuery.isLoading || startMutation.isPending}
+            >
+              {languages.map((language: CompetitiveLanguageOption) => (
+                <option key={language.id} value={language.id}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
             <Button
               size="sm"
               onClick={() => handleStart()}

@@ -31,14 +31,19 @@ class FakeProblemGenerationLlm:
         self._should_fail = should_fail
 
     def generate_problem(
-        self, theme_label: str, theme_category: str,
+        self,
+        theme_label: str,
+        theme_category: str,
+        programming_language: str,
     ) -> FakeProblemResult:
         if self._should_fail:
             raise ProblemGenerationError(
                 error_code="llm_request_failed",
                 message="fake failure",
             )
-        return FakeProblemResult()
+        result = FakeProblemResult()
+        result.programming_language = programming_language
+        return result
 
 
 class TestGenerateProblem:
@@ -48,6 +53,7 @@ class TestGenerateProblem:
         state = {
             "algo_theme_label": "二分探索",
             "algo_theme_category": "探索",
+            "programming_language": "python",
         }
         result = generate_problem(state, llm=FakeProblemGenerationLlm())
 
@@ -63,6 +69,7 @@ class TestGenerateProblem:
         state = {
             "algo_theme_label": "テスト",
             "algo_theme_category": "テスト",
+            "programming_language": "python",
         }
 
         with pytest.raises(ProblemGenerationError):

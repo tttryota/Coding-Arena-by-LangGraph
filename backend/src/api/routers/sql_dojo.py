@@ -61,7 +61,35 @@ def _question_error_to_http(exc: Exception) -> HTTPException:
 @router.get("/catalog")
 def get_catalog(request: Request) -> SqlDojoCatalog:
     c = _container(request)
-    return c.sql_theme_bank.list_catalog()
+    catalog = c.sql_theme_bank.list_catalog()
+    history_by_family = {
+        row.theme_family: row
+        for row in c.sql_dojo_store.list_theme_history()
+    }
+    return {
+        "difficulties": catalog["difficulties"],
+        "themes": [
+            {
+                **theme,
+                "attempt_count": (
+                    history_by_family[theme["family"]].attempt_count
+                    if theme["family"] in history_by_family
+                    else theme["attempt_count"]
+                ),
+                "best_score": (
+                    history_by_family[theme["family"]].best_score
+                    if theme["family"] in history_by_family
+                    else theme["best_score"]
+                ),
+                "last_attempted_at": (
+                    history_by_family[theme["family"]].last_attempted_at
+                    if theme["family"] in history_by_family
+                    else theme["last_attempted_at"]
+                ),
+            }
+            for theme in catalog["themes"]
+        ],
+    }
 
 
 @router.get("/sessions")

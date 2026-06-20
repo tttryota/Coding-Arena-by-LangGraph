@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from infrastructure.rdb.models import SqlDojoAnswer, SqlDojoSession
@@ -37,6 +37,14 @@ class SqlDojoAnswerRecord:
     feedback: str
     rule_breakdown_json: str
     improvement_suggestions: str
+
+
+@dataclass(frozen=True)
+class SqlDojoThemeHistoryRecord:
+    theme_family: str
+    attempt_count: int
+    best_score: int | None
+    last_attempted_at: str | None
 
 
 class SqlSqlDojoStore:
@@ -192,6 +200,36 @@ class SqlSqlDojoStore:
                 for row in rows
             ]
 
+    def list_theme_history(self) -> list[SqlDojoThemeHistoryRecord]:
+        stmt = (
+            select(
+                SqlDojoSession.theme_family,
+                func.count(SqlDojoSession.id).label("attempt_count"),
+                func.max(SqlDojoAnswer.score).label("best_score"),
+                func.max(SqlDojoSession.created_at).label("last_attempted_at"),
+            )
+            .outerjoin(
+                SqlDojoAnswer,
+                SqlDojoAnswer.session_id == SqlDojoSession.id,
+            )
+            .group_by(SqlDojoSession.theme_family)
+        )
+        with Session(self._engine) as s:
+            rows = s.execute(stmt).all()
+            return [
+                SqlDojoThemeHistoryRecord(
+                    theme_family=row.theme_family,
+                    attempt_count=row.attempt_count,
+                    best_score=row.best_score,
+                    last_attempted_at=(
+                        row.last_attempted_at.isoformat()
+                        if row.last_attempted_at
+                        else None
+                    ),
+                )
+                for row in rows
+            ]
+
     @staticmethod
     def grading_contract_as_dict(details: dict[str, object]) -> SqlDojoGradingContract:
         return cast(
@@ -203,5 +241,6 @@ class SqlSqlDojoStore:
 __all__ = [
     "SqlDojoAnswerRecord",
     "SqlDojoSessionRecord",
+    "SqlDojoThemeHistoryRecord",
     "SqlSqlDojoStore",
 ]

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Database, SendHorizontal } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -160,6 +161,21 @@ export function SqlDojoSessionPage() {
     }
   };
 
+  const handleSqlKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Tab") {
+      return;
+    }
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const { selectionStart, selectionEnd, value } = textarea;
+    const nextValue = `${value.slice(0, selectionStart)}\t${value.slice(selectionEnd)}`;
+    setSqlDraft(nextValue);
+    window.requestAnimationFrame(() => {
+      textarea.selectionStart = selectionStart + 1;
+      textarea.selectionEnd = selectionStart + 1;
+    });
+  };
+
   if (phase === "result" && result) {
     return (
       <AppShell
@@ -233,6 +249,7 @@ export function SqlDojoSessionPage() {
               aria-label="SQL を入力"
               value={sqlDraft}
               onChange={(e) => setSqlDraft(e.target.value)}
+              onKeyDown={handleSqlKeyDown}
               placeholder="PostgreSQL で 1 文を書いてください"
               className="font-mono min-h-[260px]"
             />

@@ -136,6 +136,31 @@ describe("SqlDojoSessionPage", () => {
     expect(screen.getByText(/SELECT 1/)).toBeInTheDocument();
   });
 
+  it("SQL 入力欄では Tab キーでタブ文字を挿入する", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/sql-dojo/sessions/sql-1")) {
+        return mockJsonResponse(inProgressSession);
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderPage();
+
+    const sqlTextarea = (await screen.findByLabelText(
+      "SQL を入力",
+    )) as HTMLTextAreaElement;
+    fireEvent.change(sqlTextarea, { target: { value: "SELECT\nFROM users" } });
+    sqlTextarea.selectionStart = 7;
+    sqlTextarea.selectionEnd = 7;
+
+    fireEvent.keyDown(sqlTextarea, { key: "Tab" });
+
+    await waitFor(() => {
+      expect(sqlTextarea.value).toBe("SELECT\n\tFROM users");
+    });
+  });
+
   it("完了済みセッション再訪では結果と参考 SQL を表示する", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input.toString();

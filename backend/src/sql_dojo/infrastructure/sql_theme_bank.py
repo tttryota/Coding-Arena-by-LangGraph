@@ -909,6 +909,9 @@ class SqlThemeBank:
                 "target_skill": theme.target_skill,
                 "title": theme.title,
                 "variant_count": len(theme.variants),
+                "attempt_count": 0,
+                "best_score": None,
+                "last_attempted_at": None,
             }
             for theme in _THEMES
         ]

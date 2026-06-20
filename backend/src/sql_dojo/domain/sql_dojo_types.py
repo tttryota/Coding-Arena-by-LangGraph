@@ -18,6 +18,9 @@ class SqlDojoThemeSummary(TypedDict):
     target_skill: str
     title: str
     variant_count: int
+    attempt_count: int
+    best_score: int | None
+    last_attempted_at: str | None
 
 
 class SqlDojoCatalog(TypedDict):

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderWithProviders, mockJsonResponse } from "@/test-utils";
 import { SqlDojoPage } from "./sql-dojo-page";
@@ -13,6 +13,9 @@ const mockCatalog = {
       target_skill: "JOIN",
       title: "顧客別注文件数",
       variant_count: 3,
+      attempt_count: 0,
+      best_score: null,
+      last_attempted_at: null,
     },
     {
       family: "window-ranking",
@@ -21,6 +24,9 @@ const mockCatalog = {
       target_skill: "Window Function",
       title: "部門別ランキング",
       variant_count: 2,
+      attempt_count: 0,
+      best_score: null,
+      last_attempted_at: null,
     },
   ],
 };
@@ -58,7 +64,7 @@ describe("SqlDojoPage", () => {
         if (url.includes("/sql-dojo/catalog")) {
           return mockJsonResponse(mockCatalog);
         }
-        if (url.includes("/sql-dojo/sessions")) {
+        if (url.endsWith("/sql-dojo/sessions")) {
           expect(init?.method).toBe("POST");
           expect(init?.body).toBe(JSON.stringify({ difficulty: "intermediate" }));
           return mockJsonResponse({
@@ -101,7 +107,7 @@ describe("SqlDojoPage", () => {
         if (url.includes("/sql-dojo/catalog")) {
           return mockJsonResponse(mockCatalog);
         }
-        if (url.includes("/sql-dojo/sessions")) {
+        if (url.endsWith("/sql-dojo/sessions")) {
           expect(init?.method).toBe("POST");
           expect(init?.body).toBe(JSON.stringify({
             difficulty: "intermediate",
@@ -129,11 +135,48 @@ describe("SqlDojoPage", () => {
       initialEntries: ["/sql-dojo"],
     });
 
-    await screen.findByText("部門別ランキング");
-    fireEvent.click(screen.getByRole("button", { name: /部門別ランキング/ }));
+    const themeTitle = await screen.findByText("部門別ランキング");
+    const themeCard = themeTitle.closest("div.rounded-lg");
+    expect(themeCard).not.toBeNull();
+    fireEvent.click(
+      within(themeCard as HTMLElement).getByRole("button", {
+        name: "このテーマを解く",
+      }),
+    );
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalled();
     });
+  });
+
+  it("テーマごとの挑戦回数と最高点を表示する", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/sql-dojo/catalog")) {
+        return mockJsonResponse({
+          ...mockCatalog,
+          themes: [
+            {
+              ...mockCatalog.themes[0],
+              difficulty: "beginner",
+              attempt_count: 2,
+              best_score: 91,
+              last_attempted_at: "2026-06-21T00:00:00+09:00",
+            },
+            mockCatalog.themes[1],
+          ],
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderWithProviders(<SqlDojoPage />, {
+      initialEntries: ["/sql-dojo"],
+    });
+
+    expect(await screen.findByText("顧客別注文件数")).toBeInTheDocument();
+    expect(screen.getByText("2 回挑戦")).toBeInTheDocument();
+    expect(screen.getByText("最高 91 点")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "このテーマを解く" }).length).toBeGreaterThan(0);
   });
 });

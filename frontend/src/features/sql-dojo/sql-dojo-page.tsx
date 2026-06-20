@@ -11,7 +11,10 @@ import {
   useStartSqlDojoSession,
 } from "./use-sql-dojo";
 import { useSqlDojoStore } from "./use-sql-dojo-store";
-import type { SqlDojoDifficulty, SqlDojoThemeSummary } from "@/types/api";
+import type {
+  SqlDojoDifficulty,
+  SqlDojoThemeSummary,
+} from "@/types/api";
 
 const DIFFICULTY_LABELS: Record<SqlDojoDifficulty, string> = {
   beginner: "初級",
@@ -97,7 +100,6 @@ export function SqlDojoPage() {
       // handled by query state
     }
   };
-
   return (
     <AppShell crumbs={[{ label: "SQL道場" }]}>
       <GeneratingDialog
@@ -187,26 +189,48 @@ export function SqlDojoPage() {
                       </div>
                     ) : (
                       <div className="grid gap-3 md:grid-cols-2">
-                        {themes.map((theme) => (
-                          <button
-                            key={`${theme.family}-${theme.title}`}
-                            type="button"
-                            className="flex items-start justify-between rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-accent"
-                            onClick={() => start(theme.family, theme.title, theme.difficulty)}
-                            disabled={startMutation.isPending}
-                          >
-                            <div className="space-y-1">
-                              <div className="font-medium">{theme.title}</div>
-                              <div className="text-sm text-muted-foreground">
-                                {theme.business_domain} / {theme.target_skill}
+                        {themes.map((theme) => {
+                          return (
+                            <div
+                              key={`${theme.family}-${theme.title}`}
+                              className="space-y-3 rounded-lg border border-border bg-card px-4 py-3"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="space-y-1">
+                                  <div className="font-medium">{theme.title}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {theme.business_domain} / {theme.target_skill}
+                                  </div>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2 pl-3">
+                                  <Badge variant="secondary">{theme.variant_count}問</Badge>
+                                  <Badge variant="outline">{theme.family}</Badge>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                {theme.attempt_count > 0 ? (
+                                  <>
+                                    <span>{theme.attempt_count} 回挑戦</span>
+                                    {theme.best_score != null && (
+                                      <span>最高 {theme.best_score} 点</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span>未着手</span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => start(theme.family, theme.title, theme.difficulty)}
+                                  disabled={startMutation.isPending}
+                                >
+                                  このテーマを解く
+                                </Button>
                               </div>
                             </div>
-                            <div className="flex shrink-0 items-center gap-2 pl-3">
-                              <Badge variant="secondary">{theme.variant_count}問</Badge>
-                              <Badge variant="outline">{theme.family}</Badge>
-                            </div>
-                          </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>

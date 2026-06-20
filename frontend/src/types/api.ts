@@ -255,6 +255,9 @@ export interface SqlDojoThemeSummary {
   target_skill: string;
   title: string;
   variant_count: number;
+  attempt_count: number;
+  best_score: number | null;
+  last_attempted_at: string | null;
 }
 
 export interface SqlDojoCatalogResponse {

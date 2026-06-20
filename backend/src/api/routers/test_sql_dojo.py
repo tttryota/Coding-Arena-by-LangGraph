@@ -23,6 +23,9 @@ class _FakeSqlThemeBank:
                     "target_skill": "JOIN",
                     "title": "顧客別注文件数",
                     "variant_count": 3,
+                    "attempt_count": 0,
+                    "best_score": None,
+                    "last_attempted_at": None,
                 },
             ],
         }
@@ -145,6 +148,20 @@ class _FakeSqlDojoStore:
             for session_id, session in self.sessions.items()
         ]
 
+    def list_theme_history(self) -> list[object]:
+        return [
+            type(
+                "ThemeHistoryRow",
+                (),
+                {
+                    "theme_family": "join-basics",
+                    "attempt_count": 2,
+                    "best_score": 91,
+                    "last_attempted_at": "2026-06-21T00:00:00+09:00",
+                },
+            )(),
+        ]
+
     def find_answer_by_session(self, session_id: str) -> _FakeSqlDojoAnswerRecord | None:
         return self.answer
 
@@ -178,11 +195,14 @@ class TestCatalog:
         resp = client.get("/sql-dojo/catalog")
 
         assert resp.status_code == 200
-        assert resp.json()["difficulties"] == [
+        data = resp.json()
+        assert data["difficulties"] == [
             "beginner",
             "intermediate",
             "advanced",
         ]
+        assert data["themes"][0]["attempt_count"] == 2
+        assert data["themes"][0]["best_score"] == 91
 
 
 class TestStartSession:

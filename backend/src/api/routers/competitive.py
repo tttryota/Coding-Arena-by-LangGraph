@@ -8,6 +8,12 @@ from typing import TYPE_CHECKING, cast
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from competitive.domain.languages import (
+    default_language,
+    is_supported_language,
+    list_supported_languages,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -40,6 +46,7 @@ class _StartSessionRequest(BaseModel):
     """競プロセッション開始要求。"""
 
     theme_id: str | None = None
+    programming_language: str | None = None
 
 
 class _SubmitAnswerRequest(BaseModel):
@@ -154,6 +161,12 @@ def list_themes(request: Request) -> dict[str, object]:
     return {"themes": themes}
 
 
+@router.get("/languages")
+def list_languages() -> dict[str, object]:
+    """競プロの選択可能言語一覧を返す。"""
+    return {"languages": list_supported_languages()}
+
+
 @router.get("/sessions")
 def list_sessions(request: Request) -> dict[str, object]:
     """最近のセッション一覧を返す。"""
@@ -189,7 +202,19 @@ def start_session(
     c = _container(request)
     runner = _require_runner(c)
     session_id = str(uuid.uuid4())
-    initial_state: dict[str, object] = {"session_id": session_id}
+    programming_language = (
+        body.programming_language if body and body.programming_language
+        else default_language()
+    )
+    if not is_supported_language(programming_language):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported programming language: {programming_language}",
+        )
+    initial_state: dict[str, object] = {
+        "session_id": session_id,
+        "programming_language": programming_language,
+    }
     if body and body.theme_id:
         initial_state["algo_theme_id"] = body.theme_id
 
@@ -342,7 +367,7 @@ def ask_question(
 
 @router.get("/sessions/{session_id}")
 def get_session(session_id: str, request: Request) -> dict[str, object]:
-    """セッション状態を取得する(reference_solution/rubricは除外)。"""
+    """セッション状態を取得する(reference_solution は completed 時のみ返す)。"""
     c = _container(request)
     try:
         details = c.competitive_store.get_session_details(session_id)
@@ -359,4 +384,6 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
         response["space_complexity"] = answer.space_complexity
         response["improvement_suggestions"] = answer.improvement_suggestions
         response["rubric_scores_json"] = answer.rubric_scores_json
+    if response.get("status") == "completed":
+        response["reference_solution"] = details.get("reference_solution", "")
     return response

@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import json
-import random
 from typing import TYPE_CHECKING, Any, TypedDict
 
 import structlog
@@ -39,9 +38,6 @@ _JSON_INSTRUCTION = (
     "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
 )
 _COMPETITIVE_MODEL = "gpt-5.3-codex-spark"
-_LANGUAGES: list[ProgrammingLanguage] = ["python", "typescript"]
-
-
 def _parse_json(text: str) -> dict[str, Any]:
     """LLM レスポンスから JSON を抽出してパースする。"""
     cleaned = text.strip()
@@ -178,13 +174,6 @@ def _validate_rubric_scores_consistency(
         expected_max = expected_criteria[rs["criterion"]]
         rs["points_max"] = expected_max
         rs["points_awarded"] = min(max(rs["points_awarded"], 0), expected_max)
-
-
-def _pick_language() -> ProgrammingLanguage:
-    """Python または TypeScript をランダムに選択する。"""
-    return random.choice(_LANGUAGES)  # noqa: S311
-
-
 def _history_to_text(history: list[CompetitiveChatMessage]) -> str:
     if not history:
         return "なし"
@@ -285,8 +274,8 @@ class CodexCompetitiveProblemGenerationLlm:
         self,
         theme_label: str,
         theme_category: str,
+        programming_language: ProgrammingLanguage,
     ) -> ProblemGenerationResult:
-        language = _pick_language()
         system = (
             "あなたは競技プログラミングの問題作成AIです。\n"
             "指定されたアルゴリズムテーマに基づき、以下を同時に生成してください:\n"
@@ -295,7 +284,7 @@ class CodexCompetitiveProblemGenerationLlm:
             "3. 出力形式(output_format): 出力の形式説明\n"
             "4. 制約(constraints): 入力値の制約条件\n"
             "5. 入出力例(examples): 2〜3個の入出力例(input, output)\n"
-            f"6. 模範解答(reference_solution): {language} で書かれた正しい解答コード\n"
+            f"6. 模範解答(reference_solution): {programming_language} で書かれた正しい解答コード\n"
             "7. 採点基準(grading_rubric): 3〜5項目の採点基準(criterion, points, description)\n\n"
             "問題設計ルール:\n"
             "- AtCoder の ABC〜ARC 程度の難易度にしてください\n"
@@ -318,7 +307,7 @@ class CodexCompetitiveProblemGenerationLlm:
             "}"
         )
         user = (
-            f"テーマ: {theme_label}\nカテゴリ: {theme_category}\n出題言語: {language}"
+            f"テーマ: {theme_label}\nカテゴリ: {theme_category}\n出題言語: {programming_language}"
         )
         try:
             raw = self._transport.call(
@@ -328,7 +317,7 @@ class CodexCompetitiveProblemGenerationLlm:
                     CodexMessage(role="user", content=user),
                 ],
             )
-            return _validate_problem_response(_parse_json(raw), language)
+            return _validate_problem_response(_parse_json(raw), programming_language)
         except ProblemGenerationError:
             raise
         except Exception as exc:

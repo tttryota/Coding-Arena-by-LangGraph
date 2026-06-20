@@ -60,7 +60,7 @@ class _FakeGraphRunner:
             "algo_theme_id": "algo-001",
             "algo_theme_label": "二分探索",
             "algo_theme_category": "探索",
-            "programming_language": "python",
+            "programming_language": state.get("programming_language", "python"),
             "problem_statement": "問題文",
             "input_format": "入力形式",
             "output_format": "出力形式",
@@ -199,6 +199,18 @@ class TestListThemes:
         assert data["themes"][0]["attempt_count"] == 0
 
 
+class TestListLanguages:
+    def test_returns_languages(self) -> None:
+        client = _make_client()
+
+        resp = client.get("/algorithm-quiz/languages")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["languages"][0]["id"] == "python"
+        assert "editor_placeholder" in data["languages"][0]
+
+
 class TestStartSession:
     def test_auto_start(self) -> None:
         client = _make_client()
@@ -215,14 +227,24 @@ class TestStartSession:
         client = _make_client()
         resp = client.post(
             "/algorithm-quiz/sessions",
-            json={"theme_id": "algo-001"},
+            json={"theme_id": "algo-001", "programming_language": "typescript"},
         )
 
         assert resp.status_code == 201
         data = resp.json()
         assert data["session_id"]
         assert data["theme_id"] == "algo-001"
+        assert data["programming_language"] == "typescript"
         assert "reference_solution" not in data
+
+    def test_rejects_unknown_language(self) -> None:
+        client = _make_client()
+        resp = client.post(
+            "/algorithm-quiz/sessions",
+            json={"programming_language": "ruby"},
+        )
+
+        assert resp.status_code == 422
 
 
 class TestSubmitAnswer:
@@ -286,7 +308,7 @@ class TestGetSession:
         data = resp.json()
         assert data["score"] == 85
         assert data["feedback"] == "良い解答です"
-        assert "reference_solution" not in data
+        assert data["reference_solution"] == "def solve(): pass"
 
     def test_hides_reference_solution_until_completed(self) -> None:
         client = _make_client()

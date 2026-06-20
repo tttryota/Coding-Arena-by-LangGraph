@@ -3,6 +3,7 @@ import { apiFetch } from "@/lib/api";
 import type {
   CompetitiveAnswerResponse,
   CompetitiveChatMessage,
+  CompetitiveLanguagesResponse,
   CompetitiveQuestionResponse,
   CompetitiveSessionListResponse,
   CompetitiveSessionResponse,
@@ -16,6 +17,16 @@ export function useThemes() {
     queryFn: async () => {
       const res = await apiFetch("/algorithm-quiz/themes");
       return res.json() as Promise<ThemesResponse>;
+    },
+  });
+}
+
+export function useCompetitiveLanguages() {
+  return useQuery({
+    queryKey: ["competitive-languages"],
+    queryFn: async () => {
+      const res = await apiFetch("/algorithm-quiz/languages");
+      return res.json() as Promise<CompetitiveLanguagesResponse>;
     },
   });
 }
@@ -43,11 +54,17 @@ export function useCompetitiveSession(sessionId: string) {
 
 export function useStartSession() {
   return useMutation({
-    mutationFn: async (themeId?: string) => {
-      const body = themeId ? JSON.stringify({ theme_id: themeId }) : undefined;
+    mutationFn: async (params: {
+      themeId?: string;
+      programmingLanguage: string;
+    }) => {
+      const body = JSON.stringify({
+        theme_id: params.themeId,
+        programming_language: params.programmingLanguage,
+      });
       const res = await apiFetch("/algorithm-quiz/sessions", {
         method: "POST",
-        headers: body ? { "Content-Type": "application/json" } : undefined,
+        headers: { "Content-Type": "application/json" },
         body,
       });
       return res.json() as Promise<CompetitiveStartResponse>;

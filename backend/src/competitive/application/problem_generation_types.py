@@ -43,6 +43,7 @@ class ProblemGenerationLlmClient(Protocol):
         self,
         theme_label: str,
         theme_category: str,
+        programming_language: str,
     ) -> ProblemGenerationResult: ...
 
 

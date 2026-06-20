@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "chromadb>=0.5",
     "sentence-transformers>=3.0",
+    "sqlglot>=27.16.0",
 ]
 
 [dependency-groups]

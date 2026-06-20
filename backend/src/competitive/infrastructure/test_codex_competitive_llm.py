@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from unittest.mock import patch
 
 import pytest
 
@@ -76,11 +75,7 @@ class TestCodexCompetitiveProblemGenerationLlm:
         transport = FakeTransport(_VALID_PROBLEM_RESPONSE)
         adapter = CodexCompetitiveProblemGenerationLlm(transport)
 
-        with patch(
-            "competitive.infrastructure.codex_competitive_llm._pick_language",
-            return_value="python",
-        ):
-            result = adapter.generate_problem("二分探索", "探索")
+        result = adapter.generate_problem("二分探索", "探索", "python")
 
         assert result.programming_language == "python"
         assert result.problem_statement == "N個の整数から二分探索で値を見つけよ"
@@ -97,11 +92,7 @@ class TestCodexCompetitiveProblemGenerationLlm:
         transport = FakeTransport(_VALID_PROBLEM_RESPONSE)
         adapter = CodexCompetitiveProblemGenerationLlm(transport)
 
-        with patch(
-            "competitive.infrastructure.codex_competitive_llm._pick_language",
-            return_value="typescript",
-        ):
-            adapter.generate_problem("ダイクストラ法", "グラフ")
+        adapter.generate_problem("ダイクストラ法", "グラフ", "typescript")
 
         user_msg = transport.last_messages[-1].content
         assert "ダイクストラ法" in user_msg
@@ -131,14 +122,8 @@ class TestCodexCompetitiveProblemGenerationLlm:
         transport = FakeTransport(bad_response)
         adapter = CodexCompetitiveProblemGenerationLlm(transport)
 
-        with (
-            pytest.raises(ProblemGenerationError) as exc_info,
-            patch(
-                "competitive.infrastructure.codex_competitive_llm._pick_language",
-                return_value="python",
-            ),
-        ):
-            adapter.generate_problem("テスト", "テスト")
+        with pytest.raises(ProblemGenerationError) as exc_info:
+            adapter.generate_problem("テスト", "テスト", "python")
         assert exc_info.value.error_code == "llm_response_parse_failed"
 
     def test_insufficient_rubric_raises(self) -> None:
@@ -166,14 +151,8 @@ class TestCodexCompetitiveProblemGenerationLlm:
         transport = FakeTransport(bad_response)
         adapter = CodexCompetitiveProblemGenerationLlm(transport)
 
-        with (
-            pytest.raises(ProblemGenerationError) as exc_info,
-            patch(
-                "competitive.infrastructure.codex_competitive_llm._pick_language",
-                return_value="python",
-            ),
-        ):
-            adapter.generate_problem("テスト", "テスト")
+        with pytest.raises(ProblemGenerationError) as exc_info:
+            adapter.generate_problem("テスト", "テスト", "python")
         assert exc_info.value.error_code == "llm_response_parse_failed"
 
     def test_invalid_json_raises(self) -> None:
@@ -184,14 +163,8 @@ class TestCodexCompetitiveProblemGenerationLlm:
         transport = FakeTransport("not json")
         adapter = CodexCompetitiveProblemGenerationLlm(transport)
 
-        with (
-            pytest.raises(ProblemGenerationError) as exc_info,
-            patch(
-                "competitive.infrastructure.codex_competitive_llm._pick_language",
-                return_value="python",
-            ),
-        ):
-            adapter.generate_problem("テスト", "テスト")
+        with pytest.raises(ProblemGenerationError) as exc_info:
+            adapter.generate_problem("テスト", "テスト", "python")
         assert exc_info.value.error_code == "llm_response_parse_failed"
 
     def test_rubric_points_not_100_raises(self) -> None:
@@ -220,14 +193,8 @@ class TestCodexCompetitiveProblemGenerationLlm:
         transport = FakeTransport(bad_response)
         adapter = CodexCompetitiveProblemGenerationLlm(transport)
 
-        with (
-            pytest.raises(ProblemGenerationError) as exc_info,
-            patch(
-                "competitive.infrastructure.codex_competitive_llm._pick_language",
-                return_value="python",
-            ),
-        ):
-            adapter.generate_problem("テスト", "テスト")
+        with pytest.raises(ProblemGenerationError) as exc_info:
+            adapter.generate_problem("テスト", "テスト", "python")
         assert exc_info.value.error_code == "llm_response_parse_failed"
 
     def test_markdown_wrapped_json_is_parsed(self) -> None:
@@ -239,11 +206,7 @@ class TestCodexCompetitiveProblemGenerationLlm:
         transport = FakeTransport(wrapped)
         adapter = CodexCompetitiveProblemGenerationLlm(transport)
 
-        with patch(
-            "competitive.infrastructure.codex_competitive_llm._pick_language",
-            return_value="python",
-        ):
-            result = adapter.generate_problem("二分探索", "探索")
+        result = adapter.generate_problem("二分探索", "探索", "python")
 
         assert result.problem_statement == "N個の整数から二分探索で値を見つけよ"
 

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { BookOpenText, MessageSquare, Swords } from "lucide-react";
+import { BookOpenText, MessageSquare, Swords, Database } from "lucide-react";
 import { ScoreBadge } from "@/components/common/score-badge";
 import { formatRelativeTime } from "@/lib/relative-time";
 import type { ActivityItem } from "./use-dashboard-data";
@@ -36,6 +36,8 @@ export function RecentActivity({ activity }: RecentActivityProps) {
         {activity.map((item, i) => {
           const isQuiz = item.kind === "quiz";
           const isCompetitive = item.kind === "competitive";
+          const isSqlDojo = item.kind === "sql_dojo";
+          const isFeedback = item.kind === "feedback";
           const time = isQuiz
             ? formatRelativeTime(item.lastQuizAt)
             : formatRelativeTime(item.createdAt);
@@ -47,13 +49,15 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                   ? `q-${item.itemId}`
                   : isCompetitive
                     ? `c-${item.sessionId}`
+                    : isSqlDojo
+                      ? `s-${item.sessionId}`
                     : `f-${item.id}`
               }
               type="button"
               className={[
                 "relative flex w-full cursor-pointer items-start gap-3 rounded-[6px] border-0 bg-transparent px-3 py-[11px] text-left font-inherit text-foreground transition-[background] duration-150 hover:bg-[rgb(51_65_85/0.4)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
                 i > 0 && "shadow-[inset_0_1px_0_0_var(--border)]",
-                !isQuiz && !isCompetitive && item.unread && "is-unread",
+                isFeedback && item.unread && "is-unread",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -62,13 +66,15 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                   navigate(`/roadmaps/${item.roadmapId}`);
                 } else if (isCompetitive) {
                   navigate(`/algorithm-quiz/${item.sessionId}`);
+                } else if (isSqlDojo) {
+                  navigate(`/sql-dojo/${item.sessionId}`);
                 } else {
                   navigate("/feedbacks");
                 }
               }}
             >
               {/* Unread left bar */}
-              {!isQuiz && !isCompetitive && item.unread && (
+              {isFeedback && item.unread && (
                 <span className="absolute bottom-3 left-1 top-3 w-0.5 rounded-r bg-primary opacity-70" />
               )}
 
@@ -80,6 +86,8 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                     ? "border-[rgb(59_130_246/0.25)] bg-[rgb(59_130_246/0.1)] text-[#93c5fd]"
                     : isCompetitive
                       ? "border-[rgb(234_179_8/0.25)] bg-[rgb(234_179_8/0.1)] text-[#fde047]"
+                      : isSqlDojo
+                        ? "border-[rgb(34_211_238/0.25)] bg-[rgb(34_211_238/0.1)] text-[#67e8f9]"
                       : "border-[rgb(168_85_247/0.22)] bg-[rgb(168_85_247/0.1)] text-[#c4b5fd]",
                 ].join(" ")}
               >
@@ -87,6 +95,8 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                   <BookOpenText size={13} />
                 ) : isCompetitive ? (
                   <Swords size={13} />
+                ) : isSqlDojo ? (
+                  <Database size={13} />
                 ) : (
                   <MessageSquare size={13} />
                 )}
@@ -95,10 +105,14 @@ export function RecentActivity({ activity }: RecentActivityProps) {
               {/* Body */}
               <span className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="truncate text-[13px] font-medium tracking-[-0.005em] text-foreground">
-                  {isCompetitive ? item.themeLabel : item.title}
+                  {isCompetitive
+                    ? item.themeLabel
+                    : isSqlDojo
+                      ? item.themeTitle
+                      : item.title}
                 </span>
                 <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  {isQuiz || isCompetitive ? (
+                  {isQuiz || isCompetitive || isSqlDojo ? (
                     <>
                       <ScoreBadge score={item.score} />
                       <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-border" />
@@ -146,6 +160,12 @@ export function RecentActivity({ activity }: RecentActivityProps) {
               <Swords size={11} />
             </span>
             競プロ
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] border border-[rgb(34_211_238/0.25)] bg-[rgb(34_211_238/0.1)] text-[#67e8f9]">
+              <Database size={11} />
+            </span>
+            SQL道場
           </span>
           <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] border border-[rgb(168_85_247/0.22)] bg-[rgb(168_85_247/0.1)] text-[#c4b5fd]">

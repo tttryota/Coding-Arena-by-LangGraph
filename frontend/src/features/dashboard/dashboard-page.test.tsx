@@ -102,6 +102,8 @@ function mockSuccess(
       return mockJsonResponse(feedbacks);
     if (path === "/algorithm-quiz/sessions")
       return mockJsonResponse({ sessions: [] });
+    if (path === "/sql-dojo/sessions")
+      return mockJsonResponse({ sessions: [] });
     throw new Error(`Unexpected path: ${path}`);
   });
 }
@@ -142,6 +144,7 @@ describe("DashboardPage", () => {
     expect(screen.getByText("学習中のロードマップ")).toBeInTheDocument();
     // 未読フィードバック
     expect(screen.getByText("未読フィードバック")).toBeInTheDocument();
+    expect(screen.getByText("SQL道場(直近)")).toBeInTheDocument();
   });
 
   /*
@@ -177,5 +180,31 @@ describe("DashboardPage", () => {
       "ダッシュボードの取得に失敗しました",
     );
     expect(screen.getByText("再読み込み")).toBeInTheDocument();
+  });
+
+  it("SQL道場一覧だけ失敗してもダッシュボード本体は表示する", async () => {
+    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
+      if (path === "/roadmaps") return mockJsonResponse(roadmapList);
+      if (path === "/roadmaps/rm-1") return mockJsonResponse(roadmapTree1);
+      if (path === "/roadmaps/rm-2") return mockJsonResponse(roadmapTree2);
+      if (path.includes("/ingestion/feedbacks")) {
+        return mockJsonResponse(unreadFeedbacks);
+      }
+      if (path === "/algorithm-quiz/sessions") {
+        return mockJsonResponse({ sessions: [] });
+      }
+      if (path === "/sql-dojo/sessions") {
+        throw new ApiError(500, "sql dojo failed");
+      }
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(
+      await screen.findByText("学習の全体像と次にやることをここで決めます"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("SQL道場(直近)")).toBeInTheDocument();
+    expect(screen.getByText("取得失敗")).toBeInTheDocument();
   });
 });

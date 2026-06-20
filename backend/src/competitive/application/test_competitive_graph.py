@@ -56,9 +56,14 @@ class FakeProblemResult:
 
 class FakeProblemGenerationLlm:
     def generate_problem(
-        self, theme_label: str, theme_category: str,
+        self,
+        theme_label: str,
+        theme_category: str,
+        programming_language: str,
     ) -> FakeProblemResult:
-        return FakeProblemResult()
+        result = FakeProblemResult()
+        result.programming_language = programming_language
+        return result
 
 
 class FakeEvaluationResult:
@@ -110,7 +115,8 @@ class TestCompetitiveGraphFlow:
         thread_id = "test-session-001"
 
         runner.start_graph(
-            {"session_id": thread_id}, thread_id=thread_id,
+            {"session_id": thread_id, "programming_language": "python"},
+            thread_id=thread_id,
         )
 
         state = runner.get_state(thread_id=thread_id)
@@ -135,7 +141,11 @@ class TestCompetitiveGraphFlow:
         thread_id = "test-session-002"
 
         runner.start_graph(
-            {"session_id": thread_id, "algo_theme_id": "algo-001"},
+            {
+                "session_id": thread_id,
+                "algo_theme_id": "algo-001",
+                "programming_language": "python",
+            },
             thread_id=thread_id,
         )
 

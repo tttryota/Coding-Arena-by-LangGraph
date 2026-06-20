@@ -7,6 +7,8 @@ import { QuizSessionPage } from "@/features/session/quiz-session-page";
 import { FeedbackListPage } from "@/features/feedback/feedback-list-page";
 import { CompetitivePage } from "@/features/competitive/competitive-page";
 import { CompetitiveSessionPage } from "@/features/competitive/competitive-session-page";
+import { SqlDojoPage } from "@/features/sql-dojo/sql-dojo-page";
+import { SqlDojoSessionPage } from "@/features/sql-dojo/sql-dojo-session-page";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +33,8 @@ export default function App() {
             path="/algorithm-quiz/:sessionId"
             element={<CompetitiveSessionPage />}
           />
+          <Route path="/sql-dojo" element={<SqlDojoPage />} />
+          <Route path="/sql-dojo/:sessionId" element={<SqlDojoSessionPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

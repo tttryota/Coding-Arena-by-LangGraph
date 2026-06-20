@@ -122,6 +122,13 @@ def _aggregate_signatures(parsed: exp.Expression) -> set[tuple[str, str]]:
                     f"{_normalize_identifier(first_arg.name)}",
                 )
             column_names.add(_normalize_identifier(first_arg.name))
+        for column in agg.find_all(exp.Column):
+            if column.table:
+                column_names.add(
+                    f"{_normalize_identifier(column.table)}."
+                    f"{_normalize_identifier(column.name)}",
+                )
+            column_names.add(_normalize_identifier(column.name))
         for column_name in column_names:
             result.add((func_name, column_name))
     return result
@@ -157,10 +164,15 @@ def _predicate_columns(parsed: exp.Expression) -> set[str]:
 
 def _statement_kind(parsed: exp.Expression, raw_sql: str) -> str:
     sql_without_comments = _strip_sql_comments_preserving_offsets(raw_sql)
-    if sql_without_comments.strip().upper().startswith("EXPLAIN"):
+    normalized_prefix = sql_without_comments.strip().upper()
+    if normalized_prefix.startswith("EXPLAIN"):
         return "explain"
+    if normalized_prefix.startswith("CREATE MATERIALIZED VIEW"):
+        return "create_materialized_view"
     if isinstance(parsed, exp.Create) and parsed.args.get("kind") == "INDEX":
         return "create_index"
+    if isinstance(parsed, exp.Insert):
+        return "insert"
     if isinstance(parsed, exp.Select) or parsed.find(exp.Select) is not None:
         return "select"
     return parsed.key
@@ -318,6 +330,65 @@ def _strip_sql_comments_preserving_offsets(raw_sql: str) -> str:
     return "".join(result)
 
 
+def _mask_sql_literals_preserving_offsets(raw_sql: str) -> str:
+    sql_without_comments = _strip_sql_comments_preserving_offsets(raw_sql)
+    result: list[str] = []
+    index = 0
+    while index < len(sql_without_comments):
+        current = sql_without_comments[index]
+        if current == "$":
+            consumed = _consume_dollar_quoted_sql(sql_without_comments, index)
+            if consumed is not None:
+                text, index = consumed
+                result.append(" " * len(text))
+                continue
+        if current == "'":
+            text, index = _consume_quoted_sql(
+                sql_without_comments,
+                index,
+                current,
+                escape_backslash=_is_postgres_escape_string_quote(
+                    sql_without_comments,
+                    index,
+                ),
+            )
+            result.append(" " * len(text))
+            continue
+        result.append(current)
+        index += 1
+    return "".join(result)
+
+
+def _sql_literal_ranges(raw_sql: str) -> list[tuple[int, int]]:
+    sql_without_comments = _strip_sql_comments_preserving_offsets(raw_sql)
+    ranges: list[tuple[int, int]] = []
+    index = 0
+    while index < len(sql_without_comments):
+        current = sql_without_comments[index]
+        if current == "$":
+            consumed = _consume_dollar_quoted_sql(sql_without_comments, index)
+            if consumed is not None:
+                _, end_index = consumed
+                ranges.append((index, end_index))
+                index = end_index
+                continue
+        if current == "'":
+            _, end_index = _consume_quoted_sql(
+                sql_without_comments,
+                index,
+                current,
+                escape_backslash=_is_postgres_escape_string_quote(
+                    sql_without_comments,
+                    index,
+                ),
+            )
+            ranges.append((index, end_index))
+            index = end_index
+            continue
+        index += 1
+    return ranges
+
+
 def _is_postgres_escape_string_quote(raw_sql: str, quote_index: int) -> bool:
     if quote_index == 0 or raw_sql[quote_index - 1].lower() != "e":
         return False
@@ -443,6 +514,183 @@ def _has_invalid_explain_option_combination(options: set[str]) -> bool:
         return True
     analyze_only_options = {"SERIALIZE", "TIMING", "WAL"}
     return bool(analyze_only_options & options) and "ANALYZE" not in options
+
+
+def _normalized_sql(raw_sql: str) -> str:
+    without_comments = _strip_sql_comments_preserving_offsets(raw_sql)
+    return re.sub(r"\s+", " ", without_comments).strip().lower()
+
+
+def _normalized_structural_sql(raw_sql: str) -> str:
+    without_literals = _mask_sql_literals_preserving_offsets(raw_sql)
+    return re.sub(r"\s+", " ", without_literals).strip().lower()
+
+
+def _compact_sql(raw_sql: str) -> str:
+    return re.sub(r"\s+", "", _normalized_sql(raw_sql))
+
+
+def _compact_structural_sql(raw_sql: str) -> str:
+    return re.sub(r"\s+", "", _normalized_structural_sql(raw_sql))
+
+
+def _compact_sql_with_offsets(raw_sql: str) -> tuple[str, list[int]]:
+    sql_without_comments = _strip_sql_comments_preserving_offsets(raw_sql)
+    compact_chars: list[str] = []
+    offsets: list[int] = []
+    for index, char in enumerate(sql_without_comments):
+        if char.isspace():
+            continue
+        compact_chars.append(char.lower())
+        offsets.append(index)
+    return "".join(compact_chars), offsets
+
+
+def _sql_fragment_present(user_sql: str, fragment: str) -> bool:
+    compact_sql, offsets = _compact_sql_with_offsets(user_sql)
+    compact_fragment = _compact_sql(fragment)
+    literal_ranges = _sql_literal_ranges(user_sql)
+    start = compact_sql.find(compact_fragment)
+    while start != -1:
+        end = start + len(compact_fragment) - 1
+        original_start = offsets[start]
+        original_end = offsets[end] + 1
+        if not any(
+            literal_start <= original_start and original_end <= literal_end
+            for literal_start, literal_end in literal_ranges
+        ):
+            return True
+        start = compact_sql.find(compact_fragment, start + 1)
+    return False
+
+
+def _required_function_present(sql_lower: str, function_name: str) -> bool:
+    normalized = _normalize_identifier(function_name)
+    if normalized == "is distinct from":
+        return " is distinct from " in f" {sql_lower} "
+    return re.search(rf"\b{re.escape(normalized)}\s*\(", sql_lower) is not None
+
+
+def _actual_filter_aggregates(sql_lower: str) -> set[tuple[str, str]]:
+    result: set[tuple[str, str]] = set()
+    pattern = re.compile(
+        r"\b(?P<func>[a-z_][a-z0-9_]*)\s*\((?P<body>[^)]*)\)\s*filter\s*\(\s*where\b",
+    )
+    for matched in pattern.finditer(sql_lower):
+        func_name = matched.group("func").upper()
+        body = matched.group("body")
+        result.add((func_name, "*"))
+        for column in re.findall(r"\b[a-z_][a-z0-9_]*\b", body):
+            result.add((func_name, _normalize_identifier(column)))
+    return result
+
+
+def _distinct_on_columns(sql_lower: str) -> set[str]:
+    matched = re.search(r"\bdistinct\s+on\s*\((?P<body>[^)]*)\)", sql_lower)
+    if matched is None:
+        return set()
+    return {
+        _normalize_identifier(part.split(".")[-1])
+        for part in matched.group("body").split(",")
+        if part.strip()
+    }
+
+
+def _having_columns(parsed: exp.Expression) -> set[str]:
+    having_expressions = list(parsed.find_all(exp.Having))
+    result = _column_names(
+        column
+        for having_exp in having_expressions
+        for column in having_exp.find_all(exp.Column)
+    )
+    if having_expressions:
+        result.add("*")
+    return result
+
+
+def _json_operator_present(sql_lower: str, operator: str) -> bool:
+    if operator == "->":
+        return "->" in sql_lower
+    return operator in sql_lower
+
+
+def _array_function_present(sql_lower: str, function_name: str) -> bool:
+    normalized = _normalize_identifier(function_name)
+    if normalized == "any":
+        return re.search(r"\bany\s*\(", sql_lower) is not None
+    return _required_function_present(sql_lower, normalized)
+
+
+def _index_include_columns(sql_lower: str) -> set[str]:
+    matched = re.search(r"\binclude\s*\((?P<body>[^)]*)\)", sql_lower)
+    if matched is None:
+        return set()
+    return {
+        _normalize_identifier(part.split(".")[-1])
+        for part in matched.group("body").split(",")
+        if part.strip()
+    }
+
+
+def _index_method(sql_lower: str) -> str | None:
+    matched = re.search(r"\busing\s+(?P<method>[a-z_][a-z0-9_]*)\b", sql_lower)
+    if matched is None:
+        return None
+    return _normalize_identifier(matched.group("method"))
+
+
+def _pagination_style_present(sql_lower: str, style: str) -> bool:
+    normalized = _normalize_identifier(style)
+    if normalized == "keyset":
+        has_cursor_predicate = re.search(r"\bwhere\b.+(?:>|<)", sql_lower) is not None
+        return has_cursor_predicate and " order by " in sql_lower and " limit " in sql_lower
+    if normalized == "offset":
+        return re.search(r"\boffset\s+\d+", sql_lower) is not None
+    return normalized in sql_lower
+
+
+def _order_requirements_satisfied(
+    actual_orders: list[tuple[str, str]],
+    expected_orders: list[tuple[str, str]],
+) -> bool:
+    if not expected_orders:
+        return True
+    return actual_orders[:len(expected_orders)] == expected_orders
+
+
+def _prohibited_pattern_hits(user_sql: str, patterns: list[str]) -> list[str]:
+    sql_lower = _normalized_sql(user_sql)
+    implicit_join = "," in sql_lower and " join " not in sql_lower
+    prohibited_hits: list[str] = []
+    for item in patterns:
+        if _is_prohibited_pattern_hit(item, sql_lower, implicit_join):
+            prohibited_hits.append(item)
+    return prohibited_hits
+
+
+def _is_prohibited_pattern_hit(
+    item: str,
+    sql_lower: str,
+    implicit_join: bool,
+) -> bool:
+    special_patterns = {
+        "implicit_join",
+        "offset_pagination",
+        "select_star_for_report",
+        "leading_wildcard_without_trigram",
+    }
+    if item == "implicit_join":
+        return implicit_join
+    if item == "offset_pagination":
+        return re.search(r"\boffset\s+\d+", sql_lower) is not None
+    if item == "select_star_for_report":
+        return re.search(r"\bselect\s+\*", sql_lower) is not None
+    if item == "leading_wildcard_without_trigram":
+        return (
+            re.search(r"\blike\s+'%", sql_lower) is not None
+            and "gin_trgm_ops" not in sql_lower
+        )
+    return item not in special_patterns and item.lower() in sql_lower
 
 
 def _add_rule(  # noqa: PLR0913
@@ -591,28 +839,28 @@ def grade_sql_answer(  # noqa: C901, PLR0915
     required_order_by = grading_contract.get("required_order_by", [])
     if required_order_by:
         order_exp = target_parsed.find(exp.Order)
-        actual_orders: set[tuple[str, str]] = set()
+        actual_orders: list[tuple[str, str]] = []
         if order_exp is not None:
             for ordered in order_exp.expressions:
                 if isinstance(ordered, exp.Ordered) and isinstance(ordered.this, exp.Column):
                     name = _normalize_identifier(ordered.this.name)
                     direction = "DESC" if ordered.args.get("desc") else "ASC"
-                    actual_orders.add((name, direction))
+                    actual_orders.append((name, direction))
                 elif isinstance(ordered, exp.Column):
-                    actual_orders.add((_normalize_identifier(ordered.name), "ASC"))
-        expected_orders = {
+                    actual_orders.append((_normalize_identifier(ordered.name), "ASC"))
+        expected_orders = [
             (
                 _normalize_identifier(str(item["column"])),
                 _normalize_identifier(str(item.get("direction", "ASC"))).upper(),
             )
             for item in required_order_by
-        }
+        ]
         _add_rule(
             rules,
             name="order_by",
             weight=10,
-            passed=expected_orders.issubset(actual_orders),
-            message=f"Expected order by {sorted(expected_orders)}, got {sorted(actual_orders)}",
+            passed=_order_requirements_satisfied(actual_orders, expected_orders),
+            message=f"Expected order by {expected_orders}, got {actual_orders}",
         )
 
     required_limit = grading_contract.get("required_limit")
@@ -653,6 +901,232 @@ def grade_sql_answer(  # noqa: C901, PLR0915
             weight=10,
             passed=expected.issubset(actual_ctes),
             message=f"Expected CTEs {sorted(expected)}, got {sorted(actual_ctes)}",
+        )
+
+    sql_lower = _normalized_structural_sql(user_sql)
+    sql_compact = _compact_structural_sql(user_sql)
+
+    required_functions = grading_contract.get("required_functions", [])
+    if required_functions:
+        expected = {_normalize_identifier(name) for name in required_functions}
+        actual = {
+            name for name in expected
+            if _required_function_present(sql_lower, name)
+        }
+        _add_rule(
+            rules,
+            name="required_functions",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=f"Expected functions {sorted(expected)}, got {sorted(actual)}",
+        )
+
+    if grading_contract.get("required_case") is True:
+        has_case = target_parsed.find(exp.Case) is not None or (
+            " case " in f" {sql_lower} " and " when " in f" {sql_lower} "
+        )
+        _add_rule(
+            rules,
+            name="case_expression",
+            weight=10,
+            passed=has_case,
+            message="Expected CASE WHEN expression",
+        )
+
+    required_filter_aggregates = grading_contract.get("required_filter_aggregates", [])
+    if required_filter_aggregates:
+        actual_filter_aggs = _actual_filter_aggregates(sql_lower)
+        expected_filter_aggs = {
+            (
+                _normalize_identifier(str(item["function"])).upper(),
+                _normalize_identifier(str(item["column"])),
+            )
+            for item in required_filter_aggregates
+        }
+        _add_rule(
+            rules,
+            name="filter_aggregates",
+            weight=10,
+            passed=expected_filter_aggs.issubset(actual_filter_aggs),
+            message=(
+                f"Expected filter aggregates {sorted(expected_filter_aggs)}, "
+                f"got {sorted(actual_filter_aggs)}"
+            ),
+        )
+
+    required_distinct_on = grading_contract.get("required_distinct_on", [])
+    if required_distinct_on:
+        actual_distinct_on = _distinct_on_columns(sql_lower)
+        expected = {_normalize_identifier(column) for column in required_distinct_on}
+        _add_rule(
+            rules,
+            name="distinct_on",
+            weight=10,
+            passed=expected.issubset(actual_distinct_on),
+            message=(
+                f"Expected DISTINCT ON {sorted(expected)}, "
+                f"got {sorted(actual_distinct_on)}"
+            ),
+        )
+
+    required_having_columns = grading_contract.get("required_having_columns", [])
+    if required_having_columns:
+        actual_having = _having_columns(target_parsed)
+        expected = {_normalize_identifier(column) for column in required_having_columns}
+        _add_rule(
+            rules,
+            name="having_columns",
+            weight=10,
+            passed=expected.issubset(actual_having),
+            message=f"Expected HAVING {sorted(expected)}, got {sorted(actual_having)}",
+        )
+
+    if grading_contract.get("required_exists") is True:
+        exists_present = re.search(r"(?<!not\s)\bexists\s*\(", sql_lower) is not None
+        _add_rule(
+            rules,
+            name="exists_subquery",
+            weight=10,
+            passed=exists_present,
+            message="Expected EXISTS subquery",
+        )
+
+    if grading_contract.get("required_not_exists") is True:
+        not_exists_present = re.search(r"\bnot\s+exists\s*\(", sql_lower) is not None
+        _add_rule(
+            rules,
+            name="not_exists_subquery",
+            weight=10,
+            passed=not_exists_present,
+            message="Expected NOT EXISTS subquery",
+        )
+
+    required_json_operators = grading_contract.get("required_json_operators", [])
+    if required_json_operators:
+        expected = set(required_json_operators)
+        actual = {
+            operator for operator in expected
+            if _json_operator_present(sql_lower, operator)
+        }
+        _add_rule(
+            rules,
+            name="json_operators",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=f"Expected JSON operators {sorted(expected)}, got {sorted(actual)}",
+        )
+
+    required_array_functions = grading_contract.get("required_array_functions", [])
+    if required_array_functions:
+        expected = {_normalize_identifier(name) for name in required_array_functions}
+        actual = {
+            name for name in expected
+            if _array_function_present(sql_lower, name)
+        }
+        _add_rule(
+            rules,
+            name="array_functions",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=f"Expected array functions {sorted(expected)}, got {sorted(actual)}",
+        )
+
+    if grading_contract.get("required_on_conflict") is True:
+        _add_rule(
+            rules,
+            name="on_conflict",
+            weight=10,
+            passed=" on conflict " in f" {sql_lower} ",
+            message="Expected ON CONFLICT clause",
+        )
+
+    partial_index_columns = grading_contract.get(
+        "required_partial_index_predicate_columns",
+        [],
+    )
+    if partial_index_columns:
+        where_sql = sql_lower.split(" where ", 1)[1] if " where " in sql_lower else ""
+        expected = {_normalize_identifier(column) for column in partial_index_columns}
+        actual = {
+            column for column in expected
+            if re.search(rf"\b{re.escape(column)}\b", where_sql)
+        }
+        _add_rule(
+            rules,
+            name="partial_index_predicate",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=(
+                f"Expected partial index predicate columns {sorted(expected)}, "
+                f"got {sorted(actual)}"
+            ),
+        )
+
+    expression_terms = grading_contract.get("required_expression_index_terms", [])
+    if expression_terms:
+        expected = {_compact_sql(term) for term in expression_terms}
+        actual = {
+            term for term in expected
+            if term in sql_compact
+        }
+        _add_rule(
+            rules,
+            name="expression_index_terms",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=(
+                f"Expected expression index terms {sorted(expected)}, "
+                f"got {sorted(actual)}"
+            ),
+        )
+
+    include_columns = grading_contract.get("required_include_columns", [])
+    if include_columns:
+        actual_include = _index_include_columns(sql_lower)
+        expected = {_normalize_identifier(column) for column in include_columns}
+        _add_rule(
+            rules,
+            name="include_columns",
+            weight=10,
+            passed=expected.issubset(actual_include),
+            message=f"Expected INCLUDE {sorted(expected)}, got {sorted(actual_include)}",
+        )
+
+    required_index_method = grading_contract.get("required_index_method")
+    if isinstance(required_index_method, str):
+        actual_method = _index_method(sql_lower)
+        expected_method = _normalize_identifier(required_index_method)
+        _add_rule(
+            rules,
+            name="index_method",
+            weight=10,
+            passed=actual_method == expected_method,
+            message=f"Expected index method {expected_method}, got {actual_method}",
+        )
+
+    required_pagination_style = grading_contract.get("required_pagination_style")
+    if isinstance(required_pagination_style, str):
+        _add_rule(
+            rules,
+            name="pagination_style",
+            weight=10,
+            passed=_pagination_style_present(sql_lower, required_pagination_style),
+            message=f"Expected pagination style {required_pagination_style}",
+        )
+
+    required_sql_fragments = grading_contract.get("required_sql_fragments", [])
+    if required_sql_fragments:
+        expected = {_compact_sql(fragment) for fragment in required_sql_fragments}
+        actual = {
+            fragment for fragment in expected
+            if _sql_fragment_present(user_sql, fragment)
+        }
+        _add_rule(
+            rules,
+            name="sql_fragments",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=f"Expected SQL fragments {sorted(expected)}, got {sorted(actual)}",
         )
 
     if grading_contract.get("require_explain") is True:
@@ -739,15 +1213,7 @@ def grade_sql_answer(  # noqa: C901, PLR0915
 
     prohibited = grading_contract.get("prohibited_patterns", [])
     if prohibited:
-        sql_lower = user_sql.lower()
-        implicit_join = "," in sql_lower and " join " not in sql_lower
-        prohibited_hits: list[str] = []
-        for item in prohibited:
-            if (
-                (item == "implicit_join" and implicit_join) or
-                (item != "implicit_join" and item.lower() in sql_lower)
-            ):
-                prohibited_hits.append(item)
+        prohibited_hits = _prohibited_pattern_hits(user_sql, prohibited)
         _add_rule(
             rules,
             name="prohibited_patterns",

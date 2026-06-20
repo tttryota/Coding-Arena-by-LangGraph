@@ -86,6 +86,12 @@ class SqlDojoIndexRequirement(TypedDict, total=False):
     orders: dict[str, str]
 
 
+class SqlDojoPaginationRequirement(TypedDict):
+    """ページネーション条件。"""
+
+    style: str
+
+
 class SqlDojoGradingContract(TypedDict, total=False):
     """採点契約。"""
 
@@ -102,6 +108,22 @@ class SqlDojoGradingContract(TypedDict, total=False):
     require_explain: bool
     required_explain_options: list[str]
     required_index: SqlDojoIndexRequirement
+    required_functions: list[str]
+    required_case: bool
+    required_filter_aggregates: list[SqlDojoAggregateRequirement]
+    required_distinct_on: list[str]
+    required_having_columns: list[str]
+    required_exists: bool
+    required_not_exists: bool
+    required_json_operators: list[str]
+    required_array_functions: list[str]
+    required_on_conflict: bool
+    required_partial_index_predicate_columns: list[str]
+    required_expression_index_terms: list[str]
+    required_include_columns: list[str]
+    required_index_method: str
+    required_pagination_style: str
+    required_sql_fragments: list[str]
     prohibited_patterns: list[str]
 
 
@@ -167,6 +189,7 @@ __all__ = [
     "SqlDojoIndexRequirement",
     "SqlDojoJoinRequirement",
     "SqlDojoOrderRequirement",
+    "SqlDojoPaginationRequirement",
     "SqlDojoProblem",
     "SqlDojoQuestionError",
     "SqlDojoSessionStatus",

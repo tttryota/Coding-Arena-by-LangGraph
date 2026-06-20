@@ -941,6 +941,1301 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
             ),
         ),
     ),
+    _ThemeTemplate(
+        family="conditional-aggregation",
+        difficulty="intermediate",
+        business_domain="Analytics",
+        target_skill="CASE WHEN と条件付き集計",
+        title="条件付き集計で実務レポートを作る",
+        generation_prompt="CASE WHEN, FILTER, ratio を使った集計を作る",
+        variants=(
+            _ThemeVariant(
+                topic_id="case-when-paid-amount",
+                topic_title="paid売上の条件付き集計",
+                problem_statement=(
+                    "請求テーブルから account ごとの paid 売上だけを集計してください。"
+                    "status='paid' の amount だけを足し、出力列は account_id, paid_amount とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "invoices(id bigint primary key, account_id bigint, status text, amount numeric, issued_at date)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("invoices", 430000)),
+                expected_focus="SUM, CASE WHEN, GROUP BY",
+                reference_sql=(
+                    "SELECT account_id, "
+                    "SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS paid_amount "
+                    "FROM invoices "
+                    "GROUP BY account_id"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["invoices"],
+                    "required_group_by_columns": ["account_id"],
+                    "required_aggregates": [{"function": "SUM", "column": "*"}],
+                    "required_case": True,
+                },
+            ),
+            _ThemeVariant(
+                topic_id="case-when-user-buckets",
+                topic_title="利用頻度bucket分類",
+                problem_statement=(
+                    "user_activity の event_count を利用頻度帯に分類してください。"
+                    "100以上を 'power', 10以上を 'active', それ以外を 'light' とし、"
+                    "出力列は user_id, usage_bucket とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "user_activity(user_id bigint primary key, event_count int, last_seen_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("user_activity", 920000)),
+                expected_focus="CASE WHEN, bucket 分類",
+                reference_sql=(
+                    "SELECT user_id, "
+                    "CASE "
+                    "WHEN event_count >= 100 THEN 'power' "
+                    "WHEN event_count >= 10 THEN 'active' "
+                    "ELSE 'light' END AS usage_bucket "
+                    "FROM user_activity"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["user_activity"],
+                    "required_case": True,
+                },
+            ),
+            _ThemeVariant(
+                topic_id="filter-error-rate",
+                topic_title="FILTERでerror rate算出",
+                problem_statement=(
+                    "api_requests から endpoint ごとの総リクエスト数と 5xx 件数を出してください。"
+                    "5xx 件数は FILTER (WHERE ...) を使い、error_rate も計算します。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "api_requests(id bigint primary key, endpoint text, status_code int, requested_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("api_requests", 68000000)),
+                expected_focus="COUNT FILTER, NULLIF, ratio",
+                reference_sql=(
+                    "SELECT endpoint, "
+                    "COUNT(*) AS request_count, "
+                    "COUNT(*) FILTER (WHERE status_code >= 500) AS error_count, "
+                    "COUNT(*) FILTER (WHERE status_code >= 500)::numeric / NULLIF(COUNT(*), 0) AS error_rate "
+                    "FROM api_requests "
+                    "GROUP BY endpoint"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["api_requests"],
+                    "required_group_by_columns": ["endpoint"],
+                    "required_filter_aggregates": [{"function": "COUNT", "column": "*"}],
+                    "required_functions": ["NULLIF"],
+                    "required_predicate_columns": ["status_code"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="pivot-order-status-counts",
+                topic_title="status別注文件数の横持ち集計",
+                problem_statement=(
+                    "orders を account_id ごとに status 別件数で横持ち集計してください。"
+                    "出力列は account_id, pending_count, paid_count, cancelled_count とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "orders(id bigint primary key, account_id bigint, status text, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("orders", 14600000)),
+                expected_focus="SUM, CASE WHEN, pivot 風集計",
+                reference_sql=(
+                    "SELECT account_id, "
+                    "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count, "
+                    "SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS paid_count, "
+                    "SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count "
+                    "FROM orders "
+                    "GROUP BY account_id"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["orders"],
+                    "required_group_by_columns": ["account_id"],
+                    "required_aggregates": [{"function": "SUM", "column": "*"}],
+                    "required_case": True,
+                },
+            ),
+            _ThemeVariant(
+                topic_id="ratio-cancellation-rate",
+                topic_title="cancellation rate算出",
+                problem_statement=(
+                    "orders から account_id ごとの cancellation_rate を算出してください。"
+                    "cancelled 件数を総件数で割り、0除算を避けてください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "orders(id bigint primary key, account_id bigint, status text, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("orders", 14600000)),
+                expected_focus="CASE WHEN, NULLIF, ratio",
+                reference_sql=(
+                    "SELECT account_id, "
+                    "SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END)::numeric "
+                    "/ NULLIF(COUNT(*), 0) AS cancellation_rate "
+                    "FROM orders "
+                    "GROUP BY account_id"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["orders"],
+                    "required_group_by_columns": ["account_id"],
+                    "required_aggregates": [
+                        {"function": "SUM", "column": "*"},
+                        {"function": "COUNT", "column": "*"},
+                    ],
+                    "required_case": True,
+                    "required_functions": ["NULLIF"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="null-handling",
+        difficulty="beginner",
+        business_domain="Product",
+        target_skill="NULL 処理",
+        title="NULL を安全に扱う",
+        generation_prompt="COALESCE, NULLIF, IS DISTINCT FROM を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="coalesce-profile-display-name",
+                topic_title="表示名fallback",
+                problem_statement=(
+                    "profiles の display_name が NULL の場合は email を表示名にしてください。"
+                    "出力列は user_id, visible_name とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "profiles(user_id bigint primary key, display_name text, email text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("profiles", 850000)),
+                expected_focus="COALESCE",
+                reference_sql=(
+                    "SELECT user_id, COALESCE(display_name, email) AS visible_name "
+                    "FROM profiles"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["profiles"],
+                    "required_functions": ["COALESCE"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="nullif-division-safe-rate",
+                topic_title="0除算回避のrate計算",
+                problem_statement=(
+                    "campaign_metrics から campaign_id ごとの conversion_rate を計算してください。"
+                    "clicks が 0 の場合に 0除算しないようにします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "campaign_metrics(campaign_id bigint primary key, clicks int, conversions int)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("campaign_metrics", 120000)),
+                expected_focus="NULLIF, rate 計算",
+                reference_sql=(
+                    "SELECT campaign_id, conversions::numeric / NULLIF(clicks, 0) AS conversion_rate "
+                    "FROM campaign_metrics"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["campaign_metrics"],
+                    "required_functions": ["NULLIF"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="is-distinct-from-sync-diff",
+                topic_title="NULL安全な差分検出",
+                problem_statement=(
+                    "crm_contacts と warehouse_contacts の email を比較し、"
+                    "NULL を安全に扱って差分がある contact_id を抽出してください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "crm_contacts(contact_id bigint primary key, email text)\n"
+                    "warehouse_contacts(contact_id bigint primary key, email text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("crm_contacts", 420000), ("warehouse_contacts", 420000)),
+                expected_focus="IS DISTINCT FROM, JOIN",
+                reference_sql=(
+                    "SELECT c.contact_id "
+                    "FROM crm_contacts AS c "
+                    "INNER JOIN warehouse_contacts AS w ON w.contact_id = c.contact_id "
+                    "WHERE c.email IS DISTINCT FROM w.email"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["crm_contacts", "warehouse_contacts"],
+                    "required_joins": [{"left": "crm_contacts", "right": "warehouse_contacts", "join_type": "INNER"}],
+                    "required_functions": ["IS DISTINCT FROM"],
+                    "required_predicate_columns": ["email"],
+                    "prohibited_patterns": ["implicit_join"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="date-time-reporting",
+        difficulty="intermediate",
+        business_domain="Analytics",
+        target_skill="日付処理と期間集計",
+        title="日付を丸めて期間レポートを作る",
+        generation_prompt="date_trunc, 期間条件, rolling window を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="date-trunc-monthly-revenue",
+                topic_title="月次売上集計",
+                problem_statement=(
+                    "payments から月次売上を集計してください。"
+                    "2026年以降を対象に、出力列は revenue_month, total_revenue とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "payments(id bigint primary key, paid_at timestamptz, amount numeric, status text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("payments", 23100000)),
+                expected_focus="DATE_TRUNC, SUM, GROUP BY",
+                reference_sql=(
+                    "SELECT DATE_TRUNC('month', paid_at) AS revenue_month, "
+                    "SUM(amount) AS total_revenue "
+                    "FROM payments "
+                    "WHERE paid_at >= TIMESTAMPTZ '2026-01-01 00:00:00+00:00' "
+                    "GROUP BY DATE_TRUNC('month', paid_at) "
+                    "ORDER BY revenue_month ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["payments"],
+                    "required_functions": ["DATE_TRUNC"],
+                    "required_predicate_columns": ["paid_at"],
+                    "required_aggregates": [{"function": "SUM", "column": "amount"}],
+                    "required_order_by": [{"column": "revenue_month", "direction": "ASC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="date-range-weekly-active-users",
+                topic_title="期間指定WAU",
+                problem_statement=(
+                    "user_events から 2026-06-01 以降の weekly active users を週ごとに集計してください。"
+                    "出力列は week_start, active_users とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "user_events(id bigint primary key, user_id bigint, event_name text, occurred_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("user_events", 125000000)),
+                expected_focus="DATE_TRUNC, COUNT DISTINCT, 期間条件",
+                reference_sql=(
+                    "SELECT DATE_TRUNC('week', occurred_at) AS week_start, "
+                    "COUNT(DISTINCT user_id) AS active_users "
+                    "FROM user_events "
+                    "WHERE occurred_at >= TIMESTAMPTZ '2026-06-01 00:00:00+00:00' "
+                    "GROUP BY DATE_TRUNC('week', occurred_at) "
+                    "ORDER BY week_start ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["user_events"],
+                    "required_functions": ["DATE_TRUNC", "COUNT"],
+                    "required_predicate_columns": ["occurred_at"],
+                    "required_order_by": [{"column": "week_start", "direction": "ASC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="rolling-7day-orders",
+                topic_title="7日移動注文数",
+                problem_statement=(
+                    "daily_orders から日別注文数と7日移動合計を出してください。"
+                    "出力列は order_date, order_count, rolling_7day_orders とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "daily_orders(order_date date primary key, order_count int)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("daily_orders", 1460)),
+                expected_focus="SUM OVER, ROWS BETWEEN",
+                reference_sql=(
+                    "SELECT order_date, order_count, "
+                    "SUM(order_count) OVER (ORDER BY order_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS rolling_7day_orders "
+                    "FROM daily_orders "
+                    "ORDER BY order_date ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["daily_orders"],
+                    "required_window_functions": ["SUM"],
+                    "required_order_by": [{"column": "order_date", "direction": "ASC"}],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="dedup-latest-row",
+        difficulty="intermediate",
+        business_domain="Product",
+        target_skill="重複排除と最新行取得",
+        title="重複を排除して代表行を取る",
+        generation_prompt="DISTINCT, DISTINCT ON, 最新1件取得を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="distinct-email-domains",
+                topic_title="重複排除したdomain抽出",
+                problem_statement=(
+                    "users の email から domain を抽出し、重複なしで一覧化してください。"
+                    "出力列は email_domain とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "users(id bigint primary key, email text, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("users", 2200000)),
+                expected_focus="DISTINCT, SPLIT_PART",
+                reference_sql=(
+                    "SELECT DISTINCT SPLIT_PART(email, '@', 2) AS email_domain "
+                    "FROM users "
+                    "WHERE email IS NOT NULL"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["users"],
+                    "required_functions": ["SPLIT_PART"],
+                    "required_predicate_columns": ["email"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="distinct-on-latest-login",
+                topic_title="user別最新login",
+                problem_statement=(
+                    "login_events から user_id ごとの最新ログイン1件を取得してください。"
+                    "PostgreSQL の DISTINCT ON を使い、出力列は user_id, logged_in_at, ip_address とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "login_events(id bigint primary key, user_id bigint, logged_in_at timestamptz, ip_address inet)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("login_events", 9800000)),
+                expected_focus="DISTINCT ON, ORDER BY",
+                reference_sql=(
+                    "SELECT DISTINCT ON (user_id) user_id, logged_in_at, ip_address "
+                    "FROM login_events "
+                    "ORDER BY user_id, logged_in_at DESC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["login_events"],
+                    "required_distinct_on": ["user_id"],
+                    "required_order_by": [
+                        {"column": "user_id", "direction": "ASC"},
+                        {"column": "logged_in_at", "direction": "DESC"},
+                    ],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="latest-order-per-account",
+                topic_title="account別最新注文",
+                problem_statement=(
+                    "orders から account_id ごとの最新注文1件を取得してください。"
+                    "DISTINCT ON を使い、出力列は account_id, order_id, created_at とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "orders(id bigint primary key, account_id bigint, created_at timestamptz, total_amount numeric)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("orders", 14600000)),
+                expected_focus="DISTINCT ON, ORDER BY DESC",
+                reference_sql=(
+                    "SELECT DISTINCT ON (account_id) account_id, id AS order_id, created_at "
+                    "FROM orders "
+                    "ORDER BY account_id, created_at DESC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["orders"],
+                    "required_distinct_on": ["account_id"],
+                    "required_order_by": [
+                        {"column": "account_id", "direction": "ASC"},
+                        {"column": "created_at", "direction": "DESC"},
+                    ],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="exists-subquery",
+        difficulty="intermediate",
+        business_domain="Cross-domain",
+        target_skill="EXISTS / NOT EXISTS",
+        title="関連レコードの存在有無で抽出する",
+        generation_prompt="EXISTS, NOT EXISTS, semi join, anti join を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="exists-active-subscription",
+                topic_title="active subscriptionありuser",
+                problem_statement=(
+                    "users から active な subscription を持つ user だけを抽出してください。"
+                    "EXISTS を使い、出力列は id, email とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "users(id bigint primary key, email text)\n"
+                    "subscriptions(id bigint primary key, user_id bigint, status text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("users", 2200000), ("subscriptions", 860000)),
+                expected_focus="EXISTS, correlated subquery",
+                reference_sql=(
+                    "SELECT u.id, u.email "
+                    "FROM users AS u "
+                    "WHERE EXISTS ("
+                    "SELECT 1 FROM subscriptions AS s "
+                    "WHERE s.user_id = u.id AND s.status = 'active'"
+                    ")"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["users", "subscriptions"],
+                    "required_exists": True,
+                    "required_predicate_columns": ["status", "user_id"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="not-exists-unpaid-invoices",
+                topic_title="未払いinvoiceなしaccount",
+                problem_statement=(
+                    "accounts から unpaid invoice が存在しない account を抽出してください。"
+                    "NOT EXISTS を使い、出力列は id, name とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "accounts(id bigint primary key, name text)\n"
+                    "invoices(id bigint primary key, account_id bigint, status text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("accounts", 180000), ("invoices", 430000)),
+                expected_focus="NOT EXISTS, anti semi join",
+                reference_sql=(
+                    "SELECT a.id, a.name "
+                    "FROM accounts AS a "
+                    "WHERE NOT EXISTS ("
+                    "SELECT 1 FROM invoices AS i "
+                    "WHERE i.account_id = a.id AND i.status = 'unpaid'"
+                    ")"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["accounts", "invoices"],
+                    "required_not_exists": True,
+                    "required_predicate_columns": ["account_id", "status"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="anti-join-no-purchase-users",
+                topic_title="未購入user抽出",
+                problem_statement=(
+                    "users から一度も purchase がない user を抽出してください。"
+                    "NOT EXISTS を使い、出力列は id, email とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "users(id bigint primary key, email text)\n"
+                    "purchases(id bigint primary key, user_id bigint, purchased_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("users", 2200000), ("purchases", 9300000)),
+                expected_focus="NOT EXISTS, anti join",
+                reference_sql=(
+                    "SELECT u.id, u.email "
+                    "FROM users AS u "
+                    "WHERE NOT EXISTS ("
+                    "SELECT 1 FROM purchases AS p WHERE p.user_id = u.id"
+                    ")"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["users", "purchases"],
+                    "required_not_exists": True,
+                    "required_predicate_columns": ["user_id"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="semi-join-has-successful-payment",
+                topic_title="成功決済ありorder抽出",
+                problem_statement=(
+                    "orders から successful payment がある注文だけを抽出してください。"
+                    "EXISTS を使い、出力列は id, account_id とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "orders(id bigint primary key, account_id bigint)\n"
+                    "payments(id bigint primary key, order_id bigint, status text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("orders", 14600000), ("payments", 23100000)),
+                expected_focus="EXISTS, semi join",
+                reference_sql=(
+                    "SELECT o.id, o.account_id "
+                    "FROM orders AS o "
+                    "WHERE EXISTS ("
+                    "SELECT 1 FROM payments AS p "
+                    "WHERE p.order_id = o.id AND p.status = 'successful'"
+                    ")"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["orders", "payments"],
+                    "required_exists": True,
+                    "required_predicate_columns": ["order_id", "status"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="post-aggregation-filter",
+        difficulty="beginner",
+        business_domain="Analytics",
+        target_skill="HAVING",
+        title="集計後に HAVING で絞り込む",
+        generation_prompt="GROUP BY 後の条件を HAVING で書く",
+        variants=(
+            _ThemeVariant(
+                topic_id="having-repeat-buyers",
+                topic_title="複数購入者抽出",
+                problem_statement=(
+                    "purchases から2回以上購入した user_id を抽出してください。"
+                    "出力列は user_id, purchase_count とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "purchases(id bigint primary key, user_id bigint, purchased_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("purchases", 9300000)),
+                expected_focus="GROUP BY, HAVING, COUNT",
+                reference_sql=(
+                    "SELECT user_id, COUNT(*) AS purchase_count "
+                    "FROM purchases "
+                    "GROUP BY user_id "
+                    "HAVING COUNT(*) >= 2"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["purchases"],
+                    "required_group_by_columns": ["user_id"],
+                    "required_aggregates": [{"function": "COUNT", "column": "*"}],
+                    "required_having_columns": ["*"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="having-high-value-accounts",
+                topic_title="集計後の高額account抽出",
+                problem_statement=(
+                    "invoices から2026年以降の合計請求額が 100000 以上の account を抽出してください。"
+                    "出力列は account_id, total_amount とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "invoices(id bigint primary key, account_id bigint, amount numeric, issued_at date)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("invoices", 430000)),
+                expected_focus="SUM, GROUP BY, HAVING",
+                reference_sql=(
+                    "SELECT account_id, SUM(amount) AS total_amount "
+                    "FROM invoices "
+                    "WHERE issued_at >= DATE '2026-01-01' "
+                    "GROUP BY account_id "
+                    "HAVING SUM(amount) >= 100000"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["invoices"],
+                    "required_predicate_columns": ["issued_at"],
+                    "required_group_by_columns": ["account_id"],
+                    "required_aggregates": [{"function": "SUM", "column": "amount"}],
+                    "required_having_columns": ["amount"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="business-analytics",
+        difficulty="advanced",
+        business_domain="Analytics",
+        target_skill="実務分析SQL",
+        title="cohort・retention・funnel などの分析SQLを書く",
+        generation_prompt="実務分析で頻出する集計・window・percentile を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="cohort-first-purchase-month",
+                topic_title="初回購入月cohort",
+                problem_statement=(
+                    "purchases から user_id ごとの初回購入月 cohort を作ってください。"
+                    "出力列は user_id, cohort_month とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "purchases(id bigint primary key, user_id bigint, purchased_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("purchases", 9300000)),
+                expected_focus="DATE_TRUNC, MIN, GROUP BY",
+                reference_sql=(
+                    "SELECT user_id, DATE_TRUNC('month', MIN(purchased_at)) AS cohort_month "
+                    "FROM purchases "
+                    "GROUP BY user_id"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["purchases"],
+                    "required_functions": ["DATE_TRUNC"],
+                    "required_group_by_columns": ["user_id"],
+                    "required_aggregates": [{"function": "MIN", "column": "purchased_at"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="retention-next-month-active",
+                topic_title="翌月継続率",
+                problem_statement=(
+                    "monthly_active_users から cohort_month ごとの翌月継続率を計算してください。"
+                    "出力列は cohort_month, retention_rate とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "monthly_active_users(user_id bigint, activity_month date)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("monthly_active_users", 5200000)),
+                expected_focus="CTE, self join, COUNT DISTINCT, NULLIF",
+                reference_sql=(
+                    "WITH first_month AS ("
+                    "SELECT user_id, MIN(activity_month) AS cohort_month "
+                    "FROM monthly_active_users "
+                    "GROUP BY user_id"
+                    ") "
+                    "SELECT f.cohort_month, "
+                    "COUNT(DISTINCT m.user_id)::numeric / NULLIF(COUNT(DISTINCT f.user_id), 0) AS retention_rate "
+                    "FROM first_month AS f "
+                    "LEFT JOIN monthly_active_users AS m "
+                    "ON m.user_id = f.user_id AND m.activity_month = f.cohort_month + INTERVAL '1 month' "
+                    "GROUP BY f.cohort_month"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["monthly_active_users"],
+                    "required_joins": [{"left": "first_month", "right": "monthly_active_users", "join_type": "LEFT"}],
+                    "required_cte_names": ["first_month"],
+                    "required_functions": ["NULLIF"],
+                    "required_aggregates": [{"function": "COUNT", "column": "user_id"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="funnel-signup-to-purchase",
+                topic_title="signupからpurchase funnel",
+                problem_statement=(
+                    "user_events から signup, trial_started, purchase の funnel 件数を1行で出してください。"
+                    "FILTER (WHERE ...) を使い、出力列は signups, trials, purchases とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "user_events(id bigint primary key, user_id bigint, event_name text, occurred_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("user_events", 125000000)),
+                expected_focus="COUNT DISTINCT FILTER",
+                reference_sql=(
+                    "SELECT "
+                    "COUNT(DISTINCT user_id) FILTER (WHERE event_name = 'signup') AS signups, "
+                    "COUNT(DISTINCT user_id) FILTER (WHERE event_name = 'trial_started') AS trials, "
+                    "COUNT(DISTINCT user_id) FILTER (WHERE event_name = 'purchase') AS purchases "
+                    "FROM user_events"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["user_events"],
+                    "required_filter_aggregates": [{"function": "COUNT", "column": "user_id"}],
+                    "required_predicate_columns": ["event_name"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="moving-average-daily-sales",
+                topic_title="日次売上移動平均",
+                problem_statement=(
+                    "daily_sales から7日移動平均を計算してください。"
+                    "出力列は sales_date, revenue, moving_avg_7day とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "daily_sales(sales_date date primary key, revenue numeric)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("daily_sales", 1460)),
+                expected_focus="AVG OVER, ROWS BETWEEN",
+                reference_sql=(
+                    "SELECT sales_date, revenue, "
+                    "AVG(revenue) OVER (ORDER BY sales_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS moving_avg_7day "
+                    "FROM daily_sales "
+                    "ORDER BY sales_date ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["daily_sales"],
+                    "required_window_functions": ["AVG"],
+                    "required_order_by": [{"column": "sales_date", "direction": "ASC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="cumulative-revenue-by-day",
+                topic_title="累積売上",
+                problem_statement=(
+                    "daily_sales から日別売上と累積売上を出してください。"
+                    "出力列は sales_date, revenue, cumulative_revenue とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "daily_sales(sales_date date primary key, revenue numeric)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("daily_sales", 1460)),
+                expected_focus="SUM OVER, cumulative sum",
+                reference_sql=(
+                    "SELECT sales_date, revenue, "
+                    "SUM(revenue) OVER (ORDER BY sales_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_revenue "
+                    "FROM daily_sales "
+                    "ORDER BY sales_date ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["daily_sales"],
+                    "required_window_functions": ["SUM"],
+                    "required_order_by": [{"column": "sales_date", "direction": "ASC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="percentile-response-time",
+                topic_title="response time p95",
+                problem_statement=(
+                    "api_requests から endpoint ごとの p95 latency を計算してください。"
+                    "percentile_cont を使い、出力列は endpoint, p95_latency_ms とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "api_requests(id bigint primary key, endpoint text, latency_ms int, requested_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("api_requests", 68000000)),
+                expected_focus="percentile_cont, WITHIN GROUP, GROUP BY",
+                reference_sql=(
+                    "SELECT endpoint, "
+                    "PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_latency_ms "
+                    "FROM api_requests "
+                    "GROUP BY endpoint"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["api_requests"],
+                    "required_functions": ["PERCENTILE_CONT"],
+                    "required_group_by_columns": ["endpoint"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="postgres-json-array",
+        difficulty="advanced",
+        business_domain="Product",
+        target_skill="JSONB と array",
+        title="PostgreSQL の JSONB / array を扱う",
+        generation_prompt="JSONB operator, jsonb_array_elements, ANY, unnest を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="jsonb-event-property-filter",
+                topic_title="JSONB property抽出検索",
+                problem_statement=(
+                    "events の payload JSONB から plan='pro' のイベントを抽出してください。"
+                    "出力列は id, account_id, plan とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "events(id bigint primary key, account_id bigint, payload jsonb, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("events", 8200000)),
+                expected_focus="JSONB ->>, WHERE",
+                reference_sql=(
+                    "SELECT id, account_id, payload ->> 'plan' AS plan "
+                    "FROM events "
+                    "WHERE payload ->> 'plan' = 'pro'"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["events"],
+                    "required_json_operators": ["->>"],
+                    "required_predicate_columns": ["payload"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="jsonb-array-items-expand",
+                topic_title="JSONB配列展開",
+                problem_statement=(
+                    "orders の items JSONB 配列を展開し、注文IDと sku を返してください。"
+                    "出力列は order_id, sku とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "orders(id bigint primary key, items jsonb, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("orders", 14600000)),
+                expected_focus="jsonb_array_elements, LATERAL, ->>",
+                reference_sql=(
+                    "SELECT o.id AS order_id, item ->> 'sku' AS sku "
+                    "FROM orders AS o "
+                    "CROSS JOIN LATERAL jsonb_array_elements(o.items) AS item"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["orders"],
+                    "required_functions": ["jsonb_array_elements"],
+                    "required_json_operators": ["->>"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="array-any-tag-filter",
+                topic_title="ANYによるtag検索",
+                problem_statement=(
+                    "articles の tags 配列に 'postgres' が含まれる記事を抽出してください。"
+                    "ANY を使い、出力列は id, title とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "articles(id bigint primary key, title text, tags text[], published_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("articles", 280000)),
+                expected_focus="ANY(array)",
+                reference_sql=(
+                    "SELECT id, title "
+                    "FROM articles "
+                    "WHERE 'postgres' = ANY(tags)"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["articles"],
+                    "required_array_functions": ["ANY"],
+                    "required_predicate_columns": ["tags"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="unnest-campaign-tags",
+                topic_title="unnestでtag別集計",
+                problem_statement=(
+                    "campaigns の tags 配列を展開し、tag ごとの campaign 件数を集計してください。"
+                    "出力列は tag, campaign_count とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "campaigns(id bigint primary key, name text, tags text[])\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("campaigns", 4200)),
+                expected_focus="unnest, GROUP BY, COUNT",
+                reference_sql=(
+                    "SELECT tag, COUNT(*) AS campaign_count "
+                    "FROM campaigns AS c "
+                    "CROSS JOIN LATERAL unnest(c.tags) AS tag "
+                    "GROUP BY tag"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["campaigns"],
+                    "required_array_functions": ["unnest"],
+                    "required_aggregates": [{"function": "COUNT", "column": "*"}],
+                    "required_group_by_columns": ["tag"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="postgres-write-patterns",
+        difficulty="advanced",
+        business_domain="Product",
+        target_skill="UPSERT",
+        title="ON CONFLICT で冪等に書き込む",
+        generation_prompt="INSERT ... ON CONFLICT を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="upsert-user-preferences",
+                topic_title="ON CONFLICT upsert",
+                problem_statement=(
+                    "user_preferences に user_id=42, key='theme', value='dark' を保存してください。"
+                    "(user_id, key) が既にある場合は value と updated_at を更新します。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "user_preferences(user_id bigint, key text, value text, updated_at timestamptz, primary key(user_id, key))\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("user_preferences", 1200000)),
+                expected_focus="INSERT, ON CONFLICT, DO UPDATE",
+                reference_sql=(
+                    "INSERT INTO user_preferences (user_id, key, value, updated_at) "
+                    "VALUES (42, 'theme', 'dark', NOW()) "
+                    "ON CONFLICT (user_id, key) DO UPDATE "
+                    "SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at"
+                ),
+                grading_contract={
+                    "statement_kind": "insert",
+                    "required_tables": ["user_preferences"],
+                    "required_on_conflict": True,
+                    "required_functions": ["NOW"],
+                    "required_sql_fragments": [
+                        "DO UPDATE",
+                        "value = EXCLUDED.value",
+                        "updated_at = EXCLUDED.updated_at",
+                    ],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="advanced-index-design",
+        difficulty="advanced",
+        business_domain="Performance",
+        target_skill="高度なインデックス設計",
+        title="partial / expression / include / trigram index を設計する",
+        generation_prompt="PostgreSQL の高度な CREATE INDEX を書く",
+        variants=(
+            _ThemeVariant(
+                topic_id="partial-index-active-orders",
+                topic_title="active条件のpartial index",
+                problem_statement=(
+                    "orders で status='active' の行だけを account_id と created_at でよく検索します。"
+                    "active 行に絞った partial index を作成してください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "orders(id bigint primary key, account_id bigint, status text, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("orders", 14600000)),
+                expected_focus="CREATE INDEX, WHERE, partial index",
+                reference_sql=(
+                    "CREATE INDEX idx_orders_active_account_created_at "
+                    "ON orders (account_id, created_at DESC) "
+                    "WHERE status = 'active'"
+                ),
+                grading_contract={
+                    "statement_kind": "create_index",
+                    "required_index": {
+                        "table": "orders",
+                        "columns": ["account_id", "created_at"],
+                        "orders": {"created_at": "DESC"},
+                    },
+                    "required_partial_index_predicate_columns": ["status"],
+                    "required_sql_fragments": ["WHERE status = 'active'"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="expression-index-lower-email",
+                topic_title="lower(email) expression index",
+                problem_statement=(
+                    "users で lower(email) = lower(?) の検索が多いです。"
+                    "大文字小文字を無視した検索に使う expression index を作成してください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "users(id bigint primary key, email text, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("users", 2200000)),
+                expected_focus="CREATE INDEX, lower(email), expression index",
+                reference_sql=(
+                    "CREATE INDEX idx_users_lower_email "
+                    "ON users (LOWER(email))"
+                ),
+                grading_contract={
+                    "statement_kind": "create_index",
+                    "required_index": {"table": "users"},
+                    "required_expression_index_terms": ["LOWER(email)"],
+                    "required_functions": ["LOWER"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="include-index-covering-orders",
+                topic_title="INCLUDE付きindex",
+                problem_statement=(
+                    "orders で account_id と created_at で絞って並べ、total_amount も頻繁に表示します。"
+                    "検索キーに account_id, created_at を使い、total_amount を INCLUDE する index を作成してください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "orders(id bigint primary key, account_id bigint, created_at timestamptz, total_amount numeric)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("orders", 14600000)),
+                expected_focus="CREATE INDEX, INCLUDE",
+                reference_sql=(
+                    "CREATE INDEX idx_orders_account_created_at_include_amount "
+                    "ON orders (account_id, created_at DESC) INCLUDE (total_amount)"
+                ),
+                grading_contract={
+                    "statement_kind": "create_index",
+                    "required_index": {
+                        "table": "orders",
+                        "columns": ["account_id", "created_at"],
+                        "orders": {"created_at": "DESC"},
+                    },
+                    "required_include_columns": ["total_amount"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="trigram-search-products",
+                topic_title="%keyword%検索のtrigram index方針",
+                problem_statement=(
+                    "products.name に対して ILIKE '%keyword%' の検索が多いです。"
+                    "pg_trgm を前提に、name の trigram index を作成してください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "products(id bigint primary key, name text, status text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("products", 124000)),
+                expected_focus="CREATE INDEX, gin, gin_trgm_ops",
+                reference_sql=(
+                    "CREATE INDEX idx_products_name_trgm "
+                    "ON products USING gin (name gin_trgm_ops)"
+                ),
+                grading_contract={
+                    "statement_kind": "create_index",
+                    "required_index": {"table": "products"},
+                    "required_index_method": "gin",
+                    "required_expression_index_terms": ["name gin_trgm_ops"],
+                    "prohibited_patterns": ["leading_wildcard_without_trigram"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="performance-reading",
+        difficulty="advanced",
+        business_domain="Performance",
+        target_skill="性能を意識したSQL",
+        title="実行計画・N+1・ページネーションを意識する",
+        generation_prompt="EXPLAIN, 集約SQL, keyset pagination を書く",
+        variants=(
+            _ThemeVariant(
+                topic_id="plan-read-seq-scan-warning",
+                topic_title="Seq Scan読解",
+                problem_statement=(
+                    "events の account_id 検索で Seq Scan が疑われます。"
+                    "実測時間とバッファを確認する EXPLAIN を書いてください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "events(id bigint primary key, account_id bigint, created_at timestamptz, event_type text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("events", 8200000)),
+                expected_focus="EXPLAIN ANALYZE, BUFFERS, Seq Scan確認",
+                reference_sql=(
+                    "EXPLAIN (ANALYZE, BUFFERS) "
+                    "SELECT id, account_id, created_at "
+                    "FROM events "
+                    "WHERE account_id = 42"
+                ),
+                grading_contract=_explain_contract(
+                    table="events",
+                    predicate_columns=["account_id"],
+                ),
+            ),
+            _ThemeVariant(
+                topic_id="plan-read-bitmap-heap-scan",
+                topic_title="Bitmap Heap Scan読解",
+                problem_statement=(
+                    "orders の status と created_at 条件で Bitmap Heap Scan が出るか確認します。"
+                    "実測時間とバッファを確認する EXPLAIN を書いてください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "orders(id bigint primary key, status text, created_at timestamptz, total_amount numeric)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("orders", 14600000)),
+                expected_focus="EXPLAIN ANALYZE, BUFFERS, Bitmap Heap Scan確認",
+                reference_sql=(
+                    "EXPLAIN (ANALYZE, BUFFERS) "
+                    "SELECT id, total_amount "
+                    "FROM orders "
+                    "WHERE status = 'paid' AND created_at >= TIMESTAMPTZ '2026-06-01 00:00:00+00:00'"
+                ),
+                grading_contract=_explain_contract(
+                    table="orders",
+                    predicate_columns=["status", "created_at"],
+                ),
+            ),
+            _ThemeVariant(
+                topic_id="n-plus-one-orders-summary",
+                topic_title="N+1回避の集約SQL",
+                problem_statement=(
+                    "accounts 一覧に各 account の注文数を表示します。"
+                    "N+1 を避けるため、JOIN と GROUP BY で account ごとの order_count を1文で出してください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "accounts(id bigint primary key, name text)\n"
+                    "orders(id bigint primary key, account_id bigint, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("accounts", 180000), ("orders", 14600000)),
+                expected_focus="LEFT JOIN, COUNT, GROUP BY",
+                reference_sql=(
+                    "SELECT a.id, a.name, COUNT(o.id) AS order_count "
+                    "FROM accounts AS a "
+                    "LEFT JOIN orders AS o ON o.account_id = a.id "
+                    "GROUP BY a.id, a.name"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["accounts", "orders"],
+                    "required_joins": [{"left": "accounts", "right": "orders", "join_type": "LEFT"}],
+                    "required_group_by_columns": ["id", "name"],
+                    "required_aggregates": [{"function": "COUNT", "column": "id"}],
+                    "prohibited_patterns": ["implicit_join"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="keyset-pagination-events",
+                topic_title="keyset pagination",
+                problem_statement=(
+                    "events を created_at DESC, id DESC で keyset pagination してください。"
+                    "前ページ末尾が created_at='2026-06-20 10:00:00+00:00', id=5000 の想定で、次の50件を取得します。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "events(id bigint primary key, account_id bigint, created_at timestamptz, event_type text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("events", 8200000)),
+                expected_focus="WHERE cursor predicate, ORDER BY, LIMIT, no OFFSET",
+                reference_sql=(
+                    "SELECT id, account_id, created_at, event_type "
+                    "FROM events "
+                    "WHERE (created_at, id) < (TIMESTAMPTZ '2026-06-20 10:00:00+00:00', 5000) "
+                    "ORDER BY created_at DESC, id DESC "
+                    "LIMIT 50"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["events"],
+                    "required_predicate_columns": ["created_at", "id"],
+                    "required_order_by": [
+                        {"column": "created_at", "direction": "DESC"},
+                        {"column": "id", "direction": "DESC"},
+                    ],
+                    "required_limit": 50,
+                    "required_pagination_style": "keyset",
+                    "prohibited_patterns": ["offset_pagination"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="offset-pagination-risk",
+                topic_title="offset paginationの問題指摘",
+                problem_statement=(
+                    "api_requests を requested_at DESC で深いページまで表示します。"
+                    "OFFSET を使わず、前ページ末尾 requested_at/id を使う keyset pagination のSQLを書いてください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "api_requests(id bigint primary key, requested_at timestamptz, endpoint text, status_code int)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("api_requests", 68000000)),
+                expected_focus="keyset pagination, OFFSET禁止",
+                reference_sql=(
+                    "SELECT id, requested_at, endpoint, status_code "
+                    "FROM api_requests "
+                    "WHERE (requested_at, id) < (TIMESTAMPTZ '2026-06-20 10:00:00+00:00', 900000) "
+                    "ORDER BY requested_at DESC, id DESC "
+                    "LIMIT 100"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["api_requests"],
+                    "required_predicate_columns": ["requested_at", "id"],
+                    "required_order_by": [
+                        {"column": "requested_at", "direction": "DESC"},
+                        {"column": "id", "direction": "DESC"},
+                    ],
+                    "required_limit": 100,
+                    "required_pagination_style": "keyset",
+                    "prohibited_patterns": ["offset_pagination"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="materialized-view-design",
+        difficulty="advanced",
+        business_domain="Analytics",
+        target_skill="Materialized View",
+        title="重い集計を materialized view に逃がす",
+        generation_prompt="CREATE MATERIALIZED VIEW で集計結果を保存する",
+        variants=(
+            _ThemeVariant(
+                topic_id="materialized-view-monthly-revenue",
+                topic_title="月次売上materialized view設計",
+                problem_statement=(
+                    "payments の月次売上集計が重いため、月次売上の materialized view を作成してください。"
+                    "列は revenue_month, total_revenue とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "payments(id bigint primary key, paid_at timestamptz, amount numeric, status text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("payments", 23100000)),
+                expected_focus="CREATE MATERIALIZED VIEW, DATE_TRUNC, SUM, GROUP BY",
+                reference_sql=(
+                    "CREATE MATERIALIZED VIEW monthly_revenue AS "
+                    "SELECT DATE_TRUNC('month', paid_at) AS revenue_month, "
+                    "SUM(amount) AS total_revenue "
+                    "FROM payments "
+                    "WHERE status = 'paid' "
+                    "GROUP BY DATE_TRUNC('month', paid_at)"
+                ),
+                grading_contract={
+                    "statement_kind": "create_materialized_view",
+                    "required_tables": ["payments"],
+                    "required_functions": ["DATE_TRUNC"],
+                    "required_predicate_columns": ["status"],
+                    "required_aggregates": [{"function": "SUM", "column": "amount"}],
+                },
+            ),
+        ),
+    ),
 )
 
 

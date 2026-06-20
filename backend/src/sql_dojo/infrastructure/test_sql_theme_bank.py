@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 from sql_dojo.application.sql_grading import grade_sql_answer
+from sql_dojo.domain.sql_dojo_types import SqlDojoGenerationError
 from sql_dojo.infrastructure.sql_theme_bank import _THEMES, SqlThemeBank
 
 
@@ -21,6 +24,44 @@ def test_catalog_exposes_broad_theme_coverage_and_variant_counts() -> None:
     assert "slow-query-diagnosis" in families
     assert "index-design" in families
     assert total_problem_count >= 20
+
+
+def test_catalog_exposes_unique_topic_entries() -> None:
+    catalog = SqlThemeBank().list_catalog()
+    topics = [
+        topic
+        for theme in catalog["themes"]
+        for topic in theme["topics"]
+    ]
+
+    topic_ids = [topic["topic_id"] for topic in topics]
+    assert len(topics) == 22
+    assert len(set(topic_ids)) == len(topic_ids)
+    assert "join-basics-shipped-orders" in topic_ids
+    assert "index-design-api-requests-workspace-endpoint-requested-at" in topic_ids
+
+
+def test_create_problem_can_pick_topic_deterministically() -> None:
+    problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="plan-reading-orders-account-status-created-at",
+    )
+
+    assert problem["family"] == "plan-reading"
+    assert problem["topic_id"] == "plan-reading-orders-account-status-created-at"
+    assert problem["topic_title"] == "orders一覧の実行計画"
+    assert problem["difficulty"] == "advanced"
+    assert "orders 一覧クエリ" in problem["problem_statement"]
+
+
+def test_create_problem_rejects_unknown_topic() -> None:
+    with pytest.raises(SqlDojoGenerationError) as excinfo:
+        SqlThemeBank().create_problem(
+            difficulty="beginner",
+            topic_id="missing-topic",
+        )
+
+    assert excinfo.value.error_code == "topic_not_found"
 
 
 def test_create_problem_can_generate_lag_variant(monkeypatch) -> None:

@@ -16,6 +16,41 @@ const mockCatalog = {
       attempt_count: 0,
       best_score: null,
       last_attempted_at: null,
+      topics: [
+        {
+          topic_id: "join-basics-shipped-orders",
+          topic_title: "shipped注文件数",
+          family: "join-basics",
+          difficulty: "beginner",
+          business_domain: "EC",
+          target_skill: "JOIN",
+          attempt_count: 0,
+          best_score: null,
+          last_attempted_at: null,
+        },
+        {
+          topic_id: "join-basics-open-tickets",
+          topic_title: "未解決チケット数",
+          family: "join-basics",
+          difficulty: "beginner",
+          business_domain: "EC",
+          target_skill: "JOIN",
+          attempt_count: 0,
+          best_score: null,
+          last_attempted_at: null,
+        },
+        {
+          topic_id: "join-basics-course-completions",
+          topic_title: "講座完了件数",
+          family: "join-basics",
+          difficulty: "beginner",
+          business_domain: "EC",
+          target_skill: "JOIN",
+          attempt_count: 0,
+          best_score: null,
+          last_attempted_at: null,
+        },
+      ],
     },
     {
       family: "window-ranking",
@@ -27,6 +62,30 @@ const mockCatalog = {
       attempt_count: 0,
       best_score: null,
       last_attempted_at: null,
+      topics: [
+        {
+          topic_id: "window-ranking-department-sales",
+          topic_title: "department別売上1位",
+          family: "window-ranking",
+          difficulty: "intermediate",
+          business_domain: "HR",
+          target_skill: "Window Function",
+          attempt_count: 0,
+          best_score: null,
+          last_attempted_at: null,
+        },
+        {
+          topic_id: "window-ranking-service-deployments",
+          topic_title: "service別最新成功deploy",
+          family: "window-ranking",
+          difficulty: "intermediate",
+          business_domain: "HR",
+          target_skill: "Window Function",
+          attempt_count: 0,
+          best_score: null,
+          last_attempted_at: null,
+        },
+      ],
     },
   ],
 };
@@ -52,6 +111,8 @@ describe("SqlDojoPage", () => {
 
     expect(await screen.findByText("顧客別注文件数")).toBeInTheDocument();
     expect(screen.getByText("部門別ランキング")).toBeInTheDocument();
+    expect(screen.getByText("shipped注文件数")).toBeInTheDocument();
+    expect(screen.getByText("department別売上1位")).toBeInTheDocument();
     expect(screen.getByText("全 2 テーマ / 5 問")).toBeInTheDocument();
     expect(screen.getByText("3問")).toBeInTheDocument();
     expect(screen.getByText("2問")).toBeInTheDocument();
@@ -70,6 +131,8 @@ describe("SqlDojoPage", () => {
           return mockJsonResponse({
             session_id: "sql-1",
             theme_family: "window-ranking",
+            topic_id: "window-ranking-department-sales",
+            topic_title: "department別売上1位",
             difficulty: "intermediate",
             dialect: "postgresql",
             theme_title: "部門別ランキング",
@@ -100,7 +163,7 @@ describe("SqlDojoPage", () => {
     });
   });
 
-  it("テーマカード開始ではカード側の難易度を送る", async () => {
+  it("トピック開始では topic_id とトピック側の難易度を送る", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
       async (input, init) => {
         const url = typeof input === "string" ? input : input.toString();
@@ -111,11 +174,13 @@ describe("SqlDojoPage", () => {
           expect(init?.method).toBe("POST");
           expect(init?.body).toBe(JSON.stringify({
             difficulty: "intermediate",
-            theme_family: "window-ranking",
+            topic_id: "window-ranking-department-sales",
           }));
           return mockJsonResponse({
             session_id: "sql-2",
             theme_family: "window-ranking",
+            topic_id: "window-ranking-department-sales",
+            topic_title: "department別売上1位",
             difficulty: "intermediate",
             dialect: "postgresql",
             theme_title: "部門別ランキング",
@@ -135,12 +200,12 @@ describe("SqlDojoPage", () => {
       initialEntries: ["/sql-dojo"],
     });
 
-    const themeTitle = await screen.findByText("部門別ランキング");
-    const themeCard = themeTitle.closest("div.rounded-lg");
-    expect(themeCard).not.toBeNull();
+    const topicTitle = await screen.findByText("department別売上1位");
+    const topicRow = topicTitle.closest("div.rounded-md");
+    expect(topicRow).not.toBeNull();
     fireEvent.click(
-      within(themeCard as HTMLElement).getByRole("button", {
-        name: "このテーマを解く",
+      within(topicRow as HTMLElement).getByRole("button", {
+        name: "department別売上1位を解く",
       }),
     );
 
@@ -149,7 +214,7 @@ describe("SqlDojoPage", () => {
     });
   });
 
-  it("テーマごとの挑戦回数と最高点を表示する", async () => {
+  it("トピックごとの挑戦回数と最高点を表示する", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.includes("/sql-dojo/catalog")) {
@@ -162,6 +227,16 @@ describe("SqlDojoPage", () => {
               attempt_count: 2,
               best_score: 91,
               last_attempted_at: "2026-06-21T00:00:00+09:00",
+              topics: [
+                {
+                  ...mockCatalog.themes[0].topics[0],
+                  attempt_count: 2,
+                  best_score: 91,
+                  last_attempted_at: "2026-06-21T00:00:00+09:00",
+                },
+                mockCatalog.themes[0].topics[1],
+                mockCatalog.themes[0].topics[2],
+              ],
             },
             mockCatalog.themes[1],
           ],
@@ -174,9 +249,9 @@ describe("SqlDojoPage", () => {
       initialEntries: ["/sql-dojo"],
     });
 
-    expect(await screen.findByText("顧客別注文件数")).toBeInTheDocument();
+    expect(await screen.findByText("shipped注文件数")).toBeInTheDocument();
     expect(screen.getByText("2 回挑戦")).toBeInTheDocument();
     expect(screen.getByText("最高 91 点")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "このテーマを解く" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /を解く/ }).length).toBeGreaterThan(0);
   });
 });

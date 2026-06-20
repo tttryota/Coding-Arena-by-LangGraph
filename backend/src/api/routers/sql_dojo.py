@@ -26,6 +26,7 @@ router = APIRouter(prefix="/sql-dojo", tags=["sql-dojo"])
 class _StartSessionRequest(BaseModel):
     difficulty: SqlDojoDifficulty = "beginner"
     theme_family: str | None = None
+    topic_id: str | None = None
 
 
 class _SubmitAnswerRequest(BaseModel):
@@ -66,6 +67,10 @@ def get_catalog(request: Request) -> SqlDojoCatalog:
         row.theme_family: row
         for row in c.sql_dojo_store.list_theme_history()
     }
+    history_by_topic = {
+        row.topic_id: row
+        for row in c.sql_dojo_store.list_topic_history()
+    }
     return {
         "difficulties": catalog["difficulties"],
         "themes": [
@@ -86,6 +91,27 @@ def get_catalog(request: Request) -> SqlDojoCatalog:
                     if theme["family"] in history_by_family
                     else theme["last_attempted_at"]
                 ),
+                "topics": [
+                    {
+                        **topic,
+                        "attempt_count": (
+                            history_by_topic[topic["topic_id"]].attempt_count
+                            if topic["topic_id"] in history_by_topic
+                            else topic["attempt_count"]
+                        ),
+                        "best_score": (
+                            history_by_topic[topic["topic_id"]].best_score
+                            if topic["topic_id"] in history_by_topic
+                            else topic["best_score"]
+                        ),
+                        "last_attempted_at": (
+                            history_by_topic[topic["topic_id"]].last_attempted_at
+                            if topic["topic_id"] in history_by_topic
+                            else topic["last_attempted_at"]
+                        ),
+                    }
+                    for topic in theme["topics"]
+                ],
             }
             for theme in catalog["themes"]
         ],
@@ -101,6 +127,8 @@ def list_sessions(request: Request) -> dict[str, object]:
         item: dict[str, object] = {
             "session_id": session.id,
             "theme_family": session.theme_family,
+            "topic_id": session.topic_id,
+            "topic_title": session.topic_title,
             "difficulty": session.difficulty,
             "dialect": session.dialect,
             "theme_title": session.theme_title,
@@ -122,6 +150,7 @@ def start_session(request: Request, body: _StartSessionRequest) -> dict[str, obj
         problem = c.sql_theme_bank.create_problem(
             difficulty=body.difficulty,
             theme_family=body.theme_family,
+            topic_id=body.topic_id,
         )
     except SqlDojoGenerationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -129,6 +158,8 @@ def start_session(request: Request, body: _StartSessionRequest) -> dict[str, obj
     c.sql_dojo_store.create_session(
         session_id=session_id,
         theme_family=problem["family"],
+        topic_id=problem["topic_id"],
+        topic_title=problem["topic_title"],
         difficulty=problem["difficulty"],
         dialect=problem["dialect"],
         theme_title=problem["theme_title"],
@@ -144,6 +175,8 @@ def start_session(request: Request, body: _StartSessionRequest) -> dict[str, obj
     return {
         "session_id": session_id,
         "theme_family": problem["family"],
+        "topic_id": problem["topic_id"],
+        "topic_title": problem["topic_title"],
         "difficulty": problem["difficulty"],
         "dialect": problem["dialect"],
         "theme_title": problem["theme_title"],
@@ -166,6 +199,8 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
     response = {
         "session_id": details["session_id"],
         "theme_family": details["theme_family"],
+        "topic_id": details["topic_id"],
+        "topic_title": details["topic_title"],
         "difficulty": details["difficulty"],
         "dialect": details["dialect"],
         "theme_title": details["theme_title"],

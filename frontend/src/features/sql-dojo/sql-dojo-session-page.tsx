@@ -63,6 +63,8 @@ export function SqlDojoSessionPage() {
       setSession({
         session_id: restored.session_id,
         theme_family: restored.theme_family,
+        topic_id: restored.topic_id,
+        topic_title: restored.topic_title,
         difficulty: restored.difficulty,
         dialect: restored.dialect,
         theme_title: restored.theme_title,
@@ -176,16 +178,18 @@ export function SqlDojoSessionPage() {
     });
   };
 
+  const displayTitle = session.topic_title ?? session.theme_title;
+
   if (phase === "result" && result) {
     return (
       <AppShell
         crumbs={[
           { label: "SQL道場", onClick: () => navigate("/sql-dojo") },
-          { label: session.theme_title },
+          { label: displayTitle },
           { label: "結果" },
         ]}
       >
-        <SqlDojoResult result={result} session={session} />
+        <SqlDojoResult result={result} title={displayTitle} />
       </AppShell>
     );
   }
@@ -194,7 +198,7 @@ export function SqlDojoSessionPage() {
     <AppShell
       crumbs={[
         { label: "SQL道場", onClick: () => navigate("/sql-dojo") },
-        { label: session.theme_title },
+        { label: displayTitle },
       ]}
     >
       <div className="space-y-6">
@@ -202,7 +206,7 @@ export function SqlDojoSessionPage() {
           <Badge variant="secondary">{session.dialect}</Badge>
           <Badge variant="outline">{session.business_domain}</Badge>
           <Badge variant="outline">{session.target_skill}</Badge>
-          <span className="font-semibold">{session.theme_title}</span>
+          <span className="font-semibold">{displayTitle}</span>
         </div>
 
         {submitMutation.isError && (
@@ -315,7 +319,7 @@ export function SqlDojoSessionPage() {
 
 function SqlDojoResult({
   result,
-  session,
+  title,
 }: {
   result: {
     score: number;
@@ -324,13 +328,13 @@ function SqlDojoResult({
     improvement_suggestions: string;
     reference_sql: string;
   };
-  session: { theme_title: string };
+  title: string;
 }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Database className="h-5 w-5 text-cyan-400" />
-        <h1 className="text-2xl font-bold">結果: {session.theme_title}</h1>
+        <h1 className="text-2xl font-bold">結果: {title}</h1>
         <Badge variant="secondary">{result.score} 点</Badge>
       </div>
 

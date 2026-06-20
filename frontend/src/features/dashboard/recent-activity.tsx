@@ -108,7 +108,7 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                   {isCompetitive
                     ? item.themeLabel
                     : isSqlDojo
-                      ? item.themeTitle
+                      ? item.topicTitle ?? item.themeTitle
                       : item.title}
                 </span>
                 <span className="flex items-center gap-2 text-[11px] text-muted-foreground">

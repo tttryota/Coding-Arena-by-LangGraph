@@ -248,6 +248,18 @@ export interface CompetitiveSessionListResponse {
 
 export type SqlDojoDifficulty = "beginner" | "intermediate" | "advanced";
 
+export interface SqlDojoTopicSummary {
+  topic_id: string;
+  topic_title: string;
+  family: string;
+  difficulty: SqlDojoDifficulty;
+  business_domain: string;
+  target_skill: string;
+  attempt_count: number;
+  best_score: number | null;
+  last_attempted_at: string | null;
+}
+
 export interface SqlDojoThemeSummary {
   family: string;
   difficulty: SqlDojoDifficulty;
@@ -258,6 +270,7 @@ export interface SqlDojoThemeSummary {
   attempt_count: number;
   best_score: number | null;
   last_attempted_at: string | null;
+  topics: SqlDojoTopicSummary[];
 }
 
 export interface SqlDojoCatalogResponse {
@@ -268,6 +281,8 @@ export interface SqlDojoCatalogResponse {
 export interface SqlDojoStartResponse {
   session_id: string;
   theme_family: string;
+  topic_id: string | null;
+  topic_title: string | null;
   difficulty: SqlDojoDifficulty;
   dialect: "postgresql";
   theme_title: string;
@@ -301,6 +316,8 @@ export interface SqlDojoSessionResponse extends SqlDojoStartResponse {
 export interface SqlDojoSessionListItem {
   session_id: string;
   theme_family: string;
+  topic_id: string | null;
+  topic_title: string | null;
   difficulty: SqlDojoDifficulty;
   dialect: "postgresql";
   theme_title: string;

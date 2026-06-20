@@ -50,6 +50,17 @@ class TestTableCreation:
         tables = set(inspector.get_table_names())
         assert tables == EXPECTED_TABLES
 
+    def test_sql_dojo_session_topic_columns_created(self) -> None:
+        engine = _create_in_memory_engine()
+        inspector = inspect(engine)
+        columns = {
+            column["name"]
+            for column in inspector.get_columns("sql_dojo_sessions")
+        }
+
+        assert "topic_id" in columns
+        assert "topic_title" in columns
+
 
 class TestRoadmap:
     def test_insert_and_read(self) -> None:

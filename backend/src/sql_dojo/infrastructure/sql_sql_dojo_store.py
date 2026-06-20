@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 class SqlDojoSessionRecord:
     id: str
     theme_family: str
+    topic_id: str | None
+    topic_title: str | None
     difficulty: str
     dialect: str
     theme_title: str
@@ -47,6 +49,14 @@ class SqlDojoThemeHistoryRecord:
     last_attempted_at: str | None
 
 
+@dataclass(frozen=True)
+class SqlDojoTopicHistoryRecord:
+    topic_id: str
+    attempt_count: int
+    best_score: int | None
+    last_attempted_at: str | None
+
+
 class SqlSqlDojoStore:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -56,6 +66,8 @@ class SqlSqlDojoStore:
         *,
         session_id: str | None = None,
         theme_family: str,
+        topic_id: str | None = None,
+        topic_title: str | None = None,
         difficulty: str,
         dialect: str,
         theme_title: str,
@@ -73,6 +85,8 @@ class SqlSqlDojoStore:
             row = SqlDojoSession(
                 id=sid,
                 theme_family=theme_family,
+                topic_id=topic_id,
+                topic_title=topic_title,
                 difficulty=difficulty,
                 dialect=dialect,
                 theme_title=theme_title,
@@ -92,6 +106,8 @@ class SqlSqlDojoStore:
         return SqlDojoSessionRecord(
             id=str(sid),
             theme_family=theme_family,
+            topic_id=topic_id,
+            topic_title=topic_title,
             difficulty=difficulty,
             dialect=dialect,
             theme_title=theme_title,
@@ -107,6 +123,8 @@ class SqlSqlDojoStore:
             return {
                 "session_id": str(row.id),
                 "theme_family": row.theme_family,
+                "topic_id": row.topic_id,
+                "topic_title": row.topic_title,
                 "difficulty": row.difficulty,
                 "dialect": row.dialect,
                 "theme_title": row.theme_title,
@@ -192,10 +210,43 @@ class SqlSqlDojoStore:
                 SqlDojoSessionRecord(
                     id=str(row.id),
                     theme_family=row.theme_family,
+                    topic_id=row.topic_id,
+                    topic_title=row.topic_title,
                     difficulty=row.difficulty,
                     dialect=row.dialect,
                     theme_title=row.theme_title,
                     status=row.status,
+                )
+                for row in rows
+            ]
+
+    def list_topic_history(self) -> list[SqlDojoTopicHistoryRecord]:
+        stmt = (
+            select(
+                SqlDojoSession.topic_id,
+                func.count(SqlDojoSession.id).label("attempt_count"),
+                func.max(SqlDojoAnswer.score).label("best_score"),
+                func.max(SqlDojoSession.created_at).label("last_attempted_at"),
+            )
+            .outerjoin(
+                SqlDojoAnswer,
+                SqlDojoAnswer.session_id == SqlDojoSession.id,
+            )
+            .where(SqlDojoSession.topic_id.is_not(None))
+            .group_by(SqlDojoSession.topic_id)
+        )
+        with Session(self._engine) as s:
+            rows = s.execute(stmt).all()
+            return [
+                SqlDojoTopicHistoryRecord(
+                    topic_id=row.topic_id,
+                    attempt_count=row.attempt_count,
+                    best_score=row.best_score,
+                    last_attempted_at=(
+                        row.last_attempted_at.isoformat()
+                        if row.last_attempted_at
+                        else None
+                    ),
                 )
                 for row in rows
             ]
@@ -242,5 +293,6 @@ __all__ = [
     "SqlDojoAnswerRecord",
     "SqlDojoSessionRecord",
     "SqlDojoThemeHistoryRecord",
+    "SqlDojoTopicHistoryRecord",
     "SqlSqlDojoStore",
 ]

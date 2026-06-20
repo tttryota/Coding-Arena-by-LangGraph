@@ -21,6 +21,36 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
+_BOOLEAN_EXPLAIN_OPTIONS = {
+    "ANALYZE",
+    "VERBOSE",
+    "COSTS",
+    "SETTINGS",
+    "GENERIC_PLAN",
+    "BUFFERS",
+    "WAL",
+    "TIMING",
+    "SUMMARY",
+    "MEMORY",
+}
+_BOOLEAN_EXPLAIN_VALUES = {"TRUE", "ON", "1", "FALSE", "OFF", "0"}
+_DISABLED_EXPLAIN_VALUES = {"FALSE", "OFF", "0"}
+_ENABLED_EXPLAIN_VALUES = {"TRUE", "ON", "1"}
+_EXPLAIN_FORMAT_VALUES = {"TEXT", "XML", "JSON", "YAML"}
+_EXPLAIN_SERIALIZE_VALUES = {"NONE", "TEXT", "BINARY"}
+_VALID_BARE_EXPLAIN_SEQUENCES = {
+    (),
+    ("ANALYZE",),
+    ("VERBOSE",),
+    ("ANALYZE", "VERBOSE"),
+}
+_EXPLAIN_PATTERN = re.compile(
+    r"^\s*EXPLAIN\s*(?:\((?P<options>[^)]*)\))?\s*(?P<query>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+_DOLLAR_QUOTE_TAG_PATTERN = re.compile(r"\$[A-Za-z_][A-Za-z_0-9]*\$|\$\$")
+
+
 @dataclass(frozen=True)
 class SqlGradingResult:
     score: int
@@ -126,7 +156,8 @@ def _predicate_columns(parsed: exp.Expression) -> set[str]:
 
 
 def _statement_kind(parsed: exp.Expression, raw_sql: str) -> str:
-    if raw_sql.strip().upper().startswith("EXPLAIN"):
+    sql_without_comments = _strip_sql_comments_preserving_offsets(raw_sql)
+    if sql_without_comments.strip().upper().startswith("EXPLAIN"):
         return "explain"
     if isinstance(parsed, exp.Create) and parsed.args.get("kind") == "INDEX":
         return "create_index"
@@ -177,37 +208,241 @@ def _index_details(parsed: exp.Expression) -> SqlDojoIndexRequirement:
     }
 
 
-def _extract_explain_parts(raw_sql: str) -> tuple[str, set[str]]:
-    pattern = re.compile(
-        r"^\s*EXPLAIN\s*(?:\((?P<options>[^)]*)\))?\s*(?P<query>.+)$",
-        re.IGNORECASE | re.DOTALL,
-    )
-    matched = pattern.match(raw_sql)
-    if matched is None:
-        return raw_sql, set()
-    grouped_options = matched.group("options")
-    if grouped_options is not None:
-        options = {
-            _normalize_identifier(part).upper()
-            for part in grouped_options.split(",")
-            if part.strip()
-        }
-        return matched.group("query").strip(), options
+def _consume_quoted_sql(
+    raw_sql: str,
+    index: int,
+    quote: str,
+    *,
+    escape_backslash: bool = False,
+) -> tuple[str, int]:
+    result: list[str] = []
+    result.append(raw_sql[index])
+    index += 1
+    while index < len(raw_sql):
+        current = raw_sql[index]
+        next_char = raw_sql[index + 1] if index + 1 < len(raw_sql) else ""
+        result.append(current)
+        if escape_backslash and current == "\\" and next_char:
+            result.append(next_char)
+            index += 2
+            continue
+        if current == quote and next_char == quote:
+            result.append(next_char)
+            index += 2
+            continue
+        if current == quote:
+            index += 1
+            break
+        index += 1
+    return "".join(result), index
 
-    query = matched.group("query").strip()
+
+def _consume_line_comment(raw_sql: str, index: int) -> tuple[str, int]:
+    result = ["  "]
+    index += 2
+    while index < len(raw_sql) and raw_sql[index] not in "\r\n":
+        result.append(" ")
+        index += 1
+    return "".join(result), index
+
+
+def _consume_block_comment(raw_sql: str, index: int) -> tuple[str, int]:
+    result = ["  "]
+    index += 2
+    depth = 1
+    while index < len(raw_sql) and depth > 0:
+        current = raw_sql[index]
+        next_char = raw_sql[index + 1] if index + 1 < len(raw_sql) else ""
+        if current == "/" and next_char == "*":
+            result.append("  ")
+            index += 2
+            depth += 1
+            continue
+        if current == "*" and next_char == "/":
+            result.append("  ")
+            index += 2
+            depth -= 1
+            continue
+        result.append("\n" if current in "\r\n" else " ")
+        index += 1
+    return "".join(result), index
+
+
+def _consume_dollar_quoted_sql(raw_sql: str, index: int) -> tuple[str, int] | None:
+    matched = _DOLLAR_QUOTE_TAG_PATTERN.match(raw_sql, index)
+    if matched is None:
+        return None
+    tag = matched.group(0)
+    close_index = raw_sql.find(tag, matched.end())
+    if close_index == -1:
+        return raw_sql[index:], len(raw_sql)
+    end_index = close_index + len(tag)
+    return raw_sql[index:end_index], end_index
+
+
+def _consume_sql_literal_or_comment(
+    raw_sql: str,
+    index: int,
+) -> tuple[str, int] | None:
+    current = raw_sql[index]
+    next_char = raw_sql[index + 1] if index + 1 < len(raw_sql) else ""
+    if current == "$":
+        consumed = _consume_dollar_quoted_sql(raw_sql, index)
+        if consumed is not None:
+            return consumed
+    if current in {"'", '"'}:
+        return _consume_quoted_sql(
+            raw_sql,
+            index,
+            current,
+            escape_backslash=_is_postgres_escape_string_quote(raw_sql, index),
+        )
+    if current == "-" and next_char == "-":
+        return _consume_line_comment(raw_sql, index)
+    if current == "/" and next_char == "*":
+        return _consume_block_comment(raw_sql, index)
+    return None
+
+
+def _strip_sql_comments_preserving_offsets(raw_sql: str) -> str:
+    result: list[str] = []
+    index = 0
+    while index < len(raw_sql):
+        consumed = _consume_sql_literal_or_comment(raw_sql, index)
+        if consumed is not None:
+            text, index = consumed
+            result.append(text)
+            continue
+        result.append(raw_sql[index])
+        index += 1
+    return "".join(result)
+
+
+def _is_postgres_escape_string_quote(raw_sql: str, quote_index: int) -> bool:
+    if quote_index == 0 or raw_sql[quote_index - 1].lower() != "e":
+        return False
+    return quote_index == 1 or not (
+        raw_sql[quote_index - 2].isalnum() or raw_sql[quote_index - 2] == "_"
+    )
+
+
+def _extract_grouped_explain_options(grouped_options: str) -> tuple[set[str], bool]:
+    option_states: dict[str, bool] = {}
+    invalid_options = False
+    for part in grouped_options.split(","):
+        option, enabled, invalid = _parse_parenthesized_explain_option(part)
+        invalid_options = invalid_options or invalid
+        if option is not None:
+            option_states[option] = enabled
+    options = {
+        option
+        for option, enabled in option_states.items()
+        if enabled
+    }
+    invalid_options = invalid_options or _has_invalid_explain_option_combination(
+        options,
+    )
+    return options, invalid_options
+
+
+def _extract_bare_explain_parts(query: str) -> tuple[str, set[str], bool]:
     statement_keyword = re.search(
         r"\b(WITH|SELECT|INSERT|UPDATE|DELETE|CREATE)\b",
         query,
         re.IGNORECASE,
     )
     if statement_keyword is None:
-        return query, set()
-    options = {
+        return query, set(), False
+    option_tokens = [
         _normalize_identifier(part).upper()
         for part in query[:statement_keyword.start()].split()
         if part.strip()
-    }
-    return query[statement_keyword.start():].strip(), options
+    ]
+    invalid_options = tuple(option_tokens) not in _VALID_BARE_EXPLAIN_SEQUENCES
+    options = set(option_tokens) & {"ANALYZE", "VERBOSE"}
+    return query[statement_keyword.start():].strip(), options, invalid_options
+
+
+def _extract_explain_parts(raw_sql: str) -> tuple[str, set[str], bool]:
+    extraction_sql = _strip_sql_comments_preserving_offsets(raw_sql)
+    matched = _EXPLAIN_PATTERN.match(extraction_sql)
+    if matched is None:
+        return raw_sql, set(), False
+    grouped_options = matched.group("options")
+    if grouped_options is not None:
+        options, invalid_options = _extract_grouped_explain_options(grouped_options)
+        return matched.group("query").strip(), options, invalid_options
+    query = matched.group("query").strip()
+    return _extract_bare_explain_parts(query)
+
+
+def _parse_parenthesized_explain_option(
+    raw_option: str,
+) -> tuple[str | None, bool, bool]:
+    parts = raw_option.strip().split()
+    if not parts:
+        return None, False, True
+    option = _normalize_identifier(parts[0]).upper()
+    if option in _BOOLEAN_EXPLAIN_OPTIONS:
+        return _parse_boolean_explain_option(option, parts)
+    if option == "FORMAT":
+        return _parse_keyword_explain_option(
+            option,
+            parts,
+            valid_values=_EXPLAIN_FORMAT_VALUES,
+        )
+    if option == "SERIALIZE":
+        if len(parts) == 1:
+            return option, True, False
+        return _parse_keyword_explain_option(
+            option,
+            parts,
+            valid_values=_EXPLAIN_SERIALIZE_VALUES,
+            disabled_values={"NONE"},
+        )
+    return None, False, True
+
+
+def _parse_boolean_explain_option(
+    option: str,
+    parts: list[str],
+) -> tuple[str | None, bool, bool]:
+    if len(parts) == 1:
+        return option, True, False
+    if len(parts) > 2:
+        return None, False, True
+    value = _normalize_identifier(parts[1]).upper()
+    if value not in _BOOLEAN_EXPLAIN_VALUES:
+        return None, False, True
+    if value in _DISABLED_EXPLAIN_VALUES:
+        return option, False, False
+    if value in _ENABLED_EXPLAIN_VALUES:
+        return option, True, False
+    return None, False, True
+
+
+def _parse_keyword_explain_option(
+    option: str,
+    parts: list[str],
+    *,
+    valid_values: set[str],
+    disabled_values: set[str] | None = None,
+) -> tuple[str | None, bool, bool]:
+    if len(parts) != 2:
+        return None, False, True
+    value = _normalize_identifier(parts[1]).upper()
+    if value not in valid_values:
+        return None, False, True
+    if disabled_values is not None and value in disabled_values:
+        return option, False, False
+    return option, True, False
+
+
+def _has_invalid_explain_option_combination(options: set[str]) -> bool:
+    if "ANALYZE" in options and "GENERIC_PLAN" in options:
+        return True
+    analyze_only_options = {"SERIALIZE", "TIMING", "WAL"}
+    return bool(analyze_only_options & options) and "ANALYZE" not in options
 
 
 def _add_rule(  # noqa: PLR0913
@@ -252,8 +487,11 @@ def grade_sql_answer(  # noqa: C901, PLR0915
     actual_kind = _statement_kind(parsed, user_sql)
     target_parsed = parsed
     explain_options: set[str] = set()
+    invalid_explain_options = False
     if actual_kind == "explain":
-        inner_sql, explain_options = _extract_explain_parts(user_sql)
+        inner_sql, explain_options, invalid_explain_options = _extract_explain_parts(
+            user_sql,
+        )
         try:
             target_parsed = _require_expression(
                 sqlglot.parse_one(inner_sql, read="postgres"),
@@ -424,6 +662,13 @@ def grade_sql_answer(  # noqa: C901, PLR0915
             weight=10,
             passed=actual_kind == "explain",
             message=f"Expected EXPLAIN, got {actual_kind}",
+        )
+        _add_rule(
+            rules,
+            name="explain_syntax",
+            weight=10,
+            passed=not invalid_explain_options,
+            message="Expected valid EXPLAIN options",
         )
         required_options = grading_contract.get("required_explain_options", [])
         if required_options:

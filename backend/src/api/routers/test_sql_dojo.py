@@ -8,7 +8,10 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from api.app import create_app
-from sql_dojo.domain.sql_dojo_types import SqlDojoQuestionError
+from sql_dojo.domain.sql_dojo_types import (
+    SqlDojoGenerationError,
+    SqlDojoQuestionError,
+)
 
 
 class _FakeSqlThemeBank:
@@ -26,6 +29,19 @@ class _FakeSqlThemeBank:
                     "attempt_count": 0,
                     "best_score": None,
                     "last_attempted_at": None,
+                    "topics": [
+                        {
+                            "topic_id": "join-basics-shipped-orders",
+                            "topic_title": "shipped注文件数",
+                            "family": "join-basics",
+                            "difficulty": "beginner",
+                            "business_domain": "EC",
+                            "target_skill": "JOIN",
+                            "attempt_count": 0,
+                            "best_score": None,
+                            "last_attempted_at": None,
+                        },
+                    ],
                 },
             ],
         }
@@ -35,10 +51,38 @@ class _FakeSqlThemeBank:
         *,
         difficulty: str,
         theme_family: str | None = None,
+        topic_id: str | None = None,
     ) -> dict[str, object]:
+        if topic_id == "missing-topic":
+            raise SqlDojoGenerationError(
+                error_code="topic_not_found",
+                message="No SQL dojo topic for topic_id='missing-topic'",
+            )
+        if topic_id is not None:
+            return {
+                "family": "join-basics",
+                "topic_id": topic_id,
+                "topic_title": "shipped注文件数",
+                "difficulty": "beginner",
+                "dialect": "postgresql",
+                "theme_title": "顧客別注文件数",
+                "business_domain": "EC",
+                "target_skill": "JOIN",
+                "problem_statement": "問題文",
+                "schema_markdown": "schema",
+                "sample_data_json": '[{"table":"customers","rows":10}]',
+                "expected_focus": "JOIN, COUNT",
+                "reference_sql": "SELECT 1",
+                "grading_contract": {
+                    "statement_kind": "select",
+                    "required_tables": ["customers"],
+                },
+            }
         if theme_family == "plan-reading":
             return {
                 "family": "plan-reading",
+                "topic_id": "plan-reading-events-account-created-at",
+                "topic_title": "events検索の実行計画",
                 "difficulty": difficulty,
                 "dialect": "postgresql",
                 "theme_title": "実行計画を確認する SQL を書く",
@@ -63,6 +107,8 @@ class _FakeSqlThemeBank:
             }
         return {
             "family": theme_family or "join-basics",
+            "topic_id": "join-basics-shipped-orders",
+            "topic_title": "shipped注文件数",
             "difficulty": difficulty,
             "dialect": "postgresql",
             "theme_title": "顧客別注文件数",
@@ -139,6 +185,8 @@ class _FakeSqlDojoStore:
                 {
                     "id": session_id,
                     "theme_family": str(session["theme_family"]),
+                    "topic_id": session.get("topic_id"),
+                    "topic_title": session.get("topic_title"),
                     "difficulty": str(session["difficulty"]),
                     "dialect": str(session["dialect"]),
                     "theme_title": str(session["theme_title"]),
@@ -158,6 +206,20 @@ class _FakeSqlDojoStore:
                     "attempt_count": 2,
                     "best_score": 91,
                     "last_attempted_at": "2026-06-21T00:00:00+09:00",
+                },
+            )(),
+        ]
+
+    def list_topic_history(self) -> list[object]:
+        return [
+            type(
+                "TopicHistoryRow",
+                (),
+                {
+                    "topic_id": "join-basics-shipped-orders",
+                    "attempt_count": 1,
+                    "best_score": 88,
+                    "last_attempted_at": "2026-06-20T00:00:00+09:00",
                 },
             )(),
         ]
@@ -203,6 +265,11 @@ class TestCatalog:
         ]
         assert data["themes"][0]["attempt_count"] == 2
         assert data["themes"][0]["best_score"] == 91
+        assert data["themes"][0]["topics"][0]["topic_id"] == (
+            "join-basics-shipped-orders"
+        )
+        assert data["themes"][0]["topics"][0]["attempt_count"] == 1
+        assert data["themes"][0]["topics"][0]["best_score"] == 88
 
 
 class TestStartSession:
@@ -217,7 +284,56 @@ class TestStartSession:
         data = resp.json()
         assert data["dialect"] == "postgresql"
         assert data["theme_family"] == "join-basics"
+        assert data["topic_id"] == "join-basics-shipped-orders"
+        assert data["topic_title"] == "shipped注文件数"
         assert "reference_sql" not in data
+
+    def test_creates_session_for_topic(self) -> None:
+        client = _make_client()
+        resp = client.post(
+            "/sql-dojo/sessions",
+            json={"topic_id": "join-basics-shipped-orders"},
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["difficulty"] == "beginner"
+        assert data["theme_family"] == "join-basics"
+        assert data["topic_id"] == "join-basics-shipped-orders"
+        assert data["topic_title"] == "shipped注文件数"
+
+    def test_rejects_unknown_topic(self) -> None:
+        client = _make_client()
+        resp = client.post(
+            "/sql-dojo/sessions",
+            json={"topic_id": "missing-topic"},
+        )
+
+        assert resp.status_code == 422
+
+    def test_rejects_topic_with_mismatched_difficulty(self) -> None:
+        client = _make_client()
+        resp = client.post(
+            "/sql-dojo/sessions",
+            json={
+                "difficulty": "advanced",
+                "topic_id": "join-basics-shipped-orders",
+            },
+        )
+
+        assert resp.status_code == 422
+
+    def test_rejects_topic_with_mismatched_theme_family(self) -> None:
+        client = _make_client()
+        resp = client.post(
+            "/sql-dojo/sessions",
+            json={
+                "theme_family": "window-ranking",
+                "topic_id": "join-basics-shipped-orders",
+            },
+        )
+
+        assert resp.status_code == 422
 
 
 class TestSubmitAnswer:
@@ -260,6 +376,8 @@ class TestGetSession:
         assert resp.status_code == 200
         assert resp.json()["feedback"] == "良い観点です"
         assert resp.json()["reference_sql"] == "SELECT 1"
+        assert resp.json()["topic_id"] == "join-basics-shipped-orders"
+        assert resp.json()["topic_title"] == "shipped注文件数"
 
 
 class TestListSessions:
@@ -270,7 +388,10 @@ class TestListSessions:
         resp = client.get("/sql-dojo/sessions")
 
         assert resp.status_code == 200
-        assert len(resp.json()["sessions"]) == 1
+        data = resp.json()
+        assert len(data["sessions"]) == 1
+        assert data["sessions"][0]["topic_id"] == "join-basics-shipped-orders"
+        assert data["sessions"][0]["topic_title"] == "shipped注文件数"
 
 
 class TestAskQuestion:

@@ -207,4 +207,42 @@ describe("DashboardPage", () => {
     expect(screen.getByText("SQL道場(直近)")).toBeInTheDocument();
     expect(screen.getByText("取得失敗")).toBeInTheDocument();
   });
+
+  it("SQL道場の最近のアクティビティでは topic_title を優先表示する", async () => {
+    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
+      if (path === "/roadmaps") return mockJsonResponse(roadmapList);
+      if (path === "/roadmaps/rm-1") return mockJsonResponse(roadmapTree1);
+      if (path === "/roadmaps/rm-2") return mockJsonResponse(roadmapTree2);
+      if (path.includes("/ingestion/feedbacks")) {
+        return mockJsonResponse(emptyFeedbacks);
+      }
+      if (path === "/algorithm-quiz/sessions") {
+        return mockJsonResponse({ sessions: [] });
+      }
+      if (path === "/sql-dojo/sessions") {
+        return mockJsonResponse({
+          sessions: [
+            {
+              session_id: "sql-1",
+              theme_family: "join-basics",
+              topic_id: "join-basics-shipped-orders",
+              topic_title: "shipped注文件数",
+              difficulty: "beginner",
+              dialect: "postgresql",
+              theme_title: "JOIN で件数集計を作る",
+              status: "completed",
+              created_at: now.toISOString(),
+              score: 88,
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText("shipped注文件数")).toBeInTheDocument();
+    expect(screen.queryByText("JOIN で件数集計を作る")).not.toBeInTheDocument();
+  });
 });

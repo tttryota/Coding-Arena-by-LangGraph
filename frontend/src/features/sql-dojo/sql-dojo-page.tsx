@@ -14,6 +14,7 @@ import { useSqlDojoStore } from "./use-sql-dojo-store";
 import type {
   SqlDojoDifficulty,
   SqlDojoThemeSummary,
+  SqlDojoTopicSummary,
 } from "@/types/api";
 
 const DIFFICULTY_LABELS: Record<SqlDojoDifficulty, string> = {
@@ -57,15 +58,15 @@ export function SqlDojoPage() {
   const problemCountByDifficulty = useMemo<Record<SqlDojoDifficulty, number>>(
     () => ({
       beginner: themesByDifficulty.beginner.reduce(
-        (sum, theme) => sum + theme.variant_count,
+        (sum, theme) => sum + theme.topics.length,
         0,
       ),
       intermediate: themesByDifficulty.intermediate.reduce(
-        (sum, theme) => sum + theme.variant_count,
+        (sum, theme) => sum + theme.topics.length,
         0,
       ),
       advanced: themesByDifficulty.advanced.reduce(
-        (sum, theme) => sum + theme.variant_count,
+        (sum, theme) => sum + theme.topics.length,
         0,
       ),
     }),
@@ -83,15 +84,21 @@ export function SqlDojoPage() {
   }, [difficulty]);
 
   const start = async (
-    themeFamily?: string,
-    themeTitle?: string,
-    targetDifficulty: SqlDojoDifficulty = difficulty,
+    options: {
+      themeFamily?: string;
+      topic?: SqlDojoTopicSummary;
+      title?: string;
+      targetDifficulty?: SqlDojoDifficulty;
+    } = {},
   ) => {
-    setGeneratingTarget(themeTitle ?? DIFFICULTY_LABELS[targetDifficulty]);
+    const targetDifficulty = options.targetDifficulty ?? difficulty;
+    const title = options.topic?.topic_title ?? options.title;
+    setGeneratingTarget(title ?? DIFFICULTY_LABELS[targetDifficulty]);
     try {
       const result = await startMutation.mutateAsync({
         difficulty: targetDifficulty,
-        themeFamily,
+        themeFamily: options.themeFamily,
+        topicId: options.topic?.topic_id,
       });
       window.localStorage.setItem(STORAGE_KEY, targetDifficulty);
       setSession(result);
@@ -99,6 +106,21 @@ export function SqlDojoPage() {
     } catch {
       // handled by query state
     }
+  };
+
+  const startTopic = async (
+    topic: SqlDojoTopicSummary,
+  ) => {
+    await start({
+      topic,
+      targetDifficulty: topic.difficulty,
+    });
+  };
+
+  const startRandom = async (
+    targetDifficulty: SqlDojoDifficulty = difficulty,
+  ) => {
+    await start({ targetDifficulty });
   };
   return (
     <AppShell crumbs={[{ label: "SQL道場" }]}>
@@ -159,7 +181,7 @@ export function SqlDojoPage() {
               </select>
               <Button
                 size="sm"
-                onClick={() => start()}
+                onClick={() => startRandom()}
                 disabled={startMutation.isPending}
               >
                 <Play className="mr-1.5 h-3.5 w-3.5" />
@@ -203,30 +225,44 @@ export function SqlDojoPage() {
                                   </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-2 pl-3">
-                                  <Badge variant="secondary">{theme.variant_count}問</Badge>
+                                  <Badge variant="secondary">{theme.topics.length}問</Badge>
                                   <Badge variant="outline">{theme.family}</Badge>
                                 </div>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                {theme.attempt_count > 0 ? (
-                                  <>
-                                    <span>{theme.attempt_count} 回挑戦</span>
-                                    {theme.best_score != null && (
-                                      <span>最高 {theme.best_score} 点</span>
-                                    )}
-                                  </>
-                                ) : (
-                                  <span>未着手</span>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => start(theme.family, theme.title, theme.difficulty)}
-                                  disabled={startMutation.isPending}
-                                >
-                                  このテーマを解く
-                                </Button>
+                              <div className="space-y-2">
+                                {theme.topics.map((topic) => (
+                                  <div
+                                    key={topic.topic_id}
+                                    className="flex flex-wrap items-center gap-3 rounded-md bg-muted/40 px-3 py-2"
+                                  >
+                                    <div className="min-w-0 flex-1 space-y-1">
+                                      <div className="truncate text-sm font-medium">
+                                        {topic.topic_title}
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        {topic.attempt_count > 0 ? (
+                                          <>
+                                            <span>{topic.attempt_count} 回挑戦</span>
+                                            {topic.best_score != null && (
+                                              <span>最高 {topic.best_score} 点</span>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <span>未着手</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => startTopic(topic)}
+                                      disabled={startMutation.isPending}
+                                      aria-label={`${topic.topic_title}を解く`}
+                                    >
+                                      解く
+                                    </Button>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           );

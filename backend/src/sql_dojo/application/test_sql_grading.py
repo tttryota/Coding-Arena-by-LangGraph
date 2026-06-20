@@ -147,10 +147,10 @@ def test_grades_bare_explain_analyze_query() -> None:
     assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
 
 
-def test_grades_bare_explain_analyze_buffers_query() -> None:
+def test_grades_parenthesized_explain_analyze_buffers_query() -> None:
     result = grade_sql_answer(
         (
-            "EXPLAIN ANALYZE BUFFERS "
+            "EXPLAIN (ANALYZE, BUFFERS) "
             "SELECT * FROM events "
             "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
         ),
@@ -167,10 +167,588 @@ def test_grades_bare_explain_analyze_buffers_query() -> None:
     assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
 
 
-def test_explain_requires_order_and_limit_when_contract_demands_them() -> None:
+def test_grades_parenthesized_explain_options_with_true_values() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE TRUE, BUFFERS ON) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_explain_with_comments_around_options() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN /* planner details */ "
+            "(ANALYZE /* runtime */, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+@pytest.mark.parametrize(
+    "user_sql",
+    [
+        (
+            "/* review */ EXPLAIN (ANALYZE, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        (
+            "-- review\n"
+            "EXPLAIN (ANALYZE, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+    ],
+)
+def test_grades_explain_with_leading_comments(user_sql: str) -> None:
+    result = grade_sql_answer(
+        user_sql,
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_explain_with_nested_block_comment_before_options() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN /* outer /* inner */ outer */ "
+            "(ANALYZE, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_explain_with_nested_block_comment_in_inner_query() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS) "
+            "SELECT * FROM events "
+            "/* outer /* inner */ outer */ "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_explain_with_line_comment_before_query() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS) -- inspect index usage\n"
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_explain_comment_stripping_preserves_string_literals() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND message = 'not /* a comment */ here'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "message"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_explain_comment_stripping_preserves_escape_string_literals() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND message = E'not \\' -- a comment'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "message"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_explain_comment_stripping_preserves_dollar_quoted_strings() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND message = $$not /* a comment */ here$$"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "message"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_explain_comment_stripping_preserves_tagged_dollar_quoted_strings() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND message = $tag$not -- a comment$tag$"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "message"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_parenthesized_explain_option_false_value_is_not_enabled() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE TRUE, BUFFERS OFF) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    explain_options_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_options"
+    )
+    assert result.score < 90
+    assert explain_options_rule["passed"] is False
+
+
+def test_parenthesized_explain_duplicate_options_use_last_value() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, ANALYZE FALSE, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    explain_options_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_options"
+    )
+    assert result.score < 90
+    assert explain_options_rule["passed"] is False
+
+
+def test_parenthesized_explain_duplicate_disabled_option_can_be_re_enabled() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS FALSE, BUFFERS TRUE) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_parenthesized_explain_duplicate_generic_plan_can_be_disabled() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (GENERIC_PLAN TRUE, GENERIC_PLAN FALSE, ANALYZE) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_parenthesized_explain_invalid_option_value_fails_syntax_rule() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE TRUE, BUFFERS OFFF) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE"],
+        },
+    )
+
+    syntax_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_syntax"
+    )
+    assert result.score < 90
+    assert syntax_rule["passed"] is False
+
+
+def test_parenthesized_explain_unknown_option_fails_syntax_rule() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE TRUE, BUFFERS TRUE, FOO) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    syntax_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_syntax"
+    )
+    assert result.score < 90
+    assert syntax_rule["passed"] is False
+
+
+def test_parenthesized_explain_accepts_serialize_option_values() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS, SERIALIZE TEXT) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_parenthesized_explain_accepts_serialize_without_value() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS, SERIALIZE) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_parenthesized_explain_rejects_analyze_with_generic_plan() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, GENERIC_PLAN, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    syntax_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_syntax"
+    )
+    assert result.score < 90
+    assert syntax_rule["passed"] is False
+
+
+@pytest.mark.parametrize(
+    "user_sql",
+    [
+        (
+            "EXPLAIN (BUFFERS, WAL) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        (
+            "EXPLAIN (BUFFERS, TIMING) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        (
+            "EXPLAIN (BUFFERS, SERIALIZE TEXT) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+    ],
+)
+def test_parenthesized_explain_rejects_analyze_only_options_without_analyze(
+    user_sql: str,
+) -> None:
+    result = grade_sql_answer(
+        user_sql,
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["BUFFERS"],
+        },
+    )
+
+    syntax_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_syntax"
+    )
+    assert result.score < 90
+    assert syntax_rule["passed"] is False
+
+
+def test_parenthesized_explain_rejects_format_without_value() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, FORMAT, BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    syntax_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_syntax"
+    )
+    assert result.score < 90
+    assert syntax_rule["passed"] is False
+
+
+def test_parenthesized_explain_rejects_empty_option_entry() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE,,BUFFERS) "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    syntax_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_syntax"
+    )
+    assert result.score < 90
+    assert syntax_rule["passed"] is False
+
+
+def test_rejects_bare_explain_buffers_option() -> None:
     result = grade_sql_answer(
         (
             "EXPLAIN ANALYZE BUFFERS "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "BUFFERS"],
+        },
+    )
+
+    rules = _rules(result.rule_breakdown_json)
+    explain_options_rule = next(
+        rule for rule in rules
+        if rule["name"] == "explain_options"
+    )
+    assert result.score < 90
+    assert explain_options_rule["passed"] is False
+
+
+def test_bare_explain_buffers_fails_even_when_buffers_not_required() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN ANALYZE BUFFERS "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE"],
+        },
+    )
+
+    syntax_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_syntax"
+    )
+    assert result.score < 90
+    assert syntax_rule["passed"] is False
+
+
+def test_bare_explain_options_must_follow_postgresql_order() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN VERBOSE ANALYZE "
+            "SELECT * FROM events "
+            "WHERE account_id = 42 AND created_at >= DATE '2026-06-01'"
+        ),
+        {
+            "statement_kind": "explain",
+            "required_tables": ["events"],
+            "required_predicate_columns": ["account_id", "created_at"],
+            "require_explain": True,
+            "required_explain_options": ["ANALYZE", "VERBOSE"],
+        },
+    )
+
+    syntax_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "explain_syntax"
+    )
+    assert result.score < 90
+    assert syntax_rule["passed"] is False
+
+
+def test_explain_requires_order_and_limit_when_contract_demands_them() -> None:
+    result = grade_sql_answer(
+        (
+            "EXPLAIN (ANALYZE, BUFFERS) "
             "SELECT id, total_amount FROM orders "
             "WHERE account_id = 9001 AND status = 'pending'"
         ),

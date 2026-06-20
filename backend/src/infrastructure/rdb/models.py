@@ -238,6 +238,8 @@ class SqlDojoSession(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     theme_family: Mapped[str] = mapped_column(String, nullable=False)
+    topic_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    topic_title: Mapped[str | None] = mapped_column(String, nullable=True)
     difficulty: Mapped[str] = mapped_column(String, nullable=False)
     dialect: Mapped[str] = mapped_column(String, nullable=False)
     theme_title: Mapped[str] = mapped_column(String, nullable=False)

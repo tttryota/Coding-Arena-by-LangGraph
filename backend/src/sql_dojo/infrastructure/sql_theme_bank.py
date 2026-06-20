@@ -13,6 +13,7 @@ from sql_dojo.domain.sql_dojo_types import (
     SqlDojoGenerationError,
     SqlDojoProblem,
     SqlDojoThemeSummary,
+    SqlDojoTopicSummary,
 )
 
 if TYPE_CHECKING:
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class _ThemeVariant:
+    topic_id: str
+    topic_title: str
     problem_statement: str
     schema_markdown: str
     sample_data: list[dict[str, object]]
@@ -176,6 +179,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
         generation_prompt="2テーブルを JOIN して COUNT 集計を作る",
         variants=(
             _ThemeVariant(
+                topic_id="join-basics-shipped-orders",
+                topic_title="shipped注文件数",
                 problem_statement=(
                     "EC サービスの月次レポートです。"
                     "顧客ごとの shipped 注文件数を多い順に 5 件取得してください。"
@@ -209,6 +214,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="join-basics-open-tickets",
+                topic_title="未解決チケット数",
                 problem_statement=(
                     "サポートチームが workspace ごとの未解決チケット数を確認したいです。"
                     "status='open' のチケット件数を多い順に 10 件取得してください。"
@@ -242,6 +249,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="join-basics-course-completions",
+                topic_title="講座完了件数",
                 problem_statement=(
                     "学習サービスで、講座ごとの completed 受講件数を確認します。"
                     "完了件数の多い順に 8 件取得してください。"
@@ -285,6 +294,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
         generation_prompt="LEFT JOIN を使って関連件数をゼロ件込みで集計する",
         variants=(
             _ThemeVariant(
+                topic_id="left-join-plan-subscriptions",
+                topic_title="プラン別subscription件数",
                 problem_statement=(
                     "全プランについて、紐づく subscription 件数を 0 件も含めて表示してください。"
                     "出力列は plan_code, subscriber_count とし、plan_code 昇順に並べます。"
@@ -316,6 +327,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="left-join-category-products",
+                topic_title="カテゴリ別product件数",
                 problem_statement=(
                     "すべての category について、紐づく product 数をゼロ件も含めて出してください。"
                     "出力列は category_name, product_count とし、category_name 昇順に並べます。"
@@ -357,6 +370,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
         generation_prompt="JOIN したデータから SUM 集計レポートを作る",
         variants=(
             _ThemeVariant(
+                topic_id="aggregation-plan-revenue",
+                topic_title="プラン別月次売上",
                 problem_statement=(
                     "SaaS 請求データから、2026-05 のプラン別売上を求めてください。"
                     "出力列は plan_code, invoice_month, total_revenue とし、"
@@ -389,6 +404,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="aggregation-region-ad-spend",
+                topic_title="region別広告費",
                 problem_statement=(
                     "広告運用チームが 2026-06 の region 別広告費を確認したいです。"
                     "出力列は region, spend_month, total_spend とし、"
@@ -421,6 +438,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="aggregation-country-payouts",
+                topic_title="country別支払総額",
                 problem_statement=(
                     "クリエイター向けサービスで、2026-01-01 以降の country 別支払総額を集計します。"
                     "出力列は country, total_payout とし、"
@@ -462,6 +481,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
         generation_prompt="LAG を使って前回値との差分を出す",
         variants=(
             _ThemeVariant(
+                topic_id="window-trends-plan-revenue-lag",
+                topic_title="plan_code別前月売上",
                 problem_statement=(
                     "plan_code ごとの月次売上テーブルがあります。"
                     "2026-04-01 以降について、前月売上を比較できるように previous_revenue を出してください。"
@@ -491,6 +512,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="window-trends-warehouse-shipments-lag",
+                topic_title="warehouse別前日出荷件数",
                 problem_statement=(
                     "warehouse ごとの日次出荷件数があります。"
                     "2026-06-01 以降について、前日件数を比較できるように"
@@ -530,6 +553,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
         generation_prompt="ROW_NUMBER と CTE で 1 位だけを抽出する",
         variants=(
             _ThemeVariant(
+                topic_id="window-ranking-department-sales",
+                topic_title="department別売上1位",
                 problem_statement=(
                     "営業担当の実績から、department ごとに revenue 上位 1 名を抽出してください。"
                     "同率があっても 1 名だけ返す前提で、担当者名と revenue を含めてください。"
@@ -562,6 +587,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="window-ranking-service-deployments",
+                topic_title="service別最新成功deploy",
                 problem_statement=(
                     "各 service について、status='success' の最新デプロイ 1 件だけを返してください。"
                     "出力には service_name, team, deployed_at, duration_seconds を含めます。"
@@ -594,6 +621,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="window-ranking-queue-agent-metrics",
+                topic_title="queue別最速agent",
                 problem_statement=(
                     "queue ごとに、report_date='2026-06-01' 時点で"
                     "avg_first_response_seconds が最も小さい agent を 1 名ずつ返してください。"
@@ -637,6 +666,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
         generation_prompt="実行計画と実測時間を見る EXPLAIN を 1 文で書く",
         variants=(
             _ThemeVariant(
+                topic_id="plan-reading-events-account-created-at",
+                topic_title="events検索の実行計画",
                 problem_statement=(
                     "以下の検索クエリが遅いと報告されています。"
                     "まず実行計画と実測時間を確認したいです。"
@@ -662,6 +693,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="plan-reading-orders-account-status-created-at",
+                topic_title="orders一覧の実行計画",
                 problem_statement=(
                     "orders 一覧クエリが遅く、account_id と status で絞って"
                     "created_at の新しい順に 100 件返す処理を調べたいです。"
@@ -679,7 +712,7 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 sample_data=_sample_rows(("orders", 14600000)),
                 expected_focus="EXPLAIN ANALYZE, BUFFERS",
                 reference_sql=(
-                    "EXPLAIN ANALYZE BUFFERS "
+                    "EXPLAIN (ANALYZE, BUFFERS) "
                     "SELECT id, total_amount FROM orders "
                     "WHERE account_id = 9001 AND status = 'pending' "
                     "ORDER BY created_at DESC LIMIT 100"
@@ -692,6 +725,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="plan-reading-payments-merchant-paid-at",
+                topic_title="payments検索の実行計画",
                 problem_statement=(
                     "payments 検索クエリの実行計画を確認したいです。"
                     "merchant_id と paid_at 条件のクエリについて、"
@@ -730,6 +765,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
         generation_prompt="WHERE, ORDER BY, LIMIT を揃えて取得クエリを作る",
         variants=(
             _ThemeVariant(
+                topic_id="slow-query-application-logs",
+                topic_title="ERRORログ取得",
                 problem_statement=(
                     "ログ分析テーブルから、service_name='billing' の ERROR ログを"
                     "新しい順に 50 件取得してください。"
@@ -758,6 +795,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 },
             ),
             _ThemeVariant(
+                topic_id="slow-query-api-requests",
+                topic_title="5xx APIリクエスト取得",
                 problem_statement=(
                     "API 監視テーブルから、endpoint='/v1/orders' かつ status_code が 500 以上のリクエストを"
                     "新しい順に 100 件確認したいです。"
@@ -786,6 +825,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 },
             ),
             _ThemeVariant(
+                topic_id="slow-query-webhook-deliveries",
+                topic_title="webhook retry取得",
                 problem_statement=(
                     "webhook 配信のリトライ対象を確認します。"
                     "integration_id=55 かつ status='retrying' の配信を"
@@ -824,6 +865,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
         generation_prompt="絞り込み条件と並び順に合う CREATE INDEX を書く",
         variants=(
             _ThemeVariant(
+                topic_id="index-design-items-seller-status-updated-at",
+                topic_title="items複合インデックス",
                 problem_statement=(
                     "items テーブルで `seller_id = ? AND status = 'active'` の条件で絞り込み、"
                     "`updated_at DESC` で一覧表示するクエリが頻出です。"
@@ -847,6 +890,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="index-design-orders-account-status-created-at",
+                topic_title="orders複合インデックス",
                 problem_statement=(
                     "orders テーブルで `account_id = ? AND status = 'pending'` で絞り込み、"
                     "`created_at DESC` で最近の注文を取得するクエリが多いです。"
@@ -870,6 +915,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 ),
             ),
             _ThemeVariant(
+                topic_id="index-design-api-requests-workspace-endpoint-requested-at",
+                topic_title="api_requests複合インデックス",
                 problem_statement=(
                     "api_requests テーブルで `workspace_id = ? AND endpoint = ?` で絞り込み、"
                     "`requested_at DESC` で最近のアクセスを確認する処理があります。"
@@ -912,6 +959,10 @@ class SqlThemeBank:
                 "attempt_count": 0,
                 "best_score": None,
                 "last_attempted_at": None,
+                "topics": [
+                    self._topic_summary(theme, variant)
+                    for variant in theme.variants
+                ],
             }
             for theme in _THEMES
         ]
@@ -925,7 +976,12 @@ class SqlThemeBank:
         *,
         difficulty: SqlDojoDifficulty,
         theme_family: str | None = None,
+        topic_id: str | None = None,
     ) -> SqlDojoProblem:
+        if topic_id is not None:
+            theme, variant = self._find_topic(topic_id)
+            return self._problem_from_variant(theme, variant)
+
         candidates = [
             theme for theme in _THEMES
             if theme.difficulty == difficulty
@@ -942,8 +998,46 @@ class SqlThemeBank:
             )
         theme = random.choice(candidates)  # noqa: S311
         variant = random.choice(theme.variants)  # noqa: S311
+        return self._problem_from_variant(theme, variant)
+
+    @staticmethod
+    def _topic_summary(
+        theme: _ThemeTemplate,
+        variant: _ThemeVariant,
+    ) -> SqlDojoTopicSummary:
+        return {
+            "topic_id": variant.topic_id,
+            "topic_title": variant.topic_title,
+            "family": theme.family,
+            "difficulty": theme.difficulty,
+            "business_domain": theme.business_domain,
+            "target_skill": theme.target_skill,
+            "attempt_count": 0,
+            "best_score": None,
+            "last_attempted_at": None,
+        }
+
+    @staticmethod
+    def _find_topic(topic_id: str) -> tuple[_ThemeTemplate, _ThemeVariant]:
+        for theme in _THEMES:
+            for variant in theme.variants:
+                if variant.topic_id == topic_id:
+                    return theme, variant
+        msg = f"No SQL dojo topic for topic_id={topic_id!r}"
+        raise SqlDojoGenerationError(
+            error_code="topic_not_found",
+            message=msg,
+        )
+
+    @staticmethod
+    def _problem_from_variant(
+        theme: _ThemeTemplate,
+        variant: _ThemeVariant,
+    ) -> SqlDojoProblem:
         return {
             "family": theme.family,
+            "topic_id": variant.topic_id,
+            "topic_title": variant.topic_title,
             "difficulty": theme.difficulty,
             "dialect": "postgresql",
             "business_domain": theme.business_domain,

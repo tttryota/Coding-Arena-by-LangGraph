@@ -12,6 +12,8 @@ import type {
 const inProgressSession: SqlDojoSessionResponse = {
   session_id: "sql-1",
   theme_family: "join-basics",
+  topic_id: "join-basics-shipped-orders",
+  topic_title: "shipped注文件数",
   difficulty: "beginner",
   dialect: "postgresql",
   theme_title: "顧客別注文件数",
@@ -131,7 +133,7 @@ describe("SqlDojoSessionPage", () => {
     fireEvent.change(sqlTextarea, { target: { value: "SELECT 1" } });
     fireEvent.click(screen.getByRole("button", { name: "提出" }));
 
-    expect(await screen.findByText("結果: 顧客別注文件数")).toBeInTheDocument();
+    expect(await screen.findByText("結果: shipped注文件数")).toBeInTheDocument();
     expect(screen.getByText("参考 SQL")).toBeInTheDocument();
     expect(screen.getByText(/SELECT 1/)).toBeInTheDocument();
   });
@@ -172,7 +174,7 @@ describe("SqlDojoSessionPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("結果: 顧客別注文件数")).toBeInTheDocument();
+    expect(await screen.findByText("結果: shipped注文件数")).toBeInTheDocument();
     expect(screen.getByText("参考 SQL")).toBeInTheDocument();
     expect(screen.getByText(/SELECT 1/)).toBeInTheDocument();
     expect(screen.queryByText("問題への質問")).not.toBeInTheDocument();
@@ -189,7 +191,7 @@ describe("SqlDojoSessionPage", () => {
 
     renderPage();
 
-    await screen.findByText("結果: 顧客別注文件数");
+    await screen.findByText("結果: shipped注文件数");
     const sqlBlock = screen.getByText(/SELECT 1/).closest("div");
     expect(sqlBlock?.className).toContain("overflow-x-auto");
   });

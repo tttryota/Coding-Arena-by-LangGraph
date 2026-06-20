@@ -9,6 +9,20 @@ SqlDojoDialect = Literal["postgresql"]
 SqlDojoSessionStatus = Literal["in_progress", "completed"]
 
 
+class SqlDojoTopicSummary(TypedDict):
+    """トピック概要。"""
+
+    topic_id: str
+    topic_title: str
+    family: str
+    difficulty: SqlDojoDifficulty
+    business_domain: str
+    target_skill: str
+    attempt_count: int
+    best_score: int | None
+    last_attempted_at: str | None
+
+
 class SqlDojoThemeSummary(TypedDict):
     """テーマ概要。"""
 
@@ -21,6 +35,7 @@ class SqlDojoThemeSummary(TypedDict):
     attempt_count: int
     best_score: int | None
     last_attempted_at: str | None
+    topics: list[SqlDojoTopicSummary]
 
 
 class SqlDojoCatalog(TypedDict):
@@ -94,6 +109,8 @@ class SqlDojoProblem(TypedDict):
     """出題済み問題。"""
 
     family: str
+    topic_id: str
+    topic_title: str
     difficulty: SqlDojoDifficulty
     dialect: SqlDojoDialect
     business_domain: str
@@ -154,4 +171,5 @@ __all__ = [
     "SqlDojoQuestionError",
     "SqlDojoSessionStatus",
     "SqlDojoThemeSummary",
+    "SqlDojoTopicSummary",
 ]

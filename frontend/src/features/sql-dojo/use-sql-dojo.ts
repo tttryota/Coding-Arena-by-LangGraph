@@ -47,6 +47,7 @@ export function useStartSqlDojoSession() {
     mutationFn: async (body: {
       difficulty: SqlDojoDifficulty;
       themeFamily?: string;
+      topicId?: string;
     }) => {
       const res = await apiFetch("/sql-dojo/sessions", {
         method: "POST",
@@ -54,6 +55,7 @@ export function useStartSqlDojoSession() {
         body: JSON.stringify({
           difficulty: body.difficulty,
           theme_family: body.themeFamily,
+          topic_id: body.topicId,
         }),
       });
       return res.json() as Promise<SqlDojoStartResponse>;

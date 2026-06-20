@@ -53,6 +53,7 @@ export interface SqlDojoActivity {
   kind: "sql_dojo";
   sessionId: string;
   themeTitle: string;
+  topicTitle: string | null;
   score: number;
   createdAt: string;
 }
@@ -315,6 +316,7 @@ export function useDashboardData(): DashboardData {
         kind: "sql_dojo" as const,
         sessionId: s.session_id,
         themeTitle: s.theme_title,
+        topicTitle: s.topic_title,
         score: s.score!,
         createdAt: s.created_at,
       }));

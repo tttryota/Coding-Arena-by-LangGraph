@@ -22,6 +22,7 @@ class _FakeSqlThemeBank:
                     "business_domain": "EC",
                     "target_skill": "JOIN",
                     "title": "顧客別注文件数",
+                    "variant_count": 3,
                 },
             ],
         }

@@ -17,6 +17,7 @@ class SqlDojoThemeSummary(TypedDict):
     business_domain: str
     target_skill: str
     title: str
+    variant_count: int
 
 
 class SqlDojoCatalog(TypedDict):

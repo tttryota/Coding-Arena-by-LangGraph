@@ -54,20 +54,28 @@ def _table_names(parsed: exp.Expression) -> set[str]:
 
 def _join_signatures(parsed: exp.Expression) -> set[tuple[str, str, str]]:
     signatures: set[tuple[str, str, str]] = set()
-    base = parsed.args.get("from_")
-    left_tables = [
-        _normalize_identifier(table.name)
-        for table in base.find_all(exp.Table)
-    ] if isinstance(base, exp.From) else []
-    left_default = left_tables[0] if left_tables else ""
-    for join in parsed.find_all(exp.Join):
-        right_table_exp = join.this
-        if not isinstance(right_table_exp, exp.Table):
-            continue
-        right = _normalize_identifier(right_table_exp.name)
-        left = left_default
-        join_type = _normalize_identifier(join.args.get("kind", "INNER") or "INNER").upper()
-        signatures.add((left, right, join_type))
+    selects = list(parsed.find_all(exp.Select))
+    if isinstance(parsed, exp.Select) and not selects:
+        selects = [parsed]
+    for select in selects:
+        base = select.args.get("from_")
+        left_tables = [
+            _normalize_identifier(table.name)
+            for table in base.find_all(exp.Table)
+        ] if isinstance(base, exp.From) else []
+        left_default = left_tables[0] if left_tables else ""
+        for join in select.args.get("joins") or []:
+            if not isinstance(join, exp.Join):
+                continue
+            right_table_exp = join.this
+            if not isinstance(right_table_exp, exp.Table):
+                continue
+            right = _normalize_identifier(right_table_exp.name)
+            left = left_default
+            join_side = join.args.get("side")
+            join_kind = join.args.get("kind")
+            join_type = _normalize_identifier(join_side or join_kind or "INNER").upper()
+            signatures.add((left, right, join_type))
     return signatures
 
 
@@ -99,7 +107,7 @@ def _window_functions(parsed: exp.Expression) -> set[str]:
 
 def _cte_names(parsed: exp.Expression) -> set[str]:
     result: set[str] = set()
-    with_clause = parsed.args.get("with")
+    with_clause = parsed.args.get("with") or parsed.args.get("with_")
     if not isinstance(with_clause, exp.With):
         return result
     for cte in with_clause.expressions:
@@ -107,6 +115,14 @@ def _cte_names(parsed: exp.Expression) -> set[str]:
         if alias:
             result.add(_normalize_identifier(alias))
     return result
+
+
+def _predicate_columns(parsed: exp.Expression) -> set[str]:
+    return _column_names(
+        column
+        for where_exp in parsed.find_all(exp.Where)
+        for column in where_exp.find_all(exp.Column)
+    )
 
 
 def _statement_kind(parsed: exp.Expression, raw_sql: str) -> str:
@@ -293,8 +309,7 @@ def grade_sql_answer(  # noqa: C901, PLR0915
 
     predicate_columns = grading_contract.get("required_predicate_columns", [])
     if predicate_columns:
-        where_exp = target_parsed.find(exp.Where)
-        actual_predicates = _column_names(where_exp.find_all(exp.Column)) if where_exp else set()
+        actual_predicates = _predicate_columns(target_parsed)
         expected = {_normalize_identifier(column) for column in predicate_columns}
         _add_rule(
             rules,

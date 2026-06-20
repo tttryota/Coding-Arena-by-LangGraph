@@ -311,6 +311,30 @@ class TestStartSession:
 
         assert resp.status_code == 422
 
+    def test_rejects_topic_with_mismatched_difficulty(self) -> None:
+        client = _make_client()
+        resp = client.post(
+            "/sql-dojo/sessions",
+            json={
+                "difficulty": "advanced",
+                "topic_id": "join-basics-shipped-orders",
+            },
+        )
+
+        assert resp.status_code == 422
+
+    def test_rejects_topic_with_mismatched_theme_family(self) -> None:
+        client = _make_client()
+        resp = client.post(
+            "/sql-dojo/sessions",
+            json={
+                "theme_family": "window-ranking",
+                "topic_id": "join-basics-shipped-orders",
+            },
+        )
+
+        assert resp.status_code == 422
+
 
 class TestSubmitAnswer:
     def test_submits_answer(self) -> None:

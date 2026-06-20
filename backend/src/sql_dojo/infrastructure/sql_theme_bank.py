@@ -712,7 +712,7 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 sample_data=_sample_rows(("orders", 14600000)),
                 expected_focus="EXPLAIN ANALYZE, BUFFERS",
                 reference_sql=(
-                    "EXPLAIN ANALYZE BUFFERS "
+                    "EXPLAIN (ANALYZE, BUFFERS) "
                     "SELECT id, total_amount FROM orders "
                     "WHERE account_id = 9001 AND status = 'pending' "
                     "ORDER BY created_at DESC LIMIT 100"

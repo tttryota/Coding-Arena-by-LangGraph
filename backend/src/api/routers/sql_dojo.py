@@ -154,6 +154,23 @@ def start_session(request: Request, body: _StartSessionRequest) -> dict[str, obj
         )
     except SqlDojoGenerationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if body.topic_id is not None:
+        if (
+            "difficulty" in body.model_fields_set
+            and body.difficulty != problem["difficulty"]
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="difficulty does not match topic_id",
+            )
+        if (
+            body.theme_family is not None
+            and body.theme_family != problem["family"]
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="theme_family does not match topic_id",
+            )
 
     c.sql_dojo_store.create_session(
         session_id=session_id,

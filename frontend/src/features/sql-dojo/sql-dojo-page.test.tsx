@@ -12,6 +12,7 @@ const mockCatalog = {
       business_domain: "EC",
       target_skill: "JOIN",
       title: "顧客別注文件数",
+      variant_count: 3,
     },
     {
       family: "window-ranking",
@@ -19,6 +20,7 @@ const mockCatalog = {
       business_domain: "HR",
       target_skill: "Window Function",
       title: "部門別ランキング",
+      variant_count: 2,
     },
   ],
 };
@@ -29,7 +31,7 @@ afterEach(() => {
 });
 
 describe("SqlDojoPage", () => {
-  it("難易度別のテーマを表示する", async () => {
+  it("全難易度のテーマと問題数を表示する", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.includes("/sql-dojo/catalog")) {
@@ -43,10 +45,10 @@ describe("SqlDojoPage", () => {
     });
 
     expect(await screen.findByText("顧客別注文件数")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("難易度"), {
-      target: { value: "intermediate" },
-    });
-    expect(await screen.findByText("部門別ランキング")).toBeInTheDocument();
+    expect(screen.getByText("部門別ランキング")).toBeInTheDocument();
+    expect(screen.getByText("全 2 テーマ / 5 問")).toBeInTheDocument();
+    expect(screen.getByText("3問")).toBeInTheDocument();
+    expect(screen.getByText("2問")).toBeInTheDocument();
   });
 
   it("開始時に選択した難易度を送る", async () => {
@@ -86,6 +88,49 @@ describe("SqlDojoPage", () => {
       target: { value: "intermediate" },
     });
     fireEvent.click(screen.getByRole("button", { name: "次の1問" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+  });
+
+  it("テーマカード開始ではカード側の難易度を送る", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (input, init) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/sql-dojo/catalog")) {
+          return mockJsonResponse(mockCatalog);
+        }
+        if (url.includes("/sql-dojo/sessions")) {
+          expect(init?.method).toBe("POST");
+          expect(init?.body).toBe(JSON.stringify({
+            difficulty: "intermediate",
+            theme_family: "window-ranking",
+          }));
+          return mockJsonResponse({
+            session_id: "sql-2",
+            theme_family: "window-ranking",
+            difficulty: "intermediate",
+            dialect: "postgresql",
+            theme_title: "部門別ランキング",
+            business_domain: "HR",
+            target_skill: "Window Function",
+            problem_statement: "問題文",
+            schema_markdown: "schema",
+            sample_data_json: "[]",
+            expected_focus: "ROW_NUMBER",
+          });
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      },
+    );
+
+    renderWithProviders(<SqlDojoPage />, {
+      initialEntries: ["/sql-dojo"],
+    });
+
+    await screen.findByText("部門別ランキング");
+    fireEvent.click(screen.getByRole("button", { name: /部門別ランキング/ }));
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalled();

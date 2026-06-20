@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Database, Play } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -39,7 +39,7 @@ export function SqlDojoPage() {
   });
   const [generatingTarget, setGeneratingTarget] = useState("");
 
-  const themesByDifficulty = useMemo(() => {
+  const themesByDifficulty = useMemo<Record<SqlDojoDifficulty, SqlDojoThemeSummary[]>>(() => {
     const groups: Record<SqlDojoDifficulty, SqlDojoThemeSummary[]> = {
       beginner: [],
       intermediate: [],
@@ -51,17 +51,47 @@ export function SqlDojoPage() {
     return groups;
   }, [data]);
 
-  const selectedThemes = themesByDifficulty[difficulty] ?? [];
+  const problemCountByDifficulty = useMemo<Record<SqlDojoDifficulty, number>>(
+    () => ({
+      beginner: themesByDifficulty.beginner.reduce(
+        (sum, theme) => sum + theme.variant_count,
+        0,
+      ),
+      intermediate: themesByDifficulty.intermediate.reduce(
+        (sum, theme) => sum + theme.variant_count,
+        0,
+      ),
+      advanced: themesByDifficulty.advanced.reduce(
+        (sum, theme) => sum + theme.variant_count,
+        0,
+      ),
+    }),
+    [themesByDifficulty],
+  );
 
-  const start = async (themeFamily?: string, themeTitle?: string) => {
-    setGeneratingTarget(themeTitle ?? DIFFICULTY_LABELS[difficulty]);
+  const totalThemeCount = (data?.themes ?? []).length;
+  const totalProblemCount = Object.values(problemCountByDifficulty).reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, difficulty);
+  }, [difficulty]);
+
+  const start = async (
+    themeFamily?: string,
+    themeTitle?: string,
+    targetDifficulty: SqlDojoDifficulty = difficulty,
+  ) => {
+    setGeneratingTarget(themeTitle ?? DIFFICULTY_LABELS[targetDifficulty]);
     try {
       const result = await startMutation.mutateAsync({
-        difficulty,
+        difficulty: targetDifficulty,
         themeFamily,
       });
+      window.localStorage.setItem(STORAGE_KEY, targetDifficulty);
       setSession(result);
-      window.localStorage.setItem(STORAGE_KEY, difficulty);
       navigate(`/sql-dojo/${result.session_id}`);
     } catch {
       // handled by query state
@@ -104,6 +134,9 @@ export function SqlDojoPage() {
               <p className="text-sm text-muted-foreground">
                 1セッション1問で、実務寄りの SQL を継続的に鍛えます
               </p>
+              <p className="text-sm text-muted-foreground">
+                全 {totalThemeCount} テーマ / {totalProblemCount} 問
+              </p>
             </div>
 
             <div className="ml-auto flex items-center gap-3">
@@ -133,38 +166,54 @@ export function SqlDojoPage() {
             </div>
           </div>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">
-                {DIFFICULTY_LABELS[difficulty]}のテーマ
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {selectedThemes.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  この難易度のテーマはまだありません。
-                </div>
-              ) : (
-                selectedThemes.map((theme) => (
-                  <button
-                    key={`${theme.family}-${theme.title}`}
-                    type="button"
-                    className="flex w-full items-start justify-between rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-accent"
-                    onClick={() => start(theme.family, theme.title)}
-                    disabled={startMutation.isPending}
-                  >
-                    <div className="space-y-1">
-                      <div className="font-medium">{theme.title}</div>
+          <div className="space-y-4">
+            {data?.difficulties.map((level) => {
+              const themes = themesByDifficulty[level];
+              const problemCount = problemCountByDifficulty[level];
+              return (
+                <Card key={level}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">
+                      {DIFFICULTY_LABELS[level]}
+                      <span className="ml-2 text-sm font-normal text-muted-foreground">
+                        {themes.length}テーマ / {problemCount}問
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {themes.length === 0 ? (
                       <div className="text-sm text-muted-foreground">
-                        {theme.business_domain} / {theme.target_skill}
+                        この難易度のテーマはまだありません。
                       </div>
-                    </div>
-                    <Badge variant="outline">{theme.family}</Badge>
-                  </button>
-                ))
-              )}
-            </CardContent>
-          </Card>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {themes.map((theme) => (
+                          <button
+                            key={`${theme.family}-${theme.title}`}
+                            type="button"
+                            className="flex items-start justify-between rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-accent"
+                            onClick={() => start(theme.family, theme.title, theme.difficulty)}
+                            disabled={startMutation.isPending}
+                          >
+                            <div className="space-y-1">
+                              <div className="font-medium">{theme.title}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {theme.business_domain} / {theme.target_skill}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2 pl-3">
+                              <Badge variant="secondary">{theme.variant_count}問</Badge>
+                              <Badge variant="outline">{theme.family}</Badge>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
     </AppShell>

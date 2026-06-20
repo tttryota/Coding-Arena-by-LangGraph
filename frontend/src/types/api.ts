@@ -254,6 +254,7 @@ export interface SqlDojoThemeSummary {
   business_domain: string;
   target_skill: string;
   title: string;
+  variant_count: number;
 }
 
 export interface SqlDojoCatalogResponse {

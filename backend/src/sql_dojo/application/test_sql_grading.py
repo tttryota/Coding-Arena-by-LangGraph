@@ -817,3 +817,435 @@ def test_grades_lag_query_with_cte() -> None:
 
     assert result.score >= 90
     assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_case_filter_and_having_rules() -> None:
+    result = grade_sql_answer(
+        (
+            "SELECT account_id, "
+            "SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS paid_amount, "
+            "COUNT(*) FILTER (WHERE status = 'failed') AS failed_count "
+            "FROM invoices "
+            "GROUP BY account_id "
+            "HAVING SUM(amount) >= 1000"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["invoices"],
+            "required_case": True,
+            "required_filter_aggregates": [{"function": "COUNT", "column": "*"}],
+            "required_having_columns": ["amount"],
+            "required_aggregates": [{"function": "SUM", "column": "amount"}],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_distinct_on_exists_and_not_exists_rules() -> None:
+    distinct_result = grade_sql_answer(
+        (
+            "SELECT DISTINCT ON (user_id) user_id, logged_in_at "
+            "FROM login_events "
+            "ORDER BY user_id, logged_in_at DESC"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["login_events"],
+            "required_distinct_on": ["user_id"],
+        },
+    )
+    exists_result = grade_sql_answer(
+        (
+            "SELECT u.id FROM users AS u "
+            "WHERE EXISTS (SELECT 1 FROM subscriptions AS s WHERE s.user_id = u.id)"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["users", "subscriptions"],
+            "required_exists": True,
+        },
+    )
+    not_exists_result = grade_sql_answer(
+        (
+            "SELECT u.id FROM users AS u "
+            "WHERE NOT EXISTS (SELECT 1 FROM purchases AS p WHERE p.user_id = u.id)"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["users", "purchases"],
+            "required_not_exists": True,
+        },
+    )
+
+    assert distinct_result.score >= 90
+    assert exists_result.score >= 90
+    assert not_exists_result.score >= 90
+
+
+def test_distinct_on_latest_row_requires_timestamp_desc_order() -> None:
+    result = grade_sql_answer(
+        (
+            "SELECT DISTINCT ON (user_id) user_id, logged_in_at "
+            "FROM login_events "
+            "ORDER BY user_id"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["login_events"],
+            "required_distinct_on": ["user_id"],
+            "required_order_by": [
+                {"column": "user_id", "direction": "ASC"},
+                {"column": "logged_in_at", "direction": "DESC"},
+            ],
+        },
+    )
+
+    order_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "order_by"
+    )
+    assert result.score < 90
+    assert order_rule["passed"] is False
+
+
+def test_distinct_on_latest_row_rejects_wrong_order_sequence() -> None:
+    result = grade_sql_answer(
+        (
+            "SELECT DISTINCT ON (user_id) user_id, logged_in_at "
+            "FROM login_events "
+            "ORDER BY logged_in_at DESC, user_id"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["login_events"],
+            "required_distinct_on": ["user_id"],
+            "required_order_by": [
+                {"column": "user_id", "direction": "ASC"},
+                {"column": "logged_in_at", "direction": "DESC"},
+            ],
+        },
+    )
+
+    order_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "order_by"
+    )
+    assert result.score < 90
+    assert order_rule["passed"] is False
+
+
+def test_distinct_on_latest_row_rejects_extra_leading_order_key() -> None:
+    result = grade_sql_answer(
+        (
+            "SELECT DISTINCT ON (user_id) user_id, logged_in_at "
+            "FROM login_events "
+            "ORDER BY id, user_id, logged_in_at DESC"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["login_events"],
+            "required_distinct_on": ["user_id"],
+            "required_order_by": [
+                {"column": "user_id", "direction": "ASC"},
+                {"column": "logged_in_at", "direction": "DESC"},
+            ],
+        },
+    )
+
+    order_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "order_by"
+    )
+    assert result.score < 90
+    assert order_rule["passed"] is False
+
+
+def test_grades_postgresql_json_array_and_upsert_rules() -> None:
+    json_result = grade_sql_answer(
+        "SELECT payload ->> 'plan' AS plan FROM events WHERE payload ->> 'plan' = 'pro'",
+        {
+            "statement_kind": "select",
+            "required_tables": ["events"],
+            "required_json_operators": ["->>"],
+        },
+    )
+    array_result = grade_sql_answer(
+        "SELECT id FROM articles WHERE 'postgres' = ANY(tags)",
+        {
+            "statement_kind": "select",
+            "required_tables": ["articles"],
+            "required_array_functions": ["ANY"],
+        },
+    )
+    upsert_result = grade_sql_answer(
+        (
+            "INSERT INTO user_preferences (user_id, key, value) "
+            "VALUES (42, 'theme', 'dark') "
+            "ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value"
+        ),
+        {
+            "statement_kind": "insert",
+            "required_tables": ["user_preferences"],
+            "required_on_conflict": True,
+        },
+    )
+
+    assert json_result.score >= 90
+    assert array_result.score >= 90
+    assert upsert_result.score >= 90
+
+
+def test_grades_advanced_index_rules() -> None:
+    result = grade_sql_answer(
+        (
+            "CREATE INDEX idx_orders_active_account_created_at "
+            "ON orders USING btree (account_id, created_at DESC) "
+            "INCLUDE (total_amount) "
+            "WHERE status = 'active'"
+        ),
+        {
+            "statement_kind": "create_index",
+            "required_index": {
+                "table": "orders",
+                "columns": ["account_id", "created_at"],
+                "orders": {"created_at": "DESC"},
+            },
+            "required_partial_index_predicate_columns": ["status"],
+            "required_include_columns": ["total_amount"],
+            "required_index_method": "btree",
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_expression_index_and_materialized_view_rules() -> None:
+    index_result = grade_sql_answer(
+        "CREATE INDEX idx_users_lower_email ON users (LOWER(email))",
+        {
+            "statement_kind": "create_index",
+            "required_index": {"table": "users"},
+            "required_expression_index_terms": ["LOWER(email)"],
+            "required_functions": ["LOWER"],
+        },
+    )
+    materialized_result = grade_sql_answer(
+        (
+            "CREATE MATERIALIZED VIEW monthly_revenue AS "
+            "SELECT DATE_TRUNC('month', paid_at) AS revenue_month, SUM(amount) AS total_revenue "
+            "FROM payments GROUP BY DATE_TRUNC('month', paid_at)"
+        ),
+        {
+            "statement_kind": "create_materialized_view",
+            "required_tables": ["payments"],
+            "required_functions": ["DATE_TRUNC"],
+            "required_aggregates": [{"function": "SUM", "column": "amount"}],
+        },
+    )
+
+    assert index_result.score >= 90
+    assert materialized_result.score >= 90
+
+
+def test_structural_string_checks_ignore_sql_literals() -> None:
+    result = grade_sql_answer(
+        "SELECT 'COALESCE(display_name, email)' AS hint FROM profiles",
+        {
+            "statement_kind": "select",
+            "required_tables": ["profiles"],
+            "required_functions": ["COALESCE"],
+        },
+    )
+
+    function_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "required_functions"
+    )
+    assert result.score < 90
+    assert function_rule["passed"] is False
+
+
+def test_required_sql_fragments_enforce_upsert_update_shape() -> None:
+    result = grade_sql_answer(
+        (
+            "INSERT INTO user_preferences (user_id, key, value) "
+            "VALUES (42, 'theme', 'dark') "
+            "ON CONFLICT (user_id, key) DO NOTHING"
+        ),
+        {
+            "statement_kind": "insert",
+            "required_tables": ["user_preferences"],
+            "required_on_conflict": True,
+            "required_sql_fragments": [
+                "DO UPDATE",
+                "value = EXCLUDED.value",
+            ],
+        },
+    )
+
+    fragment_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "sql_fragments"
+    )
+    assert result.score < 90
+    assert fragment_rule["passed"] is False
+
+
+def test_required_sql_fragments_ignore_fragments_inside_literals() -> None:
+    result = grade_sql_answer(
+        (
+            "INSERT INTO user_preferences (user_id, key, value) "
+            "VALUES (42, 'theme', 'DO UPDATE value = EXCLUDED.value updated_at = EXCLUDED.updated_at') "
+            "ON CONFLICT (user_id, key) DO NOTHING"
+        ),
+        {
+            "statement_kind": "insert",
+            "required_tables": ["user_preferences"],
+            "required_on_conflict": True,
+            "required_sql_fragments": [
+                "DO UPDATE",
+                "value = EXCLUDED.value",
+                "updated_at = EXCLUDED.updated_at",
+            ],
+        },
+    )
+
+    fragment_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "sql_fragments"
+    )
+    assert result.score < 90
+    assert fragment_rule["passed"] is False
+
+
+def test_required_sql_fragments_accept_compact_operator_spacing() -> None:
+    result = grade_sql_answer(
+        (
+            "INSERT INTO user_preferences (user_id, key, value, updated_at) "
+            "VALUES (42, 'theme', 'dark', NOW()) "
+            "ON CONFLICT (user_id, key) DO UPDATE "
+            "SET value=EXCLUDED.value, updated_at=EXCLUDED.updated_at"
+        ),
+        {
+            "statement_kind": "insert",
+            "required_tables": ["user_preferences"],
+            "required_on_conflict": True,
+            "required_sql_fragments": [
+                "DO UPDATE",
+                "value = EXCLUDED.value",
+                "updated_at = EXCLUDED.updated_at",
+            ],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_required_sql_fragments_enforce_partial_index_predicate_value() -> None:
+    result = grade_sql_answer(
+        (
+            "CREATE INDEX idx_orders_cancelled_account_created_at "
+            "ON orders (account_id, created_at DESC) "
+            "WHERE status = 'cancelled'"
+        ),
+        {
+            "statement_kind": "create_index",
+            "required_index": {
+                "table": "orders",
+                "columns": ["account_id", "created_at"],
+                "orders": {"created_at": "DESC"},
+            },
+            "required_partial_index_predicate_columns": ["status"],
+            "required_sql_fragments": ["WHERE status = 'active'"],
+        },
+    )
+
+    fragment_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "sql_fragments"
+    )
+    assert result.score < 90
+    assert fragment_rule["passed"] is False
+
+
+def test_expression_index_terms_can_require_trigram_target_column() -> None:
+    result = grade_sql_answer(
+        "CREATE INDEX idx_products_status_trgm ON products USING gin (status gin_trgm_ops)",
+        {
+            "statement_kind": "create_index",
+            "required_index": {"table": "products"},
+            "required_index_method": "gin",
+            "required_expression_index_terms": ["name gin_trgm_ops"],
+        },
+    )
+
+    expression_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "expression_index_terms"
+    )
+    assert result.score < 90
+    assert expression_rule["passed"] is False
+
+
+def test_grades_pagination_and_new_prohibited_patterns() -> None:
+    keyset_result = grade_sql_answer(
+        (
+            "SELECT id, created_at FROM events "
+            "WHERE (created_at, id) < (TIMESTAMPTZ '2026-06-20 10:00:00+00:00', 5000) "
+            "ORDER BY created_at DESC, id DESC LIMIT 50"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["events"],
+            "required_pagination_style": "keyset",
+            "prohibited_patterns": ["offset_pagination"],
+        },
+    )
+    offset_result = grade_sql_answer(
+        "SELECT id FROM events ORDER BY created_at DESC LIMIT 50 OFFSET 5000",
+        {
+            "statement_kind": "select",
+            "required_tables": ["events"],
+            "prohibited_patterns": ["offset_pagination"],
+        },
+    )
+
+    prohibited_rule = next(
+        rule for rule in _rules(offset_result.rule_breakdown_json)
+        if rule["name"] == "prohibited_patterns"
+    )
+    assert keyset_result.score >= 90
+    assert offset_result.score < 90
+    assert prohibited_rule["passed"] is False
+
+
+def test_keyset_pagination_requires_tiebreaker_order_key() -> None:
+    result = grade_sql_answer(
+        (
+            "SELECT id, created_at FROM events "
+            "WHERE (created_at, id) < (TIMESTAMPTZ '2026-06-20 10:00:00+00:00', 5000) "
+            "ORDER BY created_at DESC LIMIT 50"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["events"],
+            "required_pagination_style": "keyset",
+            "required_order_by": [
+                {"column": "created_at", "direction": "DESC"},
+                {"column": "id", "direction": "DESC"},
+            ],
+            "required_limit": 50,
+            "prohibited_patterns": ["offset_pagination"],
+        },
+    )
+
+    order_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "order_by"
+    )
+    assert result.score < 90
+    assert order_rule["passed"] is False

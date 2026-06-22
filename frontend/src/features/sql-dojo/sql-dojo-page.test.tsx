@@ -87,6 +87,30 @@ const mockCatalog = {
         },
       ],
     },
+    {
+      family: "conditional-aggregation",
+      difficulty: "intermediate",
+      business_domain: "Analytics",
+      target_skill: "CASE WHEN",
+      title: "条件付き集計で実務レポートを作る",
+      variant_count: 1,
+      attempt_count: 0,
+      best_score: null,
+      last_attempted_at: null,
+      topics: [
+        {
+          topic_id: "case-when-paid-amount",
+          topic_title: "paid売上の条件付き集計",
+          family: "conditional-aggregation",
+          difficulty: "intermediate",
+          business_domain: "Analytics",
+          target_skill: "CASE WHEN",
+          attempt_count: 0,
+          best_score: null,
+          last_attempted_at: null,
+        },
+      ],
+    },
   ],
 };
 
@@ -111,11 +135,14 @@ describe("SqlDojoPage", () => {
 
     expect(await screen.findByText("顧客別注文件数")).toBeInTheDocument();
     expect(screen.getByText("部門別ランキング")).toBeInTheDocument();
+    expect(screen.getByText("条件付き集計で実務レポートを作る")).toBeInTheDocument();
     expect(screen.getByText("shipped注文件数")).toBeInTheDocument();
     expect(screen.getByText("department別売上1位")).toBeInTheDocument();
-    expect(screen.getByText("全 2 テーマ / 5 問")).toBeInTheDocument();
+    expect(screen.getByText("paid売上の条件付き集計")).toBeInTheDocument();
+    expect(screen.getByText("全 3 テーマ / 6 問")).toBeInTheDocument();
     expect(screen.getByText("3問")).toBeInTheDocument();
     expect(screen.getByText("2問")).toBeInTheDocument();
+    expect(screen.getByText("1問")).toBeInTheDocument();
   });
 
   it("開始時に選択した難易度を送る", async () => {

@@ -376,7 +376,7 @@ class CodexCompetitiveSolutionEvaluationLlm:
     def __init__(self, transport: CodexLlmTransport) -> None:
         self._transport = transport
 
-    def evaluate_solution(  # noqa: PLR0913
+    def evaluate_solution(  # noqa: PLR0913, PLR0915
         self,
         *,
         problem_statement: str,
@@ -388,6 +388,8 @@ class CodexCompetitiveSolutionEvaluationLlm:
         grading_rubric: list[RubricItem],
         user_code: str,
         programming_language: ProgrammingLanguage,
+        allowed_knowledge: list[str] | None = None,
+        forbidden_knowledge: list[str] | None = None,
     ) -> SolutionEvaluationResult:
         rubric_text = "\n".join(
             f"- {r['criterion']} ({r['points']}点): {r['description']}"
@@ -395,6 +397,12 @@ class CodexCompetitiveSolutionEvaluationLlm:
         )
         examples_text = "\n".join(
             f"入力:\n{e['input']}\n出力:\n{e['output']}" for e in examples
+        )
+        allowed_text = (
+            " / ".join(allowed_knowledge) if allowed_knowledge else "指定なし"
+        )
+        forbidden_text = (
+            " / ".join(forbidden_knowledge) if forbidden_knowledge else "指定なし"
         )
         system = (
             "あなたは競技プログラミングの採点AIです。\n"
@@ -407,6 +415,9 @@ class CodexCompetitiveSolutionEvaluationLlm:
             "- time_complexity は時間計算量をO記法で示してください\n"
             "- space_complexity は空間計算量をO記法で示してください\n"
             "- improvement_suggestions は具体的な改善提案を書いてください\n"
+            "- 許可知識だけで自然に解けているかを必ず確認してください\n"
+            "- 禁止知識に依存している、または許可知識を明確に超える発想に依存している場合は、その時点で高得点にしないでください\n"
+            "- 正答でも学習スコープ違反なら rubric_scores と feedback に減点理由を反映してください\n"
             "- コードが空の場合: score=0 とし、解答を促す feedback を返してください\n\n"
             f"{_JSON_INSTRUCTION}\n"
             "形式:\n"
@@ -425,6 +436,8 @@ class CodexCompetitiveSolutionEvaluationLlm:
             f"入力形式:\n{input_format}\n\n"
             f"出力形式:\n{output_format}\n\n"
             f"制約:\n{constraints}\n\n"
+            f"許可知識:\n{allowed_text}\n\n"
+            f"今回は使わない知識:\n{forbidden_text}\n\n"
             f"入出力例:\n{examples_text}\n\n"
             f"出題言語: {programming_language}\n\n"
             f"模範解答:\n{reference_solution}\n\n"

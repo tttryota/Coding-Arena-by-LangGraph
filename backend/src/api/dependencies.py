@@ -31,6 +31,7 @@ class Container:
     coding_graph_runner: Any
     competitive_graph_runner: Any
     competitive_question_llm: Any
+    algorithm_foundation_solution_evaluator: Any
     sql_dojo_feedback_llm: Any
     sql_dojo_question_llm: Any
     batch_embedder: Any
@@ -62,6 +63,7 @@ class Container:
             self._init_chroma_clients()
             self._init_graph_runner()
             self._init_competitive()
+            self._init_algorithm_foundations()
             self._init_sql_dojo()
             self._init_coding_graph()
             self._init_scheduler()
@@ -270,6 +272,24 @@ class Container:
         self.sql_dojo_store = SqlSqlDojoStore(self._engine)
         self.sql_dojo_feedback_llm = CodexSqlDojoFeedbackLlm(self.transport)
         self.sql_dojo_question_llm = CodexSqlDojoQuestionLlm(self.transport)
+
+    def _init_algorithm_foundations(self) -> None:
+        """競プロうさぎの静的カタログと store を初期化する。"""
+        from algorithm_foundations.infrastructure.foundation_catalog import (
+            AlgorithmFoundationCatalog,
+        )
+        from algorithm_foundations.infrastructure.sql_foundation_store import (
+            SqlAlgorithmFoundationStore,
+        )
+        from competitive.infrastructure.codex_competitive_llm import (
+            CodexCompetitiveSolutionEvaluationLlm,
+        )
+
+        self.algorithm_foundation_catalog = AlgorithmFoundationCatalog()
+        self.algorithm_foundation_store = SqlAlgorithmFoundationStore(self._engine)
+        self.algorithm_foundation_solution_evaluator = (
+            CodexCompetitiveSolutionEvaluationLlm(self.transport)
+        )
 
     def _init_coding_graph(self) -> None:
         """座学 + 練習のコーディングセッション用 graph を初期化する。"""

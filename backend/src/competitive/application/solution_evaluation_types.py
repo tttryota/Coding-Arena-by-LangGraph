@@ -64,6 +64,8 @@ class SolutionEvaluationLlmClient(Protocol):
         grading_rubric: list[RubricItem],
         user_code: str,
         programming_language: ProgrammingLanguage,
+        allowed_knowledge: list[str] | None = None,
+        forbidden_knowledge: list[str] | None = None,
     ) -> SolutionEvaluationResult: ...
 
 

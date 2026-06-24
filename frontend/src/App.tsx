@@ -7,6 +7,8 @@ import { QuizSessionPage } from "@/features/session/quiz-session-page";
 import { FeedbackListPage } from "@/features/feedback/feedback-list-page";
 import { CompetitivePage } from "@/features/competitive/competitive-page";
 import { CompetitiveSessionPage } from "@/features/competitive/competitive-session-page";
+import { AlgorithmFoundationsPage } from "@/features/algorithm-foundations/algorithm-foundations-page";
+import { AlgorithmFoundationsSessionPage } from "@/features/algorithm-foundations/algorithm-foundations-session-page";
 import { SqlDojoPage } from "@/features/sql-dojo/sql-dojo-page";
 import { SqlDojoSessionPage } from "@/features/sql-dojo/sql-dojo-session-page";
 
@@ -32,6 +34,14 @@ export default function App() {
           <Route
             path="/algorithm-quiz/:sessionId"
             element={<CompetitiveSessionPage />}
+          />
+          <Route
+            path="/algorithm-foundations"
+            element={<AlgorithmFoundationsPage />}
+          />
+          <Route
+            path="/algorithm-foundations/:sessionId"
+            element={<AlgorithmFoundationsSessionPage />}
           />
           <Route path="/sql-dojo" element={<SqlDojoPage />} />
           <Route path="/sql-dojo/:sessionId" element={<SqlDojoSessionPage />} />

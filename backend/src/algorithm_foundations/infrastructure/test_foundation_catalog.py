@@ -1,3 +1,8 @@
+import json
+from pathlib import Path
+
+import pytest
+
 from algorithm_foundations.infrastructure.foundation_catalog import (
     AlgorithmFoundationCatalog,
 )
@@ -150,3 +155,39 @@ def test_special_units_map_to_matching_problem_templates() -> None:
     assert "最小カット値" in catalog.get_unit("algo-125-basic")["problem_bank"][0][
         "problem_statement"
     ]
+
+
+def test_catalog_uses_fallback_theme_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fallback = tmp_path / "algo_themes.json"
+    fallback.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "algo-test",
+                    "category": "探索",
+                    "label": "テストテーマ",
+                    "display_order": 1,
+                },
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "algorithm_foundations.infrastructure.foundation_catalog._DEFAULT_THEME_PATHS",
+        (Path("/opt/fixtures/algo_themes.json"), fallback),
+    )
+
+    catalog = AlgorithmFoundationCatalog.__new__(AlgorithmFoundationCatalog)
+    catalog._path = tmp_path / "missing.json"  # type: ignore[attr-defined]
+
+    candidates = catalog._candidate_theme_paths()
+    themes = catalog._load_themes()
+
+    assert candidates[0] == tmp_path / "missing.json"
+    assert candidates[1] == Path("/opt/fixtures/algo_themes.json")
+    assert candidates[2] == fallback
+    assert themes[0].id == "algo-test"

@@ -34,6 +34,12 @@ _GROUP_ORDER: Final[dict[str, int]] = {
     "フロー・マッチング": 11,
 }
 
+_DEFAULT_THEME_PATHS: Final[tuple[Path, ...]] = (
+    Path("data/algo_themes.json"),
+    Path("/opt/fixtures/algo_themes.json"),
+    Path(__file__).resolve().parents[3] / "data" / "algo_themes.json",
+)
+
 _IMPORTANT_THEME_IDS: Final[tuple[str, ...]] = (
     "algo-002",
     "algo-004",
@@ -185,17 +191,13 @@ class AlgorithmFoundationCatalog:
         return len(self._units), sum(len(unit["problem_bank"]) for unit in self._units)
 
     def _load_themes(self) -> list[_Theme]:
-        path = self._path
-        if not path.exists():
-            fallback = Path(__file__).resolve().parents[3] / "data" / "algo_themes.json"
-            if fallback.exists():
-                path = fallback
-            else:
-                msg = f"algo theme file not found: {self._path}"
-                raise AlgorithmFoundationCatalogError(
-                    error_code="theme_file_not_found",
-                    message=msg,
-                )
+        path = next((candidate for candidate in self._candidate_theme_paths() if candidate.exists()), None)
+        if path is None:
+            msg = f"algo theme file not found: {self._path}"
+            raise AlgorithmFoundationCatalogError(
+                error_code="theme_file_not_found",
+                message=msg,
+            )
         raw = json.loads(path.read_text(encoding="utf-8"))
         return [
             _Theme(
@@ -206,6 +208,9 @@ class AlgorithmFoundationCatalog:
             )
             for item in raw
         ]
+
+    def _candidate_theme_paths(self) -> tuple[Path, ...]:
+        return (self._path, *(candidate for candidate in _DEFAULT_THEME_PATHS if candidate != self._path))
 
     def _build_units(self) -> list[AlgorithmFoundationUnit]:
         ordered_themes = sorted(self._themes, key=lambda item: item.display_order)

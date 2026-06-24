@@ -44,6 +44,28 @@ const mockCatalog = {
         },
       ],
     },
+    {
+      group_id: "group-1",
+      group_title: "探索",
+      order: 1,
+      units: [
+        {
+          unit_id: "algo-004-dfs-trace",
+          theme_id: "algo-004",
+          title: "DFSの辿り順を追う",
+          display_order: 2,
+          prerequisite_unit_ids: ["algo-004-basic", "algo-004-stack-model"],
+          prerequisite_titles: ["深さ優先探索の基本", "再帰とスタックの対応"],
+          target_skill: "探索順を手で追って検証する",
+          unit_kind: "foundation",
+          problem_count: 4,
+          best_score: null,
+          last_attempted_at: null,
+          recommended: false,
+          has_unmet_prerequisites: true,
+        },
+      ],
+    },
   ],
 };
 
@@ -120,10 +142,21 @@ describe("AlgorithmFoundationsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "競プロうさぎ" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("目次")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /データ構造/ })).toHaveAttribute(
+      "href",
+      "#foundation-group-group-0",
+    );
+    expect(screen.getByRole("link", { name: /探索/ })).toHaveAttribute(
+      "href",
+      "#foundation-group-group-1",
+    );
     expect(screen.getByText("次: スタックの基本操作")).toBeInTheDocument();
     expect(screen.getAllByText("出現回数カウント").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("前提注意")).toHaveLength(2);
+    expect(screen.getByText("前提: 存在判定をハッシュで高速化")).toBeInTheDocument();
     expect(
-      screen.getByText("先に触れていない前提 unit がありますが、このまま挑戦できます。"),
+      screen.getByText("前提: 深さ優先探索の基本 / 再帰とスタックの対応"),
     ).toBeInTheDocument();
   });
 
@@ -137,7 +170,7 @@ describe("AlgorithmFoundationsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "競プロうさぎ" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "この unit を解く" })[1]);
+    fireEvent.click(screen.getAllByRole("button", { name: "解く" })[1]);
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalled();

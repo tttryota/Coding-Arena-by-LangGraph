@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { codePlaceholder } from "@/lib/programming-language";
 import {
   applyTextareaIndent,
   restoreTextareaSelection,
@@ -291,7 +292,7 @@ function AlgorithmFoundationsSessionPageInner({
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleCodeKeyDown}
-              placeholder="# Python で解答を書いてください"
+              placeholder={codePlaceholder(session.programming_language)}
               className="min-h-[320px] font-mono [tab-size:2]"
             />
             <Button

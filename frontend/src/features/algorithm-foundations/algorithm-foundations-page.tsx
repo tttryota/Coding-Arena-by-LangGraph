@@ -1,19 +1,22 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Play, Target } from "lucide-react";
+import { AlertTriangle, Target } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { GeneratingDialog } from "@/components/common/generating-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  PROGRAMMING_LANGUAGE_STORAGE_KEY,
+} from "@/lib/programming-language";
 import { cn } from "@/lib/utils";
 import {
   useAlgorithmFoundationsCatalog,
+  useAlgorithmFoundationLanguages,
   useAlgorithmFoundationSessions,
-  useStartAlgorithmFoundationSession,
 } from "./use-algorithm-foundations";
 import type {
   AlgorithmFoundationGroupSummary,
+  CompetitiveLanguageOption,
   AlgorithmFoundationSessionListItem,
   AlgorithmFoundationUnitKind,
   AlgorithmFoundationUnitSummary,
@@ -50,50 +53,48 @@ function prerequisiteSummary(unit: AlgorithmFoundationUnitSummary) {
 export function AlgorithmFoundationsPage() {
   const navigate = useNavigate();
   const catalogQuery = useAlgorithmFoundationsCatalog();
+  const languagesQuery = useAlgorithmFoundationLanguages();
   const sessionsQuery = useAlgorithmFoundationSessions();
-  const startMutation = useStartAlgorithmFoundationSession();
-  const [generatingTarget, setGeneratingTarget] = useState("");
-
-  const recommendedUnit = useMemo(() => {
-    for (const group of catalogQuery.data?.groups ?? []) {
-      const match = group.units.find((unit) => unit.recommended);
-      if (match) return match;
-    }
-    return null;
-  }, [catalogQuery.data]);
+  const [programmingLanguage, setProgrammingLanguage] = useState(
+    () =>
+      window.localStorage.getItem(PROGRAMMING_LANGUAGE_STORAGE_KEY) ?? "python",
+  );
 
   const recentSessions = useMemo(
     () => (sessionsQuery.data?.sessions ?? []).slice(0, 6),
     [sessionsQuery.data],
   );
+  const languages = languagesQuery.data?.languages ?? [];
+  const selectedLanguage =
+    languages.find((item) => item.id === programmingLanguage) ?? null;
+  const resolvedLanguage = selectedLanguage ?? languages[0] ?? null;
+  const selectValue = resolvedLanguage?.id ?? programmingLanguage;
 
-  const start = async (unit?: AlgorithmFoundationUnitSummary) => {
-    setGeneratingTarget(unit?.title ?? recommendedUnit?.title ?? "次の1問");
-    try {
-      const result = await startMutation.mutateAsync(unit?.unit_id);
-      navigate(`/algorithm-foundations/${result.session_id}`);
-    } catch {
-      // handled by query state
+  useEffect(() => {
+    if (resolvedLanguage && resolvedLanguage.id !== programmingLanguage) {
+      window.localStorage.setItem(
+        PROGRAMMING_LANGUAGE_STORAGE_KEY,
+        resolvedLanguage.id,
+      );
     }
+  }, [programmingLanguage, resolvedLanguage]);
+
+  const handleLanguageChange = (value: string) => {
+    setProgrammingLanguage(value);
+    window.localStorage.setItem(PROGRAMMING_LANGUAGE_STORAGE_KEY, value);
   };
 
   return (
     <AppShell crumbs={[{ label: "競プロうさぎ" }]}>
-      <GeneratingDialog
-        open={startMutation.isPending}
-        target={generatingTarget}
-        description="前提を絞った 1 問を開始します"
-      />
-
       {catalogQuery.isError && (
         <div className="rounded-md bg-destructive/10 p-4 text-destructive">
           競プロうさぎカタログの読み込みに失敗しました。
         </div>
       )}
 
-      {startMutation.isError && (
+      {languagesQuery.isError && (
         <div className="rounded-md bg-destructive/10 p-4 text-destructive">
-          セッションの開始に失敗しました。
+          出題言語の取得に失敗しました。
         </div>
       )}
 
@@ -119,17 +120,22 @@ export function AlgorithmFoundationsPage() {
             </div>
 
             <div className="ml-auto flex flex-wrap items-center gap-3">
-              <div className="rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
-                前提未達でも開始できます。ロックはしません。
-              </div>
-              <Button
-                size="sm"
-                onClick={() => start(recommendedUnit ?? undefined)}
-                disabled={startMutation.isPending || recommendedUnit == null}
+              <select
+                aria-label="出題言語"
+                className="rounded-md border border-border bg-card px-3 py-2 text-sm"
+                value={selectValue}
+                onChange={(e) => handleLanguageChange(e.target.value)}
+                disabled={languagesQuery.isLoading || languagesQuery.isError}
               >
-                <Play className="mr-1.5 h-3.5 w-3.5" />
-                {recommendedUnit ? `次: ${recommendedUnit.title}` : "次の1問"}
-              </Button>
+                {languages.map((language: CompetitiveLanguageOption) => (
+                  <option key={language.id} value={language.id}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
+              <div className="rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
+                unit を開いて、問題を選んでから挑戦します。
+              </div>
             </div>
           </div>
 
@@ -201,8 +207,9 @@ export function AlgorithmFoundationsPage() {
                       <UnitCard
                         key={unit.unit_id}
                         unit={unit}
-                        onStart={() => start(unit)}
-                        disabled={startMutation.isPending}
+                        onOpen={() =>
+                          navigate(`/algorithm-foundations/units/${unit.unit_id}`)
+                        }
                       />
                     ))}
                   </div>
@@ -218,12 +225,10 @@ export function AlgorithmFoundationsPage() {
 
 function UnitCard({
   unit,
-  onStart,
-  disabled,
+  onOpen,
 }: {
   unit: AlgorithmFoundationUnitSummary;
-  onStart: () => void;
-  disabled: boolean;
+  onOpen: () => void;
 }) {
   const prerequisiteLabel = prerequisiteSummary(unit);
 
@@ -231,7 +236,6 @@ function UnitCard({
     <div
       className={cn(
         "rounded-lg border border-border bg-card px-3 py-3",
-        unit.recommended && "ring-1 ring-emerald-400/70",
       )}
     >
       <div className="flex items-start gap-3">
@@ -243,7 +247,6 @@ function UnitCard({
             >
               {unitKindLabel(unit.unit_kind)}
             </Badge>
-            {unit.recommended && <Badge>推奨</Badge>}
             {unit.has_unmet_prerequisites && (
               <Badge
                 variant="outline"
@@ -270,12 +273,11 @@ function UnitCard({
 
         <Button
           size="sm"
-          variant={unit.recommended ? "default" : "secondary"}
-          onClick={onStart}
-          disabled={disabled}
+          variant="secondary"
+          onClick={onOpen}
           className="h-8 shrink-0 px-3"
         >
-          解く
+          問題を見る
         </Button>
       </div>
     </div>

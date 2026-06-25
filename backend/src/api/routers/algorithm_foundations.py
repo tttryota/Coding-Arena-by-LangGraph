@@ -12,8 +12,17 @@ from sqlalchemy.exc import IntegrityError
 from algorithm_foundations.domain.foundation_types import (
     AlgorithmFoundationCatalogError,
     AlgorithmFoundationCatalogResponse,
+    AlgorithmFoundationLanguageAdaptationError,
+    AlgorithmFoundationProblem,
+    AlgorithmFoundationUnit,
+    AlgorithmFoundationUnitDetailResponse,
 )
 from competitive.domain.competitive_types import SolutionEvaluationError
+from competitive.domain.languages import (
+    default_language,
+    is_supported_language,
+    list_supported_languages,
+)
 
 if TYPE_CHECKING:
     from api.dependencies import Container
@@ -23,6 +32,8 @@ router = APIRouter(prefix="/algorithm-foundations", tags=["algorithm-foundations
 
 class _StartSessionRequest(BaseModel):
     unit_id: str | None = None
+    problem_id: str | None = None
+    programming_language: str | None = None
 
 
 class _SubmitAnswerRequest(BaseModel):
@@ -43,11 +54,123 @@ def _history_maps(c: Container) -> tuple[dict[str, int | None], dict[str, str | 
     return best_scores, last_attempted_at
 
 
+def _problem_history_map(
+    c: Container,
+    unit_id: str,
+) -> dict[str, dict[str, int | str | None]]:
+    rows = c.algorithm_foundation_store.list_problem_history_for_unit(unit_id)
+    return {
+        row.problem_id: {
+            "best_score": row.best_score,
+            "last_attempted_at": row.last_attempted_at,
+        }
+        for row in rows
+    }
+
+
 def _evaluation_error_to_http(exc: SolutionEvaluationError) -> HTTPException:
     error_code = getattr(exc, "error_code", None)
     if error_code == "llm_response_parse_failed":
         return HTTPException(status_code=502, detail=str(exc))
     return HTTPException(status_code=503, detail=str(exc))
+
+
+def _adaptation_error_to_http(
+    exc: AlgorithmFoundationLanguageAdaptationError,
+) -> HTTPException:
+    error_code = getattr(exc, "error_code", None)
+    if error_code == "llm_response_parse_failed":
+        return HTTPException(status_code=502, detail=str(exc))
+    return HTTPException(status_code=503, detail=str(exc))
+
+
+@router.get("/languages")
+def list_languages() -> dict[str, object]:
+    return {"languages": list_supported_languages()}
+
+
+def _has_unmet_prerequisites(
+    prerequisite_unit_ids: list[str],
+    best_scores: dict[str, int | None],
+) -> bool:
+    return any((best_scores.get(pid) or 0) < 80 for pid in prerequisite_unit_ids)
+
+
+def _resolve_programming_language(
+    body: _StartSessionRequest | None,
+) -> str:
+    programming_language = (
+        body.programming_language if body is not None and body.programming_language
+        else default_language()
+    )
+    if not is_supported_language(programming_language):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported programming language: {programming_language}",
+        )
+    return programming_language
+
+
+def _load_unit_and_problem(
+    c: Container,
+    *,
+    unit_id: str | None,
+    problem_id: str | None,
+    best_scores: dict[str, int | None],
+) -> tuple[AlgorithmFoundationUnit, AlgorithmFoundationProblem]:
+    if problem_id is not None and unit_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="unit_id is required when problem_id is specified",
+        )
+    resolved_unit_id = unit_id or c.algorithm_foundation_catalog.pick_recommended_unit_id(
+        best_scores,
+    )
+    try:
+        unit = c.algorithm_foundation_catalog.get_unit(resolved_unit_id)
+    except AlgorithmFoundationCatalogError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        if problem_id is not None:
+            problem = c.algorithm_foundation_catalog.get_problem(
+                resolved_unit_id,
+                problem_id,
+            )
+        else:
+            recent_problem_ids = c.algorithm_foundation_store.list_recent_problem_ids_for_unit(
+                resolved_unit_id,
+            )
+            problem = c.algorithm_foundation_catalog.pick_problem(
+                resolved_unit_id,
+                recent_problem_ids,
+            )
+    except AlgorithmFoundationCatalogError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return unit, problem
+
+
+def _adapt_reference_solution(
+    c: Container,
+    *,
+    problem: AlgorithmFoundationProblem,
+    programming_language: str,
+) -> str:
+    try:
+        return cast(
+            "str",
+            c.algorithm_foundation_language_adapter.adapt_reference_solution(
+            canonical_reference_solution=problem["canonical_reference_solution"],
+            canonical_language=problem["canonical_language"],
+            target_language=programming_language,
+            problem_statement=problem["problem_statement"],
+            input_format=problem["input_format"],
+            output_format=problem["output_format"],
+            constraints=problem["constraints"],
+            examples=cast("list[dict[str, str]]", problem["examples"]),
+            ),
+        )
+    except AlgorithmFoundationLanguageAdaptationError as exc:
+        raise _adaptation_error_to_http(exc) from exc
 
 
 @router.get("/catalog")
@@ -58,6 +181,57 @@ def get_catalog(request: Request) -> AlgorithmFoundationCatalogResponse:
         best_scores=best_scores,
         last_attempted_at=last_attempted_at,
     )
+
+
+@router.get("/units/{unit_id}")
+def get_unit_detail(
+    unit_id: str,
+    request: Request,
+) -> AlgorithmFoundationUnitDetailResponse:
+    c = _container(request)
+    best_scores, last_attempted_at = _history_maps(c)
+    try:
+        unit = c.algorithm_foundation_catalog.get_unit(unit_id)
+    except AlgorithmFoundationCatalogError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    problem_history = _problem_history_map(c, unit_id)
+    return {
+        "unit_id": unit["unit_id"],
+        "theme_id": unit["theme_id"],
+        "group_id": unit["group_id"],
+        "group_title": unit["group_title"],
+        "title": unit["title"],
+        "display_order": unit["display_order"],
+        "prerequisite_unit_ids": unit["prerequisite_unit_ids"],
+        "prerequisite_titles": unit["prerequisite_titles"],
+        "allowed_knowledge": unit["allowed_knowledge"],
+        "forbidden_knowledge": unit["forbidden_knowledge"],
+        "target_skill": unit["target_skill"],
+        "unit_kind": unit["unit_kind"],
+        "problem_count": len(unit["problem_bank"]),
+        "best_score": best_scores.get(unit_id),
+        "last_attempted_at": last_attempted_at.get(unit_id),
+        "has_unmet_prerequisites": _has_unmet_prerequisites(
+            unit["prerequisite_unit_ids"],
+            best_scores,
+        ),
+        "problems": [
+            {
+                "problem_id": problem["problem_id"],
+                "title": problem["title"],
+                "best_score": cast(
+                    "int | None",
+                    problem_history.get(problem["problem_id"], {}).get("best_score"),
+                ),
+                "last_attempted_at": cast(
+                    "str | None",
+                    problem_history.get(problem["problem_id"], {}).get("last_attempted_at"),
+                ),
+            }
+            for problem in unit["problem_bank"]
+        ],
+    }
 
 
 @router.get("/sessions")
@@ -95,14 +269,19 @@ def start_session(
     c = _container(request)
     best_scores, _last_attempted_at = _history_maps(c)
     unit_id = body.unit_id if body is not None else None
-    if unit_id is None:
-        unit_id = c.algorithm_foundation_catalog.pick_recommended_unit_id(best_scores)
-    try:
-        unit = c.algorithm_foundation_catalog.get_unit(unit_id)
-    except AlgorithmFoundationCatalogError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    recent_problem_ids = c.algorithm_foundation_store.list_recent_problem_ids_for_unit(unit_id)
-    problem = c.algorithm_foundation_catalog.pick_problem(unit_id, recent_problem_ids)
+    problem_id = body.problem_id if body is not None else None
+    programming_language = _resolve_programming_language(body)
+    unit, problem = _load_unit_and_problem(
+        c,
+        unit_id=unit_id,
+        problem_id=problem_id,
+        best_scores=best_scores,
+    )
+    reference_solution = _adapt_reference_solution(
+        c,
+        problem=problem,
+        programming_language=programming_language,
+    )
     session_id = str(uuid.uuid4())
     c.algorithm_foundation_store.create_session(
         session_id=session_id,
@@ -116,7 +295,7 @@ def start_session(
         prerequisite_titles=unit["prerequisite_titles"],
         allowed_knowledge=unit["allowed_knowledge"],
         forbidden_knowledge=unit["forbidden_knowledge"],
-        programming_language="python",
+        programming_language=programming_language,
         problem_id=problem["problem_id"],
         problem_title=problem["title"],
         problem_statement=problem["problem_statement"],
@@ -124,7 +303,7 @@ def start_session(
         output_format=problem["output_format"],
         constraints=problem["constraints"],
         examples=cast("list[dict[str, str]]", problem["examples"]),
-        reference_solution=problem["reference_solution"],
+        reference_solution=reference_solution,
         grading_rubric=cast("list[dict[str, object]]", problem["grading_rubric"]),
     )
     return {
@@ -141,14 +320,17 @@ def start_session(
         "forbidden_knowledge": unit["forbidden_knowledge"],
         "problem_id": problem["problem_id"],
         "problem_title": problem["title"],
-        "programming_language": "python",
+        "programming_language": programming_language,
         "problem_statement": problem["problem_statement"],
         "input_format": problem["input_format"],
         "output_format": problem["output_format"],
         "constraints": problem["constraints"],
         "examples": problem["examples"],
         "recommended": unit["unit_id"] == c.algorithm_foundation_catalog.pick_recommended_unit_id(best_scores),
-        "has_unmet_prerequisites": any((best_scores.get(pid) or 0) < 80 for pid in unit["prerequisite_unit_ids"]),
+        "has_unmet_prerequisites": _has_unmet_prerequisites(
+            unit["prerequisite_unit_ids"],
+            best_scores,
+        ),
     }
 
 
@@ -183,7 +365,10 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
         "status": details["status"],
         "created_at": details["created_at"],
         "recommended": details["unit_id"] == c.algorithm_foundation_catalog.pick_recommended_unit_id(best_scores),
-        "has_unmet_prerequisites": any((best_scores.get(pid) or 0) < 80 for pid in cast("list[str]", details["prerequisite_unit_ids"])),
+        "has_unmet_prerequisites": _has_unmet_prerequisites(
+            cast("list[str]", details["prerequisite_unit_ids"]),
+            best_scores,
+        ),
     }
     answer = c.algorithm_foundation_store.find_answer_by_session(session_id)
     if answer is not None:

@@ -8,6 +8,7 @@ import { FeedbackListPage } from "@/features/feedback/feedback-list-page";
 import { CompetitivePage } from "@/features/competitive/competitive-page";
 import { CompetitiveSessionPage } from "@/features/competitive/competitive-session-page";
 import { AlgorithmFoundationsPage } from "@/features/algorithm-foundations/algorithm-foundations-page";
+import { AlgorithmFoundationsUnitPage } from "@/features/algorithm-foundations/algorithm-foundations-unit-page";
 import { AlgorithmFoundationsSessionPage } from "@/features/algorithm-foundations/algorithm-foundations-session-page";
 import { SqlDojoPage } from "@/features/sql-dojo/sql-dojo-page";
 import { SqlDojoSessionPage } from "@/features/sql-dojo/sql-dojo-session-page";
@@ -38,6 +39,10 @@ export default function App() {
           <Route
             path="/algorithm-foundations"
             element={<AlgorithmFoundationsPage />}
+          />
+          <Route
+            path="/algorithm-foundations/units/:unitId"
+            element={<AlgorithmFoundationsUnitPage />}
           />
           <Route
             path="/algorithm-foundations/:sessionId"

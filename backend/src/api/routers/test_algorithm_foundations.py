@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from algorithm_foundations.domain.foundation_types import (
     AlgorithmFoundationCatalogError,
+    AlgorithmFoundationLanguageAdaptationError,
 )
 from api.app import create_app
 from competitive.domain.competitive_types import SolutionEvaluationError
@@ -83,7 +84,8 @@ class _FakeCatalog:
                     "output_format": "出力形式",
                     "constraints": "制約",
                     "examples": [{"input": "1", "output": "1"}],
-                    "reference_solution": "def solve():\n    print(1)\n",
+                    "canonical_reference_solution": "def solve():\n    print(1)\n",
+                    "canonical_language": "python",
                     "grading_rubric": [
                         {"criterion": "正しさ", "points": 100, "description": "ok"},
                     ],
@@ -98,6 +100,19 @@ class _FakeCatalog:
     ) -> dict[str, object]:
         _ = unit_id, recent_problem_ids
         return self.get_unit("algo-102-hashmap-exists")["problem_bank"][0]
+
+    def get_problem(
+        self,
+        unit_id: str,
+        problem_id: str,
+    ) -> dict[str, object]:
+        problem = self.get_unit(unit_id)["problem_bank"][0]
+        if problem["problem_id"] != problem_id:
+            raise AlgorithmFoundationCatalogError(
+                error_code="problem_not_found",
+                message=f"Algorithm foundation problem not found: {problem_id}",
+            )
+        return problem
 
 
 class _FakeEvalResult:
@@ -121,6 +136,21 @@ class _FakeEvaluator:
         if self.error is not None:
             raise self.error
         return _FakeEvalResult()
+
+
+class _FakeLanguageAdapter:
+    def __init__(self) -> None:
+        self.error: AlgorithmFoundationLanguageAdaptationError | None = None
+        self.last_kwargs: dict[str, Any] | None = None
+
+    def adapt_reference_solution(self, **kwargs: Any) -> str:
+        self.last_kwargs = kwargs
+        if self.error is not None:
+            raise self.error
+        target_language = kwargs["target_language"]
+        if target_language == "typescript":
+            return "function solve(): void {\n  console.log(1);\n}\n"
+        return str(kwargs["canonical_reference_solution"])
 
 
 class _FakeAnswer:
@@ -147,6 +177,22 @@ class _FakeStore:
     def list_recent_problem_ids_for_unit(self, unit_id: str, *, limit: int = 5) -> list[str]:
         _ = unit_id, limit
         return []
+
+    def list_problem_history_for_unit(self, unit_id: str) -> list[object]:
+        _ = unit_id
+        return [
+            type(
+                "_ProblemHistory",
+                (),
+                {
+                    "unit_id": "algo-102-hashmap-exists",
+                    "problem_id": "p-1",
+                    "attempt_count": 1,
+                    "best_score": 91,
+                    "last_attempted_at": "2026-06-25T10:05:00",
+                },
+            )(),
+        ]
 
     def create_session(self, **kwargs: Any) -> object:
         session_id = str(kwargs["session_id"])
@@ -212,6 +258,7 @@ class _FakeContainer:
     def __init__(self) -> None:
         self.algorithm_foundation_catalog = _FakeCatalog()
         self.algorithm_foundation_store = _FakeStore()
+        self.algorithm_foundation_language_adapter = _FakeLanguageAdapter()
         self.algorithm_foundation_solution_evaluator = _FakeEvaluator()
 
 
@@ -229,6 +276,30 @@ def test_get_catalog() -> None:
     data = response.json()
     assert data["total_unit_count"] == 2
     assert data["groups"][0]["units"][0]["recommended"] is True
+
+
+def test_get_languages() -> None:
+    client = _client()
+
+    response = client.get("/algorithm-foundations/languages")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["languages"]] == [
+        "python",
+        "typescript",
+    ]
+
+
+def test_get_unit_detail() -> None:
+    client = _client()
+
+    response = client.get("/algorithm-foundations/units/algo-102-hashmap-exists")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["unit_id"] == "algo-102-hashmap-exists"
+    assert data["problems"][0]["problem_id"] == "p-1"
+    assert data["problems"][0]["best_score"] == 91
 
 
 def test_start_session_does_not_list_unsubmitted_attempt() -> None:
@@ -249,6 +320,77 @@ def test_start_session_does_not_list_unsubmitted_attempt() -> None:
     listed = client.get("/algorithm-foundations/sessions")
     assert listed.status_code == 200
     assert listed.json()["sessions"] == []
+
+
+def test_start_session_with_problem_id() -> None:
+    client = _client()
+
+    response = client.post(
+        "/algorithm-foundations/sessions",
+        json={"unit_id": "algo-102-hashmap-exists", "problem_id": "p-1"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["problem_id"] == "p-1"
+
+
+def test_start_session_with_programming_language() -> None:
+    client = _client()
+
+    response = client.post(
+        "/algorithm-foundations/sessions",
+        json={
+            "unit_id": "algo-102-hashmap-exists",
+            "problem_id": "p-1",
+            "programming_language": "typescript",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["programming_language"] == "typescript"
+    detail = client.get(f"/algorithm-foundations/sessions/{data['session_id']}")
+    assert detail.status_code == 200
+    assert detail.json()["programming_language"] == "typescript"
+    container = client.app.state.container
+    adapter = container.algorithm_foundation_language_adapter
+    assert adapter.last_kwargs is not None
+    assert adapter.last_kwargs["canonical_language"] == "python"
+    assert adapter.last_kwargs["target_language"] == "typescript"
+
+
+def test_unknown_programming_language_returns_422() -> None:
+    client = _client()
+
+    response = client.post(
+        "/algorithm-foundations/sessions",
+        json={"programming_language": "ruby"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_unknown_problem_returns_422() -> None:
+    client = _client()
+
+    response = client.post(
+        "/algorithm-foundations/sessions",
+        json={"unit_id": "algo-102-hashmap-exists", "problem_id": "p-x"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_problem_id_requires_unit_id() -> None:
+    client = _client()
+
+    response = client.post(
+        "/algorithm-foundations/sessions",
+        json={"problem_id": "p-1"},
+    )
+
+    assert response.status_code == 422
 
 
 def test_submit_answer_returns_reference_solution() -> None:
@@ -293,6 +435,28 @@ def test_submit_answer_returns_502_for_parse_failure() -> None:
     )
 
     assert response.status_code == 502
+
+
+def test_start_session_returns_503_when_language_adaptation_fails() -> None:
+    client = _client()
+    container = client.app.state.container
+    container.algorithm_foundation_language_adapter.error = (
+        AlgorithmFoundationLanguageAdaptationError(
+            error_code="llm_request_failed",
+            message="adapter unavailable",
+        )
+    )
+
+    response = client.post(
+        "/algorithm-foundations/sessions",
+        json={
+            "unit_id": "algo-102-hashmap-exists",
+            "problem_id": "p-1",
+            "programming_language": "typescript",
+        },
+    )
+
+    assert response.status_code == 503
 
 
 def test_unknown_unit_returns_422() -> None:

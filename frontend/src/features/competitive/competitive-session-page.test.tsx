@@ -186,6 +186,25 @@ describe("CompetitiveSessionPage", () => {
     expect(screen.queryByText("問題への質問")).not.toBeInTheDocument();
   });
 
+  it("TypeScript セッションでは shared placeholder を表示する", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/algorithm-quiz/sessions/sess-1")) {
+        return mockJsonResponse({
+          ...inProgressSession,
+          programming_language: "typescript",
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByPlaceholderText("// TypeScript で解答を書いてください"),
+    ).toBeInTheDocument();
+  });
+
   it("submit中に別セッションへ遷移しても古い結果で画面を汚さない", async () => {
     const submitDeferred = deferred<Response>();
     vi.spyOn(globalThis, "fetch").mockImplementation((input) => {

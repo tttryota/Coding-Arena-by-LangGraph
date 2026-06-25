@@ -55,6 +55,15 @@ class AlgorithmFoundationUnitHistoryRecord:
     last_attempted_at: str | None
 
 
+@dataclass(frozen=True)
+class AlgorithmFoundationProblemHistoryRecord:
+    unit_id: str
+    problem_id: str
+    attempt_count: int
+    best_score: int | None
+    last_attempted_at: str | None
+
+
 class SqlAlgorithmFoundationStore:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -312,9 +321,49 @@ class SqlAlgorithmFoundationStore:
             rows = s.execute(stmt).scalars().all()
             return list(rows)
 
+    def list_problem_history_for_unit(
+        self,
+        unit_id: str,
+    ) -> list[AlgorithmFoundationProblemHistoryRecord]:
+        stmt = (
+            select(
+                AlgorithmFoundationSession.unit_id,
+                AlgorithmFoundationSession.problem_id,
+                func.count(AlgorithmFoundationAnswer.id).label("attempt_count"),
+                func.max(AlgorithmFoundationAnswer.score).label("best_score"),
+                func.max(AlgorithmFoundationAnswer.created_at).label("last_attempted_at"),
+            )
+            .join(
+                AlgorithmFoundationAnswer,
+                AlgorithmFoundationAnswer.session_id == AlgorithmFoundationSession.id,
+            )
+            .where(AlgorithmFoundationSession.unit_id == unit_id)
+            .group_by(
+                AlgorithmFoundationSession.unit_id,
+                AlgorithmFoundationSession.problem_id,
+            )
+        )
+        with Session(self._engine) as s:
+            rows = s.execute(stmt).all()
+            return [
+                AlgorithmFoundationProblemHistoryRecord(
+                    unit_id=row.unit_id,
+                    problem_id=row.problem_id,
+                    attempt_count=row.attempt_count,
+                    best_score=row.best_score,
+                    last_attempted_at=(
+                        row.last_attempted_at.isoformat()
+                        if row.last_attempted_at
+                        else None
+                    ),
+                )
+                for row in rows
+            ]
+
 
 __all__ = [
     "AlgorithmFoundationAnswerRecord",
+    "AlgorithmFoundationProblemHistoryRecord",
     "AlgorithmFoundationSessionRecord",
     "AlgorithmFoundationUnitHistoryRecord",
     "SqlAlgorithmFoundationStore",

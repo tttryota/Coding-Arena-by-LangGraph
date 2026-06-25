@@ -32,6 +32,7 @@ class Container:
     competitive_graph_runner: Any
     competitive_question_llm: Any
     algorithm_foundation_solution_evaluator: Any
+    algorithm_foundation_language_adapter: Any
     sql_dojo_feedback_llm: Any
     sql_dojo_question_llm: Any
     batch_embedder: Any
@@ -275,6 +276,9 @@ class Container:
 
     def _init_algorithm_foundations(self) -> None:
         """競プロうさぎの静的カタログと store を初期化する。"""
+        from algorithm_foundations.infrastructure.codex_foundation_language_adapter import (
+            CodexAlgorithmFoundationLanguageAdapter,
+        )
         from algorithm_foundations.infrastructure.foundation_catalog import (
             AlgorithmFoundationCatalog,
         )
@@ -287,6 +291,9 @@ class Container:
 
         self.algorithm_foundation_catalog = AlgorithmFoundationCatalog()
         self.algorithm_foundation_store = SqlAlgorithmFoundationStore(self._engine)
+        self.algorithm_foundation_language_adapter = (
+            CodexAlgorithmFoundationLanguageAdapter(self.transport)
+        )
         self.algorithm_foundation_solution_evaluator = (
             CodexCompetitiveSolutionEvaluationLlm(self.transport)
         )

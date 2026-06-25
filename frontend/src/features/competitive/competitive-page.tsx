@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Play } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { GeneratingDialog } from "@/components/common/generating-dialog";
+import { PROGRAMMING_LANGUAGE_STORAGE_KEY } from "@/lib/programming-language";
 import {
   useCompetitiveLanguages,
   useThemes,
@@ -13,8 +14,6 @@ import {
 } from "./use-competitive";
 import { useCompetitiveStore } from "./use-competitive-store";
 import type { CompetitiveLanguageOption } from "@/types/api";
-
-const STORAGE_KEY = "competitive-programming-language";
 
 const PHASES = [
   { label: "基礎", min: 0, max: 19 },
@@ -32,7 +31,8 @@ export function CompetitivePage() {
   const navigate = useNavigate();
   const [generatingTarget, setGeneratingTarget] = useState("");
   const [programmingLanguage, setProgrammingLanguage] = useState(
-    () => window.localStorage.getItem(STORAGE_KEY) ?? "python",
+    () =>
+      window.localStorage.getItem(PROGRAMMING_LANGUAGE_STORAGE_KEY) ?? "python",
   );
 
   const languages = useMemo(
@@ -50,7 +50,10 @@ export function CompetitivePage() {
 
   useEffect(() => {
     if (resolvedLanguage && resolvedLanguage.id !== programmingLanguage) {
-      window.localStorage.setItem(STORAGE_KEY, resolvedLanguage.id);
+      window.localStorage.setItem(
+        PROGRAMMING_LANGUAGE_STORAGE_KEY,
+        resolvedLanguage.id,
+      );
     }
   }, [programmingLanguage, resolvedLanguage]);
 
@@ -68,7 +71,7 @@ export function CompetitivePage() {
 
   const handleLanguageChange = (value: string) => {
     setProgrammingLanguage(value);
-    window.localStorage.setItem(STORAGE_KEY, value);
+    window.localStorage.setItem(PROGRAMMING_LANGUAGE_STORAGE_KEY, value);
   };
 
   const handleStart = async (themeId?: string, label?: string) => {

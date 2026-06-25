@@ -187,6 +187,20 @@ class AlgorithmFoundationCatalog:
             return unit["problem_bank"][0]
         return unit["problem_bank"][(latest_index + 1) % len(unit["problem_bank"])]
 
+    def get_problem(
+        self,
+        unit_id: str,
+        problem_id: str,
+    ) -> AlgorithmFoundationProblem:
+        unit = self.get_unit(unit_id)
+        for problem in unit["problem_bank"]:
+            if problem["problem_id"] == problem_id:
+                return problem
+        raise AlgorithmFoundationCatalogError(
+            error_code="problem_not_found",
+            message=f"Algorithm foundation problem not found: {problem_id}",
+        )
+
     def counts(self) -> tuple[int, int]:
         return len(self._units), sum(len(unit["problem_bank"]) for unit in self._units)
 
@@ -362,7 +376,11 @@ class AlgorithmFoundationCatalog:
             "output_format": cast("str", template["output_format"]),
             "constraints": cast("str", template["constraints"]),
             "examples": cast("list[AlgorithmFoundationExample]", template["examples"]),
-            "reference_solution": cast("str", template["reference_solution"]),
+            "canonical_reference_solution": cast(
+                "str",
+                template["reference_solution"],
+            ),
+            "canonical_language": "python",
             "grading_rubric": _default_rubric(unit_kind),
         }
 

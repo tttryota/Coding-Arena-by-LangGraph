@@ -277,6 +277,33 @@ export interface AlgorithmFoundationCatalogResponse {
   groups: AlgorithmFoundationGroupSummary[];
 }
 
+export interface AlgorithmFoundationProblemSummary {
+  problem_id: string;
+  title: string;
+  best_score: number | null;
+  last_attempted_at: string | null;
+}
+
+export interface AlgorithmFoundationUnitDetailResponse {
+  unit_id: string;
+  theme_id: string;
+  group_id: string;
+  group_title: string;
+  title: string;
+  display_order: number;
+  prerequisite_unit_ids: string[];
+  prerequisite_titles: string[];
+  allowed_knowledge: string[];
+  forbidden_knowledge: string[];
+  target_skill: string;
+  unit_kind: AlgorithmFoundationUnitKind;
+  problem_count: number;
+  best_score: number | null;
+  last_attempted_at: string | null;
+  has_unmet_prerequisites: boolean;
+  problems: AlgorithmFoundationProblemSummary[];
+}
+
 export interface AlgorithmFoundationStartResponse {
   session_id: string;
   unit_id: string;

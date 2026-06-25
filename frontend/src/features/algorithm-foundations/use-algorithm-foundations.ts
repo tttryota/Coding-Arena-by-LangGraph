@@ -6,6 +6,8 @@ import type {
   AlgorithmFoundationSessionListResponse,
   AlgorithmFoundationSessionResponse,
   AlgorithmFoundationStartResponse,
+  AlgorithmFoundationUnitDetailResponse,
+  CompetitiveLanguagesResponse,
 } from "@/types/api";
 
 export function useAlgorithmFoundationsCatalog() {
@@ -14,6 +16,16 @@ export function useAlgorithmFoundationsCatalog() {
     queryFn: async () => {
       const res = await apiFetch("/algorithm-foundations/catalog");
       return res.json() as Promise<AlgorithmFoundationCatalogResponse>;
+    },
+  });
+}
+
+export function useAlgorithmFoundationLanguages() {
+  return useQuery({
+    queryKey: ["algorithm-foundations-languages"],
+    queryFn: async () => {
+      const res = await apiFetch("/algorithm-foundations/languages");
+      return res.json() as Promise<CompetitiveLanguagesResponse>;
     },
   });
 }
@@ -39,14 +51,33 @@ export function useAlgorithmFoundationSession(sessionId: string) {
   });
 }
 
+export function useAlgorithmFoundationUnit(unitId: string) {
+  return useQuery({
+    queryKey: ["algorithm-foundations-unit", unitId],
+    queryFn: async () => {
+      const res = await apiFetch(`/algorithm-foundations/units/${unitId}`);
+      return res.json() as Promise<AlgorithmFoundationUnitDetailResponse>;
+    },
+    enabled: !!unitId,
+  });
+}
+
 export function useStartAlgorithmFoundationSession() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (unitId?: string) => {
+    mutationFn: async (payload?: {
+      unitId?: string;
+      problemId?: string;
+      programmingLanguage?: string;
+    }) => {
       const res = await apiFetch("/algorithm-foundations/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ unit_id: unitId }),
+        body: JSON.stringify({
+          unit_id: payload?.unitId,
+          problem_id: payload?.problemId,
+          programming_language: payload?.programmingLanguage,
+        }),
       });
       return res.json() as Promise<AlgorithmFoundationStartResponse>;
     },
@@ -87,6 +118,9 @@ export function useSubmitAlgorithmFoundationAnswer(sessionId: string) {
         }),
         queryClient.invalidateQueries({
           queryKey: ["algorithm-foundations-session", sessionId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["algorithm-foundations-unit"],
         }),
       ]);
     },

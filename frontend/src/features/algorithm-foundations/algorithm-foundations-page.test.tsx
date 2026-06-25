@@ -1,4 +1,5 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
+import { Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, mockJsonResponse } from "@/test-utils";
 import { AlgorithmFoundationsPage } from "./algorithm-foundations-page";
@@ -94,37 +95,30 @@ afterEach(() => {
 });
 
 function mockFetch() {
-  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = typeof input === "string" ? input : input.toString();
+    if (url.includes("/algorithm-foundations/languages")) {
+      return mockJsonResponse({
+        languages: [
+          {
+            id: "python",
+            label: "Python",
+            editor_placeholder: "# Python で解答を書いてください",
+            enabled_order: 0,
+          },
+          {
+            id: "typescript",
+            label: "TypeScript",
+            editor_placeholder: "// TypeScript で解答を書いてください",
+            enabled_order: 1,
+          },
+        ],
+      });
+    }
     if (url.includes("/algorithm-foundations/catalog")) {
       return mockJsonResponse(mockCatalog);
     }
     if (url.includes("/algorithm-foundations/sessions")) {
-      if (init?.method === "POST") {
-        return mockJsonResponse({
-          session_id: "sess-1",
-          unit_id: "algo-102-hashmap-count",
-          group_id: "group-0",
-          group_title: "データ構造",
-          unit_title: "出現回数カウント",
-          target_skill: "出現回数カウント",
-          unit_kind: "foundation",
-          problem_id: "p-1",
-          problem_title: "問題1",
-          programming_language: "python",
-          problem_statement: "問題文",
-          input_format: "入力",
-          output_format: "出力",
-          constraints: "制約",
-          examples: [],
-          prerequisite_unit_ids: ["algo-102-hashmap-exists"],
-          prerequisite_titles: ["存在判定をハッシュで高速化"],
-          allowed_knowledge: ["出現回数カウント", "ハッシュマップ・ハッシュセット"],
-          forbidden_knowledge: ["尺取り法"],
-          recommended: false,
-          has_unmet_prerequisites: true,
-        });
-      }
       return mockJsonResponse(mockSessions);
     }
     throw new Error(`Unexpected fetch: ${url}`);
@@ -142,6 +136,7 @@ describe("AlgorithmFoundationsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "競プロうさぎ" }),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("出題言語")).toHaveValue("python");
     expect(screen.getByText("目次")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /データ構造/ })).toHaveAttribute(
       "href",
@@ -151,7 +146,7 @@ describe("AlgorithmFoundationsPage", () => {
       "href",
       "#foundation-group-group-1",
     );
-    expect(screen.getByText("次: スタックの基本操作")).toBeInTheDocument();
+    expect(screen.queryByText("次: スタックの基本操作")).not.toBeInTheDocument();
     expect(screen.getAllByText("出現回数カウント").length).toBeGreaterThan(0);
     expect(screen.getAllByText("前提注意")).toHaveLength(2);
     expect(screen.getByText("前提: 存在判定をハッシュで高速化")).toBeInTheDocument();
@@ -160,25 +155,33 @@ describe("AlgorithmFoundationsPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("unit指定で開始リクエストを送る", async () => {
-    const fetchSpy = mockFetch();
+  it("unit 詳細ページへ遷移する", async () => {
+    mockFetch();
 
-    renderWithProviders(<AlgorithmFoundationsPage />, {
+    renderWithProviders(
+      <Routes>
+        <Route path="/algorithm-foundations" element={<AlgorithmFoundationsPage />} />
+        <Route
+          path="/algorithm-foundations/units/:unitId"
+          element={<div>unit detail route</div>}
+        />
+      </Routes>,
+      {
       initialEntries: ["/algorithm-foundations"],
-    });
+      },
+    );
 
     expect(
       await screen.findByRole("heading", { name: "競プロうさぎ" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "解く" })[1]);
+    fireEvent.change(screen.getByLabelText("出題言語"), {
+      target: { value: "typescript" },
+    });
+    expect(window.localStorage.getItem("competitive-programming-language")).toBe(
+      "typescript",
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "問題を見る" })[1]);
 
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-    const startCall = fetchSpy.mock.calls.find(([, init]) => init?.method === "POST");
-    expect(startCall).toBeDefined();
-    expect(JSON.parse(String(startCall?.[1]?.body))).toEqual({
-      unit_id: "algo-102-hashmap-count",
-    });
+    expect(await screen.findByText("unit detail route")).toBeInTheDocument();
   });
 });

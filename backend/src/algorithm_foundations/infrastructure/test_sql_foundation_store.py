@@ -96,3 +96,14 @@ def test_store_persists_session_answer_and_history() -> None:
     assert history[0].unit_id == "algo-102-hashmap-count"
     assert history[0].attempt_count == 1
     assert history[0].best_score == 88
+
+    problem_history = store.list_problem_history_for_unit("algo-102-hashmap-count")
+    assert problem_history == [
+        type(problem_history[0])(
+            unit_id="algo-102-hashmap-count",
+            problem_id="p-1",
+            attempt_count=1,
+            best_score=88,
+            last_attempted_at=problem_history[0].last_attempted_at,
+        ),
+    ]

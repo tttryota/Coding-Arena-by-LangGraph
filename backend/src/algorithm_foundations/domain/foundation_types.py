@@ -27,7 +27,8 @@ class AlgorithmFoundationProblem(TypedDict):
     output_format: str
     constraints: str
     examples: list[AlgorithmFoundationExample]
-    reference_solution: str
+    canonical_reference_solution: str
+    canonical_language: str
     grading_rubric: list[AlgorithmFoundationRubricItem]
 
 
@@ -63,6 +64,13 @@ class AlgorithmFoundationUnitSummary(TypedDict):
     has_unmet_prerequisites: bool
 
 
+class AlgorithmFoundationProblemSummary(TypedDict):
+    problem_id: str
+    title: str
+    best_score: int | None
+    last_attempted_at: str | None
+
+
 class AlgorithmFoundationGroupSummary(TypedDict):
     group_id: str
     group_title: str
@@ -74,6 +82,26 @@ class AlgorithmFoundationCatalogResponse(TypedDict):
     total_unit_count: int
     total_problem_count: int
     groups: list[AlgorithmFoundationGroupSummary]
+
+
+class AlgorithmFoundationUnitDetailResponse(TypedDict):
+    unit_id: str
+    theme_id: str
+    group_id: str
+    group_title: str
+    title: str
+    display_order: int
+    prerequisite_unit_ids: list[str]
+    prerequisite_titles: list[str]
+    allowed_knowledge: list[str]
+    forbidden_knowledge: list[str]
+    target_skill: str
+    unit_kind: AlgorithmFoundationUnitKind
+    problem_count: int
+    best_score: int | None
+    last_attempted_at: str | None
+    has_unmet_prerequisites: bool
+    problems: list[AlgorithmFoundationProblemSummary]
 
 
 class AlgorithmFoundationStartPayload(TypedDict):
@@ -137,6 +165,10 @@ class AlgorithmFoundationCatalogError(AlgorithmFoundationError):
     """カタログ生成/取得の失敗。"""
 
 
+class AlgorithmFoundationLanguageAdaptationError(AlgorithmFoundationError):
+    """言語適応ステップの失敗。"""
+
+
 __all__ = [
     "AlgorithmFoundationAnswerResponse",
     "AlgorithmFoundationCatalogError",
@@ -144,12 +176,15 @@ __all__ = [
     "AlgorithmFoundationError",
     "AlgorithmFoundationExample",
     "AlgorithmFoundationGroupSummary",
+    "AlgorithmFoundationLanguageAdaptationError",
     "AlgorithmFoundationProblem",
+    "AlgorithmFoundationProblemSummary",
     "AlgorithmFoundationRubricItem",
     "AlgorithmFoundationSessionStatus",
     "AlgorithmFoundationSessionSummary",
     "AlgorithmFoundationStartPayload",
     "AlgorithmFoundationUnit",
+    "AlgorithmFoundationUnitDetailResponse",
     "AlgorithmFoundationUnitKind",
     "AlgorithmFoundationUnitSummary",
 ]

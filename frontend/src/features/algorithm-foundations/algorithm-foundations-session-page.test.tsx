@@ -118,4 +118,23 @@ describe("AlgorithmFoundationsSessionPage", () => {
     expect(screen.getByText("模範解答")).toBeInTheDocument();
     expect(screen.queryByText("解答コード")).not.toBeInTheDocument();
   });
+
+  it("セッション言語に応じた placeholder を表示する", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/algorithm-foundations/sessions/af-1")) {
+        return mockJsonResponse({
+          ...inProgressSession,
+          programming_language: "typescript",
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByPlaceholderText("// TypeScript で解答を書いてください"),
+    ).toBeInTheDocument();
+  });
 });

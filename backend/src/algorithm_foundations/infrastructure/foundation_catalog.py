@@ -18,6 +18,16 @@ from algorithm_foundations.domain.foundation_types import (
     AlgorithmFoundationUnit,
     AlgorithmFoundationUnitSummary,
 )
+from algorithm_foundations.infrastructure.foundation_units import (
+    SPECIAL_THEME_UNITS as _SPECIAL_THEME_UNITS,
+)
+from algorithm_foundations.infrastructure.foundation_units import (
+    SPECIAL_UNIT_CONCEPT_OVERVIEWS as _SPECIAL_UNIT_CONCEPT_OVERVIEWS,
+)
+from algorithm_foundations.infrastructure.foundation_units import (
+    build_family_problem_template,
+    build_special_problem_template,
+)
 
 _GROUP_ORDER: Final[dict[str, int]] = {
     "データ構造": 0,
@@ -73,31 +83,6 @@ _IMPORTANT_THEME_IDS: Final[tuple[str, ...]] = (
     "algo-102",
     "algo-104",
 )
-
-_SPECIAL_THEME_UNITS: Final[dict[str, list[tuple[str, str, str]]]] = {
-    "algo-093": [
-        ("stack-basics", "スタックの基本操作", "foundation"),
-        ("stack-brackets", "括弧対応と後入れ先出し", "foundation"),
-        ("stack-cancel", "スタックで消去をシミュレート", "integration"),
-    ],
-    "algo-094": [
-        ("queue-basics", "キューの基本操作", "foundation"),
-        ("deque-basics", "デックの基本操作", "foundation"),
-    ],
-    "algo-099": [
-        ("prefix-sum-1d", "一次元累積和の基本", "foundation"),
-        ("prefix-sum-range", "累積和で区間和を求める", "foundation"),
-        ("prefix-sum-2d", "二次元累積和で長方形和を求める", "integration"),
-    ],
-    "algo-102": [
-        ("hashmap-exists", "存在判定をハッシュで高速化", "foundation"),
-        ("hashmap-duplicate", "重複検出をハッシュで行う", "foundation"),
-        ("hashmap-count", "出現回数カウント", "foundation"),
-        ("hashmap-index", "値から位置を引く対応表", "foundation"),
-        ("hashmap-match", "2配列の照合をハッシュで処理", "integration"),
-    ],
-}
-
 
 @dataclass(frozen=True)
 class _Theme:
@@ -318,10 +303,18 @@ class AlgorithmFoundationCatalog:
         forbidden = self._forbidden_knowledge(theme, title)
         important_unit = self._is_important_unit(theme.id, unit_id)
         problem_count = 6 if important_unit else 3
+        concept_overview = self._concept_overview(
+            theme=theme,
+            unit_id=unit_id,
+            title=title,
+            unit_kind=unit_kind,
+            prerequisite_titles=prerequisite_titles,
+        )
         problem_bank = [
             self._build_problem(
                 unit_id=unit_id,
                 unit_title=title,
+                concept_overview=concept_overview,
                 theme=theme,
                 problem_index=index,
                 unit_kind=unit_kind,
@@ -334,6 +327,7 @@ class AlgorithmFoundationCatalog:
             "group_id": group_id,
             "group_title": _GROUP_DISPLAY_TITLE.get(theme.category, theme.category),
             "title": title,
+            "concept_overview": concept_overview,
             "display_order": display_order,
             "prerequisite_unit_ids": prerequisite_unit_ids,
             "prerequisite_titles": prerequisite_titles,
@@ -349,11 +343,12 @@ class AlgorithmFoundationCatalog:
         *,
         unit_id: str,
         unit_title: str,
+        concept_overview: str,
         theme: _Theme,
         problem_index: int,
         unit_kind: str,
     ) -> AlgorithmFoundationProblem:
-        template = self._problem_template(theme, unit_title)
+        template = self._problem_template(theme, unit_id, unit_title)
         difficulty_labels = (
             (
                 "2unit組み合わせ確認",
@@ -372,7 +367,7 @@ class AlgorithmFoundationCatalog:
         )
         prompt_kind = difficulty_labels[problem_index]
         statement = (
-            f"この問題で扱う知識は「{unit_title}」です。\n\n"
+            f"{concept_overview}\n\n"
             f"- カテゴリ: {theme.category}\n"
             f"- 学習単位: {unit_title}\n"
             "\n"
@@ -394,246 +389,149 @@ class AlgorithmFoundationCatalog:
             "grading_rubric": _default_rubric(unit_kind),
         }
 
+    def _concept_overview(  # noqa: PLR0913
+        self,
+        *,
+        theme: _Theme,
+        unit_id: str,
+        title: str,
+        unit_kind: str,
+        prerequisite_titles: list[str],
+    ) -> str:
+        if unit_id in _SPECIAL_UNIT_CONCEPT_OVERVIEWS:
+            return _SPECIAL_UNIT_CONCEPT_OVERVIEWS[unit_id]
+
+        base_title = title
+        for suffix in (" の基本", " を素直に実装する", " の総合演習"):
+            if base_title.endswith(suffix):
+                base_title = base_title.removesuffix(suffix)
+                break
+
+        concept = theme.label if theme.label in title else base_title
+        explanation = self._concept_overview_for_concept(concept, category=theme.category)
+        if unit_kind == "integration" and prerequisite_titles:
+            joined = " と ".join(prerequisite_titles[:2])
+            return f"{explanation} この unit では、既習の {joined} を順に使いながら、1 問を分けて解く流れまで確認します。"
+        return explanation
+
+    def _concept_overview_for_concept(self, concept: str, *, category: str) -> str:  # noqa: C901, PLR0915
+        key = concept
+        if "bit全探索" in key:
+            return "bit 全探索は、各要素を選ぶ・選ばないをビットで表し、部分集合を全部試す解き方です。整数のビット表現と集合の対応づけを使えるようにします。"
+        if "順列全探索" in key:
+            return "順列全探索は、並べ方をすべて試し、その中から条件を満たすものを見つける解き方です。候補を生成して順に評価する流れを押さえます。"
+        if "半分全列挙" in key:
+            return "半分全列挙は、候補を前半と後半に分けて列挙し、あとで組み合わせて全体の答えを作る考え方です。全部試したいがそのままでは多すぎるときの基本形を学びます。"
+        if "全探索" in key or "ブルートフォース" in key:
+            return "全探索（ブルートフォース）は、ありえる候補を順番に全部試し、条件を満たすものを見つける解き方です。まずは漏れなく列挙し、1 つずつ判定する形を身につけます。"
+        if "二分探索" in key:
+            return "二分探索は、条件を満たす境目や値を、探索範囲を半分ずつ絞りながら見つける解き方です。単調性を見つけて mid で判定する流れを身につけます。"
+        if "三分探索" in key:
+            return "三分探索は、値が山型や谷型に変化するとき、比較する位置を 3 分するように動かして最適値に近づく解き方です。関数の形に注目して範囲を狭める感覚を学びます。"
+        if "尺取り法" in key:
+            return "尺取り法は、左右の端を動かしながら連続区間を保ち、条件を満たす最短・最長・個数を求める考え方です。区間を伸ばすときと縮めるときの役割分担を押さえます。"
+        if "深さ優先探索" in key or "DFS" in key:
+            return "深さ優先探索は、行けるところまで進んでから戻る形で状態や頂点をたどる解き方です。再帰やスタックで探索順を管理する基本を学びます。"
+        if "幅優先探索" in key or "BFS" in key:
+            return "幅優先探索は、近い状態から順に広げていく解き方です。キューを使って層ごとに進むことで、最短手数や到達可否を素直に求めます。"
+        if "スタック" in key:
+            return "スタックは、最後に入れたものを先に取り出す考え方です。直前の状態や未処理の情報をあとから回収したい場面で使います。"
+        if "キュー" in key:
+            return "キューは、先に入れたものを先に取り出す考え方です。到着順の処理や、近い順に広げる探索で基本になります。"
+        if "デック" in key:
+            return "デックは、前後どちらの端からも追加・削除できる考え方です。両端を使い分けながら状態を保つ場面で使います。"
+        if "累積和" in key:
+            return "累積和は、左上や左から順に合計をためておき、あとで区間や長方形の和を差で取り出す考え方です。前計算して問い合わせを軽くする基本形を学びます。"
+        if "いもす" in key:
+            return "いもす法は、区間への加算を差分として記録し、最後に累積して各位置の値を復元する考え方です。更新をまとめて遅延処理する形を押さえます。"
+        if "ハッシュ" in key:
+            return "ハッシュは、値をキーにして必要な情報へすぐたどる考え方です。『探す』を『表から引く』に置き換えて、判定や数え上げを高速化します。"
+        if "Union-Find" in key:
+            return "Union-Find は、要素どうしが同じグループかを管理し、グループをくっつける操作を高速に行う考え方です。連結性をまとめて扱う基本を学びます。"
+        if "ダイクストラ" in key:
+            return "ダイクストラ法は、重みが負でないグラフで、いちばん近い頂点から順に最短距離を確定していく解き方です。優先度付きキューを使う最短路の基本形です。"
+        if "ベルマンフォード" in key:
+            return "ベルマンフォード法は、辺の緩和を繰り返して最短距離を更新する解き方です。負辺がある場合や負閉路の検出まで扱える基本を学びます。"
+        if "ワーシャルフロイド" in key:
+            return "ワーシャルフロイド法は、『この頂点を経由してよいか』を順に増やしながら、全点対間の最短距離を更新する解き方です。表を段階的に改善する形を押さえます。"
+        if "最小全域木" in key or "プリム" in key or "クラスカル" in key:
+            return "最小全域木は、全頂点をつなぎつつ重み合計を最小にする辺集合を作る考え方です。どの辺を採用すると無駄なくつながるかを順に決める基本を学びます。"
+        if "トポロジカル" in key:
+            return "トポロジカルソートは、依存関係を壊さない順番に頂点を並べる考え方です。『先に済ませるべきもの』を整理して順序を作る基本を学びます。"
+        if "最小共通祖先" in key or "LCA" in key:
+            return "最小共通祖先は、木の 2 頂点に対して共通の祖先のうち最も深いものを求める考え方です。木の親子関係を前計算して質問に素早く答える形を学びます。"
+        if "強連結成分" in key or "SCC" in key:
+            return "強連結成分分解は、互いに行き来できる頂点どうしをひとかたまりにまとめる考え方です。グラフを縮約して構造を見やすくする基本を学びます。"
+        if "二部グラフ" in key:
+            return "二部グラフ判定は、頂点を 2 色に分け、隣り合う頂点が同じ色にならないかを見る考え方です。制約を色分けとして扱う基本形を押さえます。"
+        if "オイラー" in key:
+            return "オイラー路・オイラー閉路は、辺をちょうど 1 回ずつ通る道が作れるかを考える知識です。次数や通り方の条件を整理する基本を学びます。"
+        if "座標圧縮" in key:
+            return "座標圧縮は、大小関係を保ったまま値を小さい番号に置き換える考え方です。広い値域を扱いやすい添字に直す基本を学びます。"
+        if "転倒数" in key:
+            return "転倒数は、順序が逆になっている組の個数を数える知識です。『何個後ろに小さいものがあるか』を効率よく数える形を学びます。"
+        if "Fenwick木" in key or "BIT/Fenwick木" in key or "Binary Indexed Tree" in key:
+            return "Binary Indexed Tree（BIT/Fenwick木）は、配列の値を少しずつまとめて持ち、更新しながら区間和を素早く求める知識です。1 点更新と累積和の対応を使う基本を学びます。"
+        if "遅延評価セグメント木" in key:
+            return "遅延評価セグメント木は、区間更新の情報を今すぐ全部配らずに持っておき、必要になったときだけ反映する知識です。広い区間への更新と問い合わせを両立する基本を学びます。"
+        if "セグメント木" in key:
+            return "セグメント木は、区間を二分しながら情報を木に持たせ、更新と区間問い合わせを素早く行う知識です。部分区間の答えを合体して全体の答えを作る基本を学びます。"
+        if "スパーステーブル" in key or "RMQ" in key:
+            return "スパーステーブルは、動かない配列に対して区間最小値などを何度も聞かれるときに、前計算で問い合わせを速くする知識です。『更新なし・問い合わせ多数』の形を見抜く基本を学びます。"
+        if "素数" in key or "エラトステネス" in key:
+            return "素数判定やふるいは、数の割り切れ方を使って素数を見分けたり列挙したりする知識です。約数の性質を利用する基本を押さえます。"
+        if "最大公約数" in key or "最小公倍数" in key or "GCD" in key or "LCM" in key:
+            return "最大公約数・最小公倍数は、整数の割り切れ方を使って共通する周期やまとまりを扱う知識です。互除法と関係式を使う基本を学びます。"
+        if "mod" in key or "剰余" in key:
+            return "剰余は、値をある法で割ったあまりとして扱い、巨大な数でも性質を保ったまま計算する考え方です。足し算・掛け算・逆元の基本を押さえます。"
+        if "組み合わせ" in key or "二項係数" in key:
+            return "組み合わせは、順序を区別せずに選ぶ方法の数を数える知識です。場合分けではなく公式や前計算で数える基本を学びます。"
+        if "確率" in key or "期待値" in key:
+            return "確率・期待値は、各結果がどれだけ起こりやすいかを数で扱い、平均的な値を求める知識です。場合の数と重みづけを整理する基本を押さえます。"
+        if "ローリングハッシュ" in key:
+            return "ローリングハッシュは、文字列の一部分を数として持ち回り、部分文字列どうしを素早く比較する考え方です。再計算せずに比較する基本を学びます。"
+        if "KMP" in key or "Z-algorithm" in key:
+            return "文字列検索アルゴリズムは、一致しなかった場所の情報を使い回し、比較を最初からやり直さない考え方です。文字列の自己一致を利用する基本を学びます。"
+        if "Suffix Array" in key or "LCP" in key:
+            return "Suffix Array や LCP は、文字列の suffix を順序づけて管理し、部分文字列の比較や共通部分を扱いやすくする知識です。並べ替えた構造で文字列を見る基本を学びます。"
+        if "Trie" in key:
+            return "Trie は、文字列を文字ごとの木として共有しながら保存する考え方です。接頭辞が共通する語をまとめて扱う基本を学びます。"
+        if category == "動的計画法" or "DP" in key:
+            return "動的計画法は、小さい状態の答えを先に求め、その結果を使って大きい状態の答えを作る考え方です。状態・遷移・初期値を整理する基本を身につけます。"
+        if "ソート" in key or category == "ソート":
+            return "ソートは、要素を決まった順番に並べ替える知識です。比較や交換をどう進めると目的の順序になるかを手順として理解します。"
+        if "文字列" in key or category == "文字列":
+            return "文字列処理は、文字の並びを比較したり、部分文字列を見つけたり、規則性を前計算で利用したりする知識です。並びをそのまま走査して構造をつかむ基本を学びます。"
+        if category == "貪欲法" or "貪欲" in key:
+            return "貪欲法は、その時点で最もよさそうな選択を順に確定していく考え方です。後戻りせずに決めてよい条件を見抜く基本を学びます。"
+        if category == "ビット演算" or "bit" in key.lower() or "XOR" in key or "OR" in key or "AND" in key:
+            return "ビット演算は、整数を 2 進数として見て、立っている桁の有無で状態や条件を扱う知識です。集合や状態をコンパクトに表す基本を学びます。"
+        if category == "分割統治":
+            return "分割統治は、問題を小さく分けて解き、その結果を合体して元の問題の答えを作る考え方です。分け方と戻し方を整理する基本を学びます。"
+        if category == "幾何":
+            return "図形・座標の問題は、点や線の位置関係を式に直し、距離・面積・向きなどを使って判定する知識です。図を数式として扱う基本を学びます。"
+        if category == "フロー・マッチング" or "最大流" in key or "マッチング" in key:
+            return "最大流・マッチングは、通せる量や組み合わせをグラフの辺として表し、制約つきでどれだけ流せるか・結べるかを考える知識です。問題をネットワークに置き換える基本を学びます。"
+        return f"{concept}は、入力の構造や候補を整理し、決まった手順で答えを作る知識です。まずは典型の使い方を自分の手で追える状態を目指します。"
+
     def _problem_template(  # noqa: C901, PLR0915
         self,
         theme: _Theme,
+        unit_id: str,
         unit_title: str,
     ) -> dict[str, str | list[AlgorithmFoundationExample]]:
         key = f"{theme.label} {unit_title}"
         title = unit_title
-        if title == "括弧対応と後入れ先出し":
-            return _array_template(
-                statement="括弧列 S が与えられる。対応が正しい括弧列なら Yes、そうでなければ No を出力せよ。",
-                input_format="1 行目に S。",
-                output_format="Yes / No を出力する。",
-                constraints="1 <= |S| <= 2 * 10^5\nS は '(' と ')' からなる",
-                examples=[{"input": "(()())", "output": "Yes"}],
-                reference_solution=(
-                    "def solve() -> None:\n"
-                    "    s = input().strip()\n"
-                    "    depth = 0\n"
-                    "    for ch in s:\n"
-                    "        if ch == '(':\n"
-                    "            depth += 1\n"
-                    "        else:\n"
-                    "            depth -= 1\n"
-                    "        if depth < 0:\n"
-                    "            print('No')\n"
-                    "            return\n"
-                    "    print('Yes' if depth == 0 else 'No')\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if title == "スタックで消去をシミュレート":
-            return _array_template(
-                statement=(
-                    "英小文字からなる文字列 S が与えられる。"
-                    " 左から順に見て、直前と同じ文字が現れたら 2 文字まとめて消す操作を繰り返した最終文字列を出力せよ。"
-                ),
-                input_format="1 行目に S。",
-                output_format="最終文字列を出力する。",
-                constraints="1 <= |S| <= 2 * 10^5",
-                examples=[{"input": "abbaca", "output": "ca"}],
-                reference_solution=(
-                    "def solve() -> None:\n"
-                    "    s = input().strip()\n"
-                    "    stack = []\n"
-                    "    for ch in s:\n"
-                    "        if stack and stack[-1] == ch:\n"
-                    "            stack.pop()\n"
-                    "        else:\n"
-                    "            stack.append(ch)\n"
-                    "    print(''.join(stack))\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if title == "一次元累積和の基本":
-            return _array_template(
-                statement="長さ N の整数列 A が与えられる。累積和 P を `P0=0, Pi=A1+...+Ai` と定義し、P0 から PN までを出力せよ。",
-                input_format="1 行目に N。\n2 行目に A1..AN。",
-                output_format="P0..PN を空白区切りで出力する。",
-                constraints="1 <= N <= 2 * 10^5\n|Ai| <= 10^9",
-                examples=[{"input": "4\n3 1 4 1", "output": "0 3 4 8 9"}],
-                reference_solution=(
-                    "def solve() -> None:\n"
-                    "    input()\n"
-                    "    a = list(map(int, input().split()))\n"
-                    "    prefix = [0]\n"
-                    "    for value in a:\n"
-                    "        prefix.append(prefix[-1] + value)\n"
-                    "    print(*prefix)\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if title == "二次元累積和で長方形和を求める":
-            return _array_template(
-                statement=(
-                    "H 行 W 列の整数表 A と Q 個の長方形が与えられる。"
-                    " 各問い合わせについて、左上 (r1, c1)、右下 (r2, c2) に囲まれる長方形の総和を求めよ。"
-                ),
-                input_format=(
-                    "1 行目に H W Q。\n"
-                    "続く H 行に各行の値。\n"
-                    "続く Q 行に r1 c1 r2 c2 (1-indexed)。"
-                ),
-                output_format="各問い合わせの長方形和を 1 行ずつ出力する。",
-                constraints="1 <= H, W, Q <= 2 * 10^3\n|Aij| <= 10^9",
-                examples=[{"input": "2 3 2\n1 2 3\n4 5 6\n1 1 2 2\n2 2 2 3", "output": "12\n11"}],
-                reference_solution=(
-                    "def solve() -> None:\n"
-                    "    import sys\n"
-                    "    input = sys.stdin.readline\n"
-                    "    h, w, q = map(int, input().split())\n"
-                    "    prefix = [[0] * (w + 1) for _ in range(h + 1)]\n"
-                    "    for i in range(1, h + 1):\n"
-                    "        row = list(map(int, input().split()))\n"
-                    "        for j in range(1, w + 1):\n"
-                    "            prefix[i][j] = (\n"
-                    "                prefix[i - 1][j]\n"
-                    "                + prefix[i][j - 1]\n"
-                    "                - prefix[i - 1][j - 1]\n"
-                    "                + row[j - 1]\n"
-                    "            )\n"
-                    "    out = []\n"
-                    "    for _ in range(q):\n"
-                    "        r1, c1, r2, c2 = map(int, input().split())\n"
-                    "        total = (\n"
-                    "            prefix[r2][c2]\n"
-                    "            - prefix[r1 - 1][c2]\n"
-                    "            - prefix[r2][c1 - 1]\n"
-                    "            + prefix[r1 - 1][c1 - 1]\n"
-                    "        )\n"
-                    "        out.append(str(total))\n"
-                    "    sys.stdout.write('\\n'.join(out))\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if title == "存在判定をハッシュで高速化":
-            return _array_template(
-                statement=(
-                    "長さ N の整数列 A と Q 個の問い合わせ x が与えられる。"
-                    " 各問い合わせについて x が A に含まれるなら Yes、含まれないなら No を出力せよ。"
-                ),
-                input_format="1 行目に N Q。\n2 行目に A1..AN。\n続く Q 行に x。",
-                output_format="各問い合わせごとに Yes / No を 1 行ずつ出力する。",
-                constraints="1 <= N, Q <= 2 * 10^5\n0 <= Ai, x <= 10^9",
-                examples=[
-                    {"input": "5 3\n1 4 2 4 7\n4\n3\n7", "output": "Yes\nNo\nYes"},
-                ],
-                reference_solution=(
-                    "def solve() -> None:\n"
-                    "    import sys\n"
-                    "    input = sys.stdin.readline\n"
-                    "    n, q = map(int, input().split())\n"
-                    "    values = set(map(int, input().split()))\n"
-                    "    out = []\n"
-                    "    for _ in range(q):\n"
-                    "        x = int(input())\n"
-                    "        out.append('Yes' if x in values else 'No')\n"
-                    "    sys.stdout.write('\\n'.join(out))\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if title == "重複検出をハッシュで行う":
-            return _array_template(
-                statement="長さ N の整数列 A が与えられる。同じ値が 2 回以上現れるなら Yes、そうでなければ No を出力せよ。",
-                input_format="1 行目に N。\n2 行目に A1..AN。",
-                output_format="Yes / No を出力する。",
-                constraints="1 <= N <= 2 * 10^5\n0 <= Ai <= 10^9",
-                examples=[{"input": "5\n1 4 2 4 7", "output": "Yes"}],
-                reference_solution=(
-                    "def solve() -> None:\n"
-                    "    input()\n"
-                    "    a = list(map(int, input().split()))\n"
-                    "    seen = set()\n"
-                    "    for value in a:\n"
-                    "        if value in seen:\n"
-                    "            print('Yes')\n"
-                    "            return\n"
-                    "        seen.add(value)\n"
-                    "    print('No')\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if title == "出現回数カウント":
-            return _array_template(
-                statement=(
-                    "長さ N の整数列 A と Q 個の問い合わせ x が与えられる。"
-                    " 各問い合わせについて x の出現回数を出力せよ。"
-                ),
-                input_format="1 行目に N Q。\n2 行目に A1..AN。\n続く Q 行に x。",
-                output_format="各問い合わせの答えを 1 行ずつ出力する。",
-                constraints="1 <= N, Q <= 2 * 10^5\n0 <= Ai, x <= 10^9",
-                examples=[{"input": "6 3\n1 4 2 4 7 4\n4\n3\n1", "output": "3\n0\n1"}],
-                reference_solution=(
-                    "from collections import Counter\n\n"
-                    "def solve() -> None:\n"
-                    "    import sys\n"
-                    "    input = sys.stdin.readline\n"
-                    "    n, q = map(int, input().split())\n"
-                    "    counter = Counter(map(int, input().split()))\n"
-                    "    out = []\n"
-                    "    for _ in range(q):\n"
-                    "        x = int(input())\n"
-                    "        out.append(str(counter[x]))\n"
-                    "    sys.stdout.write('\\n'.join(out))\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if title == "値から位置を引く対応表":
-            return _array_template(
-                statement=(
-                    "長さ N の整数列 A はすべて異なる。"
-                    " Q 個の問い合わせ x について、x が A の何番目にあるかを 1-indexed で出力し、"
-                    " 含まれなければ -1 を出力せよ。"
-                ),
-                input_format="1 行目に N Q。\n2 行目に A1..AN。\n続く Q 行に x。",
-                output_format="各問い合わせの答えを 1 行ずつ出力する。",
-                constraints="1 <= N, Q <= 2 * 10^5\n0 <= Ai, x <= 10^9",
-                examples=[{"input": "5 3\n10 20 30 40 50\n40\n15\n10", "output": "4\n-1\n1"}],
-                reference_solution=(
-                    "def solve() -> None:\n"
-                    "    import sys\n"
-                    "    input = sys.stdin.readline\n"
-                    "    n, q = map(int, input().split())\n"
-                    "    pos = {value: idx for idx, value in enumerate(map(int, input().split()), start=1)}\n"
-                    "    out = []\n"
-                    "    for _ in range(q):\n"
-                    "        x = int(input())\n"
-                    "        out.append(str(pos.get(x, -1)))\n"
-                    "    sys.stdout.write('\\n'.join(out))\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if title == "2配列の照合をハッシュで処理":
-            return _array_template(
-                statement=(
-                    "長さ N の整数列 A, B が与えられる。"
-                    " 並べ替えると一致するなら Yes、そうでなければ No を出力せよ。"
-                ),
-                input_format="1 行目に N。\n2 行目に A1..AN。\n3 行目に B1..BN。",
-                output_format="Yes / No を出力する。",
-                constraints="1 <= N <= 2 * 10^5\n0 <= Ai, Bi <= 10^9",
-                examples=[{"input": "4\n1 2 2 5\n2 5 1 2", "output": "Yes"}],
-                reference_solution=(
-                    "from collections import Counter\n\n"
-                    "def solve() -> None:\n"
-                    "    input()\n"
-                    "    a = Counter(map(int, input().split()))\n"
-                    "    b = Counter(map(int, input().split()))\n"
-                    "    print('Yes' if a == b else 'No')\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
+        special_template = build_special_problem_template(unit_id)
+        if special_template is not None:
+            return special_template
+        family_template = build_family_problem_template(
+            theme_id=theme.id,
+            key=key,
+            category=theme.category,
+        )
+        if family_template is not None:
+            return family_template
         if title == "いもす法 の基本":
             return _array_template(
                 statement=(
@@ -1188,36 +1086,6 @@ class AlgorithmFoundationCatalog:
                     "    solve()\n"
                 ),
             )
-        if title == "スタックの基本操作":
-            return _array_template(
-                statement=(
-                    "Q 個の操作が与えられる。"
-                    " `1 x` は x を積み、`2` は一番上を取り除き、`3` は一番上の値を出力せよ。"
-                ),
-                input_format="1 行目に Q。\n続く Q 行に操作。",
-                output_format="type=3 のたびに一番上の値を 1 行ずつ出力する。",
-                constraints="1 <= Q <= 2 * 10^5\ntype=2,3 の時点でスタックは空でない",
-                examples=[{"input": "7\n1 3\n1 5\n3\n2\n3\n1 9\n3", "output": "5\n3\n9"}],
-                reference_solution=(
-                    "def solve() -> None:\n"
-                    "    import sys\n"
-                    "    input = sys.stdin.readline\n"
-                    "    q = int(input())\n"
-                    "    stack = []\n"
-                    "    out = []\n"
-                    "    for _ in range(q):\n"
-                    "        parts = list(map(int, input().split()))\n"
-                    "        if parts[0] == 1:\n"
-                    "            stack.append(parts[1])\n"
-                    "        elif parts[0] == 2:\n"
-                    "            stack.pop()\n"
-                    "        else:\n"
-                    "            out.append(str(stack[-1]))\n"
-                    "    sys.stdout.write('\\n'.join(out))\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
         if title == "優先度付きキュー（ヒープ） の基本":
             return _array_template(
                 statement=(
@@ -1242,101 +1110,6 @@ class AlgorithmFoundationCatalog:
                     "            heapq.heappush(heap, parts[1])\n"
                     "        else:\n"
                     "            out.append(str(heapq.heappop(heap)))\n"
-                    "    sys.stdout.write('\\n'.join(out))\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if "デック" in title:
-            return _array_template(
-                statement=(
-                    "Q 個の操作が与えられる。"
-                    " `1 x` は先頭に追加、`2 x` は末尾に追加、`3` は先頭を出力して削除、`4` は末尾を出力して削除せよ。"
-                ),
-                input_format="1 行目に Q。\n続く Q 行に操作。",
-                output_format="type=3,4 のたびに取り出した値を 1 行ずつ出力する。",
-                constraints="1 <= Q <= 2 * 10^5",
-                examples=[{"input": "6\n1 3\n2 8\n3\n1 2\n4\n3", "output": "3\n8\n2"}],
-                reference_solution=(
-                    "from collections import deque\n\n"
-                    "def solve() -> None:\n"
-                    "    import sys\n"
-                    "    input = sys.stdin.readline\n"
-                    "    q = int(input())\n"
-                    "    dq = deque()\n"
-                    "    out = []\n"
-                    "    for _ in range(q):\n"
-                    "        parts = list(map(int, input().split()))\n"
-                    "        t = parts[0]\n"
-                    "        if t == 1:\n"
-                    "            dq.appendleft(parts[1])\n"
-                    "        elif t == 2:\n"
-                    "            dq.append(parts[1])\n"
-                    "        elif t == 3:\n"
-                    "            out.append(str(dq.popleft()))\n"
-                    "        else:\n"
-                    "            out.append(str(dq.pop()))\n"
-                    "    sys.stdout.write('\\n'.join(out))\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if "キュー" in title:
-            return _array_template(
-                statement=(
-                    "Q 個の操作が与えられる。"
-                    " `1 x` は末尾に x を追加し、`2` は先頭を取り除き、`3` は先頭の値を出力せよ。"
-                ),
-                input_format="1 行目に Q。\n続く Q 行に操作。",
-                output_format="type=3 のたびに先頭の値を 1 行ずつ出力する。",
-                constraints="1 <= Q <= 2 * 10^5",
-                examples=[{"input": "6\n1 4\n1 7\n3\n2\n1 9\n3", "output": "4\n7"}],
-                reference_solution=(
-                    "from collections import deque\n\n"
-                    "def solve() -> None:\n"
-                    "    import sys\n"
-                    "    input = sys.stdin.readline\n"
-                    "    q = int(input())\n"
-                    "    queue = deque()\n"
-                    "    out = []\n"
-                    "    for _ in range(q):\n"
-                    "        parts = list(map(int, input().split()))\n"
-                    "        if parts[0] == 1:\n"
-                    "            queue.append(parts[1])\n"
-                    "        elif parts[0] == 2:\n"
-                    "            queue.popleft()\n"
-                    "        else:\n"
-                    "            out.append(str(queue[0]))\n"
-                    "    sys.stdout.write('\\n'.join(out))\n\n"
-                    "if __name__ == '__main__':\n"
-                    "    solve()\n"
-                ),
-            )
-        if title == "累積和で区間和を求める":
-            return _array_template(
-                statement=(
-                    "長さ N の整数列 A と Q 個の区間 [L, R] が与えられる。"
-                    " 各区間について Ai..Aj の総和を求めよ。"
-                ),
-                input_format="1 行目に N Q。\n2 行目に A1..AN。\n続く Q 行に L R (1-indexed)。",
-                output_format="各問い合わせの区間和を 1 行ずつ出力する。",
-                constraints="1 <= N, Q <= 2 * 10^5\n|Ai| <= 10^9",
-                examples=[
-                    {"input": "5 3\n1 2 3 4 5\n1 3\n2 5\n4 4", "output": "6\n14\n4"},
-                ],
-                reference_solution=(
-                    "def solve() -> None:\n"
-                    "    import sys\n"
-                    "    input = sys.stdin.readline\n"
-                    "    n, q = map(int, input().split())\n"
-                    "    a = list(map(int, input().split()))\n"
-                    "    prefix = [0]\n"
-                    "    for value in a:\n"
-                    "        prefix.append(prefix[-1] + value)\n"
-                    "    out = []\n"
-                    "    for _ in range(q):\n"
-                    "        l, r = map(int, input().split())\n"
-                    "        out.append(str(prefix[r] - prefix[l - 1]))\n"
                     "    sys.stdout.write('\\n'.join(out))\n\n"
                     "if __name__ == '__main__':\n"
                     "    solve()\n"

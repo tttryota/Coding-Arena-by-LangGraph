@@ -198,11 +198,27 @@ def _display_problem_title(raw_title: str, unit_title: str) -> str:
     return f"{unit_title} / {normalized}"
 
 
-def _display_problem_statement(raw_statement: str, unit_title: str) -> str:
+def _concept_overview(
+    c: Container,
+    *,
+    unit_id: str,
+    fallback_title: str,
+) -> str:
+    try:
+        return c.algorithm_foundation_catalog.get_unit(unit_id)["concept_overview"]
+    except AlgorithmFoundationCatalogError:
+        return f"{fallback_title}を使って答えを作る考え方を、この問題で確かめます。"
+
+
+def _display_problem_statement(
+    raw_statement: str,
+    *,
+    concept_overview: str,
+) -> str:
     normalized_lines: list[str] = []
     for index, line in enumerate(raw_statement.splitlines()):
         if index == 0 and "として、" in line and " を使う 1 問です。" in line:
-            normalized_lines.append(f"この問題で扱う知識は「{unit_title}」です。")
+            normalized_lines.append(concept_overview)
             continue
         if line.startswith(("- ねらい:", "- 補足:")):
             continue
@@ -243,6 +259,7 @@ def get_unit_detail(
         "group_id": unit["group_id"],
         "group_title": unit["group_title"],
         "title": unit["title"],
+        "concept_overview": unit["concept_overview"],
         "display_order": unit["display_order"],
         "prerequisite_unit_ids": unit["prerequisite_unit_ids"],
         "prerequisite_titles": unit["prerequisite_titles"],
@@ -386,6 +403,11 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
         details = c.algorithm_foundation_store.get_session_details(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    concept_overview = _concept_overview(
+        c,
+        unit_id=cast("str", details["unit_id"]),
+        fallback_title=cast("str", details["unit_title"]),
+    )
     response = {
         "session_id": details["session_id"],
         "unit_id": details["unit_id"],
@@ -402,7 +424,7 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
         "programming_language": details["programming_language"],
         "problem_statement": _display_problem_statement(
             cast("str", details["problem_statement"]),
-            cast("str", details["unit_title"]),
+            concept_overview=concept_overview,
         ),
         "input_format": details["input_format"],
         "output_format": details["output_format"],

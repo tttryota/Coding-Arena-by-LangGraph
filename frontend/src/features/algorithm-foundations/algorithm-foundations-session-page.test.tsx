@@ -21,9 +21,10 @@ const inProgressSession: AlgorithmFoundationSessionResponse = {
   allowed_knowledge: ["出現回数カウント", "ハッシュマップ・ハッシュセット"],
   forbidden_knowledge: ["尺取り法"],
   problem_id: "p-1",
-  problem_title: "問題1",
+  problem_title: "出現回数カウント / 基本確認",
   programming_language: "python",
-  problem_statement: "問題文です",
+  problem_statement:
+    "値ごとの出現回数を連想配列にため、あとで必要な回数をすぐ取り出せるようにする考え方です。数え上げを map の更新に置き換える形を身につけます。\n\n問題文です",
   input_format: "入力形式",
   output_format: "出力形式",
   constraints: "制約",
@@ -149,7 +150,7 @@ describe("AlgorithmFoundationsSessionPage", () => {
 
     renderPage();
 
-    await screen.findByText("問題1");
+    await screen.findByText("出現回数カウント / 基本確認");
 
     expect(screen.queryByText("この unit で見るもの")).not.toBeInTheDocument();
     expect(screen.queryByText("この 1 問のルール")).not.toBeInTheDocument();
@@ -157,5 +158,21 @@ describe("AlgorithmFoundationsSessionPage", () => {
     expect(screen.queryByText("使ってよい知識")).not.toBeInTheDocument();
     expect(screen.queryByText("今回は使わない知識")).not.toBeInTheDocument();
     expect(screen.queryByText("前提 unit")).not.toBeInTheDocument();
+  });
+
+  it("問題文の先頭で知識の説明を表示する", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/algorithm-foundations/sessions/af-1")) {
+        return mockJsonResponse(inProgressSession);
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByText(/値ごとの出現回数を連想配列にため/),
+    ).toBeInTheDocument();
   });
 });

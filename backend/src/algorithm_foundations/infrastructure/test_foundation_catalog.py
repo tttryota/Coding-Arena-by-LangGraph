@@ -69,12 +69,16 @@ def test_special_units_map_to_matching_problem_templates() -> None:
         catalog.get_unit("algo-079-integration")["problem_bank"][0]["title"]
         == "最大公約数・最小公倍数（GCD/LCM） の総合演習 / 2unit組み合わせ確認"
     )
+    assert (
+        catalog.get_unit("algo-001-basic")["concept_overview"]
+        == "全探索（ブルートフォース）は、ありえる候補を順番に全部試し、条件を満たすものを見つける解き方です。まずは漏れなく列挙し、1 つずつ判定する形を身につけます。"
+    )
     statement = catalog.get_unit("algo-093-stack-basics")["problem_bank"][0][
         "problem_statement"
     ]
     assert "- ねらい:" not in statement
     assert "- 補足:" not in statement
-    assert 'この問題で扱う知識は「スタックの基本操作」です。' in statement
+    assert "スタックは、最後に入れたものから先に取り出す入れ物です。" in statement
 
     assert "括弧列" in catalog.get_unit("algo-093-stack-brackets")["problem_bank"][0][
         "problem_statement"
@@ -83,6 +87,16 @@ def test_special_units_map_to_matching_problem_templates() -> None:
         "problem_statement"
     ]
     assert "出現回数" in catalog.get_unit("algo-102-hashmap-count")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "Binary Indexed Tree" in catalog.get_unit("algo-098-basic")["concept_overview"]
+    assert "前計算で問い合わせを速くする" in catalog.get_unit("algo-103-basic")[
+        "concept_overview"
+    ]
+    assert "座標圧縮" in catalog.get_unit("algo-019-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "転倒数" in catalog.get_unit("algo-020-basic")["problem_bank"][0][
         "problem_statement"
     ]
     assert "二部グラフ" in catalog.get_unit("algo-032-basic")["problem_bank"][0][
@@ -103,10 +117,22 @@ def test_special_units_map_to_matching_problem_templates() -> None:
     assert "順列" in catalog.get_unit("algo-007-basic")["problem_bank"][0][
         "problem_statement"
     ]
+    assert "下に凸" in catalog.get_unit("algo-003-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "半分全列挙" in catalog.get_unit("algo-008-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
     assert "すべてのパターン" in catalog.get_unit("algo-076-basic")["problem_bank"][0][
         "problem_statement"
     ]
     assert "ローリングハッシュ" in catalog.get_unit("algo-069-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "KMP 法" in catalog.get_unit("algo-070-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "Z-algorithm" in catalog.get_unit("algo-071-basic")["problem_bank"][0][
         "problem_statement"
     ]
     assert "OR 畳み込み" in catalog.get_unit("algo-122-basic")["problem_bank"][0][
@@ -151,6 +177,16 @@ def test_special_units_map_to_matching_problem_templates() -> None:
     assert "橋の本数" in catalog.get_unit("algo-035-basic")["problem_bank"][0][
         "problem_statement"
     ]
+    assert "Fenwick" in catalog.get_unit("algo-098-basic")["problem_bank"][0][
+        "problem_statement"
+    ] or "A_i に x を加算" in catalog.get_unit("algo-098-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "スパーステーブル" in catalog.get_unit("algo-103-basic")["problem_bank"][0][
+        "problem_statement"
+    ] or "前処理" in catalog.get_unit("algo-103-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
     assert "併合コスト" in catalog.get_unit("algo-040-basic")["problem_bank"][0][
         "problem_statement"
     ]
@@ -167,6 +203,9 @@ def test_special_units_map_to_matching_problem_templates() -> None:
         "problem_statement"
     ]
     assert "Suffix Array" in catalog.get_unit("algo-073-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "異なる部分文字列の個数" in catalog.get_unit("algo-077-basic")["problem_bank"][0][
         "problem_statement"
     ]
     assert "Ford-Fulkerson" in catalog.get_unit("algo-123-basic")["problem_bank"][0][

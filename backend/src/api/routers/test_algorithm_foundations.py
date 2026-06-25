@@ -68,6 +68,7 @@ class _FakeCatalog:
             "group_id": "group-data",
             "group_title": "データ構造",
             "title": "存在判定をハッシュで高速化",
+            "concept_overview": "値を見たかどうかをハッシュ集合に記録し、あとで同じ値があるかをすぐ調べる考え方です。探索を繰り返さず membership 判定で済ませる形を身につけます。",
             "display_order": 0,
             "prerequisite_unit_ids": [],
             "prerequisite_titles": [],
@@ -298,6 +299,7 @@ def test_get_unit_detail() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["unit_id"] == "algo-102-hashmap-exists"
+    assert "ハッシュ集合に記録" in data["concept_overview"]
     assert data["problems"][0]["problem_id"] == "p-1"
     assert data["problems"][0]["best_score"] == 91
 
@@ -329,7 +331,7 @@ def test_start_session_does_not_list_unsubmitted_attempt() -> None:
     assert detail.status_code == 200
     assert (
         detail.json()["problem_statement"]
-        == "この問題で扱う知識は「存在判定をハッシュで高速化」です。\n\n"
+        == "値を見たかどうかをハッシュ集合に記録し、あとで同じ値があるかをすぐ調べる考え方です。探索を繰り返さず membership 判定で済ませる形を身につけます。\n\n"
         "- カテゴリ: データ構造\n"
         "- 学習単位: 存在判定をハッシュで高速化\n\n"
         "問題文"
@@ -410,7 +412,7 @@ def test_completed_session_detail_and_list_normalize_legacy_problem_title() -> N
     assert detail.json()["problem_title"] == "存在判定をハッシュで高速化 / 基本確認"
     assert (
         detail.json()["problem_statement"]
-        == "この問題で扱う知識は「存在判定をハッシュで高速化」です。\n\n"
+        == "値を見たかどうかをハッシュ集合に記録し、あとで同じ値があるかをすぐ調べる考え方です。探索を繰り返さず membership 判定で済ませる形を身につけます。\n\n"
         "- カテゴリ: データ構造\n"
         "- 学習単位: 存在判定をハッシュで高速化\n\n"
         "問題文"

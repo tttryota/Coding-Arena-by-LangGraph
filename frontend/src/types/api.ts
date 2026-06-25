@@ -290,6 +290,7 @@ export interface AlgorithmFoundationUnitDetailResponse {
   group_id: string;
   group_title: string;
   title: string;
+  concept_overview: string;
   display_order: number;
   prerequisite_unit_ids: string[];
   prerequisite_titles: string[];

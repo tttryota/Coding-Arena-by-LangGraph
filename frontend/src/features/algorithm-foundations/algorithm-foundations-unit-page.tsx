@@ -142,7 +142,9 @@ function AlgorithmFoundationsUnitPageInner({ unitId }: { unitId: string }) {
               <Badge variant="outline">{unit.group_title}</Badge>
               <Badge variant="secondary">{unitKindLabel(unit.unit_kind)}</Badge>
             </div>
-            <p className="text-sm text-muted-foreground">{unit.target_skill}</p>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              {unit.concept_overview}
+            </p>
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <span>{unit.problem_count} 問</span>
               <span className={scoreTone(unit.best_score)}>

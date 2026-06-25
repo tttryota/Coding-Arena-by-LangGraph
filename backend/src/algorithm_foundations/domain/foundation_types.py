@@ -38,6 +38,7 @@ class AlgorithmFoundationUnit(TypedDict):
     group_id: str
     group_title: str
     title: str
+    concept_overview: str
     display_order: int
     prerequisite_unit_ids: list[str]
     prerequisite_titles: list[str]
@@ -90,6 +91,7 @@ class AlgorithmFoundationUnitDetailResponse(TypedDict):
     group_id: str
     group_title: str
     title: str
+    concept_overview: str
     display_order: int
     prerequisite_unit_ids: list[str]
     prerequisite_titles: list[str]

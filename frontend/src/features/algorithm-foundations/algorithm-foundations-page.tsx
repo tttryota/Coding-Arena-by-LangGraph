@@ -109,7 +109,7 @@ export function AlgorithmFoundationsPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-emerald-300" />
-                <h1 className="text-2xl font-bold">競プロうさぎ</h1>
+                <h1 className="text-2xl font-bold">競プロうさぎ（初学者向け）</h1>
               </div>
               <p className="text-sm text-muted-foreground">
                 講義なし、1セッション1問、前提知識を絞った基礎 unit を順番に積みます

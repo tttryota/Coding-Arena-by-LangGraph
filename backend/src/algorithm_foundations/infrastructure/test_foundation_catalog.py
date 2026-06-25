@@ -21,6 +21,10 @@ def test_catalog_groups_are_split_by_category() -> None:
         "探索",
         "動的計画法",
     }
+    assert "数え上げ・整数・確率" in {
+        group["group_title"] for group in data["groups"]
+    }
+    assert "図形・座標" in {group["group_title"] for group in data["groups"]}
 
 
 def test_pick_problem_rotates_when_recent_history_covers_all_problems() -> None:
@@ -52,6 +56,19 @@ def test_pick_problem_rotates_when_recent_history_covers_all_problems() -> None:
 
 def test_special_units_map_to_matching_problem_templates() -> None:
     catalog = AlgorithmFoundationCatalog()
+
+    assert (
+        catalog.get_unit("algo-093-stack-basics")["problem_bank"][0]["title"]
+        == "知識をそのまま使う確認: スタックの基本操作"
+    )
+    assert (
+        catalog.get_unit("algo-093-stack-basics")["problem_bank"][1]["title"]
+        == "実装の定着: スタックの基本操作"
+    )
+    assert (
+        catalog.get_unit("algo-079-integration")["problem_bank"][0]["title"]
+        == "既習2unitの組み合わせ確認: 最大公約数・最小公倍数（GCD/LCM） の総合演習"
+    )
 
     assert "括弧列" in catalog.get_unit("algo-093-stack-brackets")["problem_bank"][0][
         "problem_statement"

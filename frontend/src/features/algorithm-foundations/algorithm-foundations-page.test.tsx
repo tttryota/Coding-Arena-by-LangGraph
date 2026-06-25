@@ -134,7 +134,7 @@ describe("AlgorithmFoundationsPage", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "競プロうさぎ" }),
+      await screen.findByRole("heading", { name: "競プロうさぎ（初学者向け）" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("出題言語")).toHaveValue("python");
     expect(screen.getByText("目次")).toBeInTheDocument();
@@ -172,7 +172,7 @@ describe("AlgorithmFoundationsPage", () => {
     );
 
     expect(
-      await screen.findByRole("heading", { name: "競プロうさぎ" }),
+      await screen.findByRole("heading", { name: "競プロうさぎ（初学者向け）" }),
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("出題言語"), {
       target: { value: "typescript" },

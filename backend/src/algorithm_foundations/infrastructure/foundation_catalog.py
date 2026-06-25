@@ -34,6 +34,21 @@ _GROUP_ORDER: Final[dict[str, int]] = {
     "フロー・マッチング": 11,
 }
 
+_GROUP_DISPLAY_TITLE: Final[dict[str, str]] = {
+    "データ構造": "データ構造",
+    "探索": "探索",
+    "ソート": "ソート",
+    "数学": "数え上げ・整数・確率",
+    "動的計画法": "動的計画法",
+    "グラフ": "グラフ",
+    "文字列": "文字列処理",
+    "貪欲法": "その場で決めるアルゴリズム",
+    "ビット演算": "ビット演算",
+    "分割統治": "分けて解くアルゴリズム",
+    "幾何": "図形・座標",
+    "フロー・マッチング": "最大流・マッチング",
+}
+
 _DEFAULT_THEME_PATHS: Final[tuple[Path, ...]] = (
     Path("data/algo_themes.json"),
     Path("/opt/fixtures/algo_themes.json"),
@@ -118,7 +133,7 @@ class AlgorithmFoundationCatalog:
                 {
                     "group_id": unit["group_id"],
                     "group_title": unit["group_title"],
-                    "order": _GROUP_ORDER.get(unit["group_title"], 999),
+                    "order": int(str(unit["group_id"]).removeprefix("group-")),
                     "units": [],
                 },
             )
@@ -318,7 +333,7 @@ class AlgorithmFoundationCatalog:
             "unit_id": unit_id,
             "theme_id": theme.id,
             "group_id": group_id,
-            "group_title": theme.category,
+            "group_title": _GROUP_DISPLAY_TITLE.get(theme.category, theme.category),
             "title": title,
             "display_order": display_order,
             "prerequisite_unit_ids": prerequisite_unit_ids,
@@ -342,12 +357,20 @@ class AlgorithmFoundationCatalog:
     ) -> AlgorithmFoundationProblem:
         template = self._problem_template(theme, unit_title)
         difficulty_labels = (
-            "知識をそのまま使う確認",
-            "実装の定着",
-            "境界条件の確認",
-            "別表現への言い換え",
-            "制約付きの整理",
-            "軽い総合確認",
+            (
+                "既習2unitの組み合わせ確認",
+                "実装のつなぎ込み",
+                "条件違いの確認",
+            )
+            if unit_kind == "integration"
+            else (
+                "知識をそのまま使う確認",
+                "実装の定着",
+                "境界条件の確認",
+                "別表現への言い換え",
+                "制約付きの整理",
+                "軽い総合確認",
+            )
         )
         prompt_kind = difficulty_labels[problem_index]
         support = (
@@ -370,7 +393,7 @@ class AlgorithmFoundationCatalog:
         )
         return {
             "problem_id": f"{unit_id}-p{problem_index + 1}",
-            "title": f"{unit_title} {problem_index + 1}",
+            "title": f"{prompt_kind}: {unit_title}",
             "problem_statement": statement,
             "input_format": cast("str", template["input_format"]),
             "output_format": cast("str", template["output_format"]),

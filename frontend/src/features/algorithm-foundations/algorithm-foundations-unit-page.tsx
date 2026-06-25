@@ -196,103 +196,44 @@ function AlgorithmFoundationsUnitPageInner({ unitId }: { unitId: string }) {
           </div>
         )}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ListChecks className="h-4 w-4" />
-                問題一覧
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {unit.problems.map((problem) => (
-                <div
-                  key={problem.problem_id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3"
-                >
-                  <div className="space-y-1">
-                    <div className="font-medium">{problem.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      <span className={scoreTone(problem.best_score)}>
-                        {problem.best_score != null ? `最高 ${problem.best_score} 点` : "-"}
-                      </span>
-                    </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ListChecks className="h-4 w-4" />
+              問題一覧
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {unit.problems.map((problem) => (
+              <div
+                key={problem.problem_id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3"
+              >
+                <div className="space-y-1">
+                  <div className="font-medium">{problem.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    <span className={scoreTone(problem.best_score)}>
+                      {problem.best_score != null ? `最高 ${problem.best_score} 点` : "-"}
+                    </span>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => startProblem(problem.problem_id, problem.title)}
-                    disabled={
-                      startMutation.isPending ||
-                      languagesQuery.isLoading ||
-                      languagesQuery.isError ||
-                      resolvedLanguage == null
-                    }
-                  >
-                    この問題を解く
-                  </Button>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <div className="space-y-4">
-            <KnowledgeCard
-              title="使ってよい知識"
-              items={unit.allowed_knowledge}
-              tone="emerald"
-            />
-            <KnowledgeCard
-              title="今回は使わない知識"
-              items={unit.forbidden_knowledge}
-              tone="amber"
-            />
-            <KnowledgeCard
-              title="前提 unit"
-              items={
-                unit.prerequisite_titles.length > 0
-                  ? unit.prerequisite_titles
-                  : ["前提なし"]
-              }
-              tone="slate"
-            />
-          </div>
-        </div>
+                <Button
+                  size="sm"
+                  onClick={() => startProblem(problem.problem_id, problem.title)}
+                  disabled={
+                    startMutation.isPending ||
+                    languagesQuery.isLoading ||
+                    languagesQuery.isError ||
+                    resolvedLanguage == null
+                  }
+                >
+                  この問題を解く
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </AppShell>
-  );
-}
-
-function KnowledgeCard({
-  title,
-  items,
-  tone,
-}: {
-  title: string;
-  items: string[];
-  tone: "emerald" | "amber" | "slate";
-}) {
-  const toneClass =
-    tone === "emerald"
-      ? "border-emerald-400/25 bg-emerald-400/5 text-emerald-100"
-      : tone === "amber"
-        ? "border-amber-400/25 bg-amber-400/5 text-amber-100"
-        : "border-border bg-muted/20 text-foreground";
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {items.map((item) => (
-          <div
-            key={item}
-            className={`rounded-md border px-3 py-2 text-sm ${toneClass}`}
-          >
-            {item}
-          </div>
-        ))}
-      </CardContent>
-    </Card>
   );
 }

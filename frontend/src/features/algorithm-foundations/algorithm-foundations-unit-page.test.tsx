@@ -24,13 +24,13 @@ const mockUnitDetail = {
   problems: [
     {
       problem_id: "algo-102-hashmap-count-p1",
-      title: "出現回数カウント 1",
+      title: "知識をそのまま使う確認: 出現回数カウント",
       best_score: 88,
       last_attempted_at: "2026-06-25T10:00:00+09:00",
     },
     {
       problem_id: "algo-102-hashmap-count-p2",
-      title: "出現回数カウント 2",
+      title: "実装の定着: 出現回数カウント",
       best_score: null,
       last_attempted_at: null,
     },
@@ -86,7 +86,9 @@ describe("AlgorithmFoundationsUnitPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("出題言語")).toHaveValue("python");
     expect(screen.getByText("問題一覧")).toBeInTheDocument();
-    expect(screen.getByText("出現回数カウント 1")).toBeInTheDocument();
+    expect(
+      screen.getByText("知識をそのまま使う確認: 出現回数カウント"),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("最高 88 点")).toHaveLength(2);
     expect(screen.getByText("-")).toBeInTheDocument();
   });
@@ -132,7 +134,7 @@ describe("AlgorithmFoundationsUnitPage", () => {
             allowed_knowledge: ["出現回数カウント"],
             forbidden_knowledge: ["尺取り法"],
             problem_id: "algo-102-hashmap-count-p2",
-            problem_title: "出現回数カウント 2",
+            problem_title: "実装の定着: 出現回数カウント",
             programming_language: "python",
             problem_statement: "問題文",
             input_format: "入力",

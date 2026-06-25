@@ -69,6 +69,11 @@ def test_special_units_map_to_matching_problem_templates() -> None:
         catalog.get_unit("algo-079-integration")["problem_bank"][0]["title"]
         == "既習2unitの組み合わせ確認: 最大公約数・最小公倍数（GCD/LCM） の総合演習"
     )
+    statement = catalog.get_unit("algo-093-stack-basics")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "- ねらい:" not in statement
+    assert "- 補足:" not in statement
 
     assert "括弧列" in catalog.get_unit("algo-093-stack-brackets")["problem_bank"][0][
         "problem_statement"

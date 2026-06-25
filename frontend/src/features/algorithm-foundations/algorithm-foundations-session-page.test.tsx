@@ -137,4 +137,25 @@ describe("AlgorithmFoundationsSessionPage", () => {
       await screen.findByPlaceholderText("// TypeScript で解答を書いてください"),
     ).toBeInTheDocument();
   });
+
+  it("問題に不要な補助カードを表示しない", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/algorithm-foundations/sessions/af-1")) {
+        return mockJsonResponse(inProgressSession);
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderPage();
+
+    await screen.findByText("問題1");
+
+    expect(screen.queryByText("この unit で見るもの")).not.toBeInTheDocument();
+    expect(screen.queryByText("この 1 問のルール")).not.toBeInTheDocument();
+    expect(screen.queryByText("ターゲットスキル")).not.toBeInTheDocument();
+    expect(screen.queryByText("使ってよい知識")).not.toBeInTheDocument();
+    expect(screen.queryByText("今回は使わない知識")).not.toBeInTheDocument();
+    expect(screen.queryByText("前提 unit")).not.toBeInTheDocument();
+  });
 });

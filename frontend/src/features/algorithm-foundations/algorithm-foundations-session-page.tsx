@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, Target } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { MarkdownContent } from "@/components/common/markdown-content";
 import { Button } from "@/components/ui/button";
@@ -185,59 +185,6 @@ function AlgorithmFoundationsSessionPageInner({
           </div>
         )}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.9fr)]">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                この unit で見るもの
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <div className="mb-2 text-sm font-semibold">ターゲットスキル</div>
-                <div className="rounded-md bg-muted/40 px-3 py-2 text-sm">
-                  {session.target_skill}
-                </div>
-              </div>
-              <KnowledgeList
-                title="使ってよい知識"
-                items={session.allowed_knowledge}
-                tone="emerald"
-              />
-              <KnowledgeList
-                title="今回は使わない知識"
-                items={session.forbidden_knowledge}
-                tone="amber"
-              />
-              <KnowledgeList
-                title="前提 unit"
-                items={
-                  session.prerequisite_titles.length > 0
-                    ? session.prerequisite_titles
-                    : ["前提なし"]
-                }
-                tone="slate"
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>この 1 問のルール</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>新しい発想の持ち込みは不要です。</p>
-              <p>提出後にのみ模範解答を表示します。</p>
-              <p>
-                {session.unit_kind === "integration"
-                  ? "総合演習でも、既習 2 unit までの素直な組み合わせに限定します。"
-                  : "この unit 単体の知識で解けるように絞っています。"}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
         <Card>
           <CardHeader>
             <CardTitle>{session.problem_title}</CardTitle>
@@ -306,42 +253,6 @@ function AlgorithmFoundationsSessionPageInner({
         </Card>
       </div>
     </AppShell>
-  );
-}
-
-function KnowledgeList({
-  title,
-  items,
-  tone,
-}: {
-  title: string;
-  items: string[];
-  tone: "emerald" | "amber" | "slate";
-}) {
-  const className = useMemo(() => {
-    if (tone === "emerald") {
-      return "border-emerald-400/25 bg-emerald-400/10 text-emerald-100";
-    }
-    if (tone === "amber") {
-      return "border-amber-400/25 bg-amber-400/10 text-amber-100";
-    }
-    return "border-border bg-muted/40 text-foreground";
-  }, [tone]);
-
-  return (
-    <div>
-      <div className="mb-2 text-sm font-semibold">{title}</div>
-      <div className="flex flex-wrap gap-2">
-        {items.map((item) => (
-          <span
-            key={item}
-            className={`rounded-full border px-2.5 py-1 text-xs ${className}`}
-          >
-            {item}
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }
 

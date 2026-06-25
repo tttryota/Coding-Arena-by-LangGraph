@@ -325,7 +325,6 @@ class AlgorithmFoundationCatalog:
                 theme=theme,
                 problem_index=index,
                 unit_kind=unit_kind,
-                prerequisite_titles=prerequisite_titles,
             )
             for index in range(problem_count)
         ]
@@ -353,7 +352,6 @@ class AlgorithmFoundationCatalog:
         theme: _Theme,
         problem_index: int,
         unit_kind: str,
-        prerequisite_titles: list[str],
     ) -> AlgorithmFoundationProblem:
         template = self._problem_template(theme, unit_title)
         difficulty_labels = (
@@ -373,22 +371,11 @@ class AlgorithmFoundationCatalog:
             )
         )
         prompt_kind = difficulty_labels[problem_index]
-        support = (
-            "既習の 2 unit までを素直に組み合わせてください。"
-            if unit_kind == "integration"
-            else "この unit の知識だけで解けるように作ってあります。"
-        )
-        prerequisites_text = (
-            f"前提として使ってよい知識: {', '.join(prerequisite_titles)}。"
-            if prerequisite_titles
-            else "前提として他の知識は要求しません。"
-        )
         statement = (
             f"{prompt_kind}として、{unit_title} を使う 1 問です。\n\n"
             f"- カテゴリ: {theme.category}\n"
             f"- 学習単位: {unit_title}\n"
-            f"- ねらい: {support}\n"
-            f"- 補足: {prerequisites_text}\n\n"
+            "\n"
             + cast("str", template["statement"])
         )
         return {

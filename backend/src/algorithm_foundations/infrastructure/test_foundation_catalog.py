@@ -59,21 +59,22 @@ def test_special_units_map_to_matching_problem_templates() -> None:
 
     assert (
         catalog.get_unit("algo-093-stack-basics")["problem_bank"][0]["title"]
-        == "知識をそのまま使う確認: スタックの基本操作"
+        == "スタックの基本操作 / 基本確認"
     )
     assert (
         catalog.get_unit("algo-093-stack-basics")["problem_bank"][1]["title"]
-        == "実装の定着: スタックの基本操作"
+        == "スタックの基本操作 / 実装確認"
     )
     assert (
         catalog.get_unit("algo-079-integration")["problem_bank"][0]["title"]
-        == "既習2unitの組み合わせ確認: 最大公約数・最小公倍数（GCD/LCM） の総合演習"
+        == "最大公約数・最小公倍数（GCD/LCM） の総合演習 / 2unit組み合わせ確認"
     )
     statement = catalog.get_unit("algo-093-stack-basics")["problem_bank"][0][
         "problem_statement"
     ]
     assert "- ねらい:" not in statement
     assert "- 補足:" not in statement
+    assert 'この問題で扱う知識は「スタックの基本操作」です。' in statement
 
     assert "括弧列" in catalog.get_unit("algo-093-stack-brackets")["problem_bank"][0][
         "problem_statement"

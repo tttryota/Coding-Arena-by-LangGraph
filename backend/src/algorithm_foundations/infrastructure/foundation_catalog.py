@@ -356,23 +356,23 @@ class AlgorithmFoundationCatalog:
         template = self._problem_template(theme, unit_title)
         difficulty_labels = (
             (
-                "既習2unitの組み合わせ確認",
-                "実装のつなぎ込み",
-                "条件違いの確認",
+                "2unit組み合わせ確認",
+                "実装つなぎ込み",
+                "条件違い確認",
             )
             if unit_kind == "integration"
             else (
-                "知識をそのまま使う確認",
-                "実装の定着",
-                "境界条件の確認",
-                "別表現への言い換え",
-                "制約付きの整理",
+                "基本確認",
+                "実装確認",
+                "境界条件確認",
+                "別視点確認",
+                "条件整理",
                 "軽い総合確認",
             )
         )
         prompt_kind = difficulty_labels[problem_index]
         statement = (
-            f"{prompt_kind}として、{unit_title} を使う 1 問です。\n\n"
+            f"この問題で扱う知識は「{unit_title}」です。\n\n"
             f"- カテゴリ: {theme.category}\n"
             f"- 学習単位: {unit_title}\n"
             "\n"
@@ -380,7 +380,7 @@ class AlgorithmFoundationCatalog:
         )
         return {
             "problem_id": f"{unit_id}-p{problem_index + 1}",
-            "title": f"{prompt_kind}: {unit_title}",
+            "title": f"{unit_title} / {prompt_kind}",
             "problem_statement": statement,
             "input_format": cast("str", template["input_format"]),
             "output_format": cast("str", template["output_format"]),

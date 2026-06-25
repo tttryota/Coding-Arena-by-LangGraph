@@ -173,6 +173,47 @@ def _adapt_reference_solution(
         raise _adaptation_error_to_http(exc) from exc
 
 
+_LEGACY_PROMPT_KIND_LABELS = {
+    "知識をそのまま使う確認": "基本確認",
+    "実装の定着": "実装確認",
+    "境界条件の確認": "境界条件確認",
+    "別表現への言い換え": "別視点確認",
+    "制約付きの整理": "条件整理",
+    "既習2unitの組み合わせ確認": "2unit組み合わせ確認",
+    "実装のつなぎ込み": "実装つなぎ込み",
+    "条件違いの確認": "条件違い確認",
+}
+
+
+def _display_problem_title(raw_title: str, unit_title: str) -> str:
+    if " / " in raw_title:
+        return raw_title
+    if ":" not in raw_title:
+        return raw_title
+    prefix, suffix = raw_title.split(":", 1)
+    title = suffix.strip()
+    if title != unit_title:
+        return raw_title
+    normalized = _LEGACY_PROMPT_KIND_LABELS.get(prefix.strip(), prefix.strip())
+    return f"{unit_title} / {normalized}"
+
+
+def _display_problem_statement(raw_statement: str, unit_title: str) -> str:
+    normalized_lines: list[str] = []
+    for index, line in enumerate(raw_statement.splitlines()):
+        if index == 0 and "として、" in line and " を使う 1 問です。" in line:
+            normalized_lines.append(f"この問題で扱う知識は「{unit_title}」です。")
+            continue
+        if line.startswith(("- ねらい:", "- 補足:")):
+            continue
+        normalized_lines.append(line)
+
+    normalized = "\n".join(normalized_lines).strip()
+    while "\n\n\n" in normalized:
+        normalized = normalized.replace("\n\n\n", "\n\n")
+    return normalized
+
+
 @router.get("/catalog")
 def get_catalog(request: Request) -> AlgorithmFoundationCatalogResponse:
     c = _container(request)
@@ -251,7 +292,10 @@ def list_sessions(request: Request) -> dict[str, object]:
                 "target_skill": session.target_skill,
                 "unit_kind": session.unit_kind,
                 "problem_id": session.problem_id,
-                "problem_title": session.problem_title,
+                "problem_title": _display_problem_title(
+                    str(session.problem_title),
+                    str(session.unit_title),
+                ),
                 "programming_language": session.programming_language,
                 "status": session.status,
                 "created_at": details["completed_at"] or details["created_at"],
@@ -351,9 +395,15 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
         "target_skill": details["target_skill"],
         "unit_kind": details["unit_kind"],
         "problem_id": details["problem_id"],
-        "problem_title": details["problem_title"],
+        "problem_title": _display_problem_title(
+            cast("str", details["problem_title"]),
+            cast("str", details["unit_title"]),
+        ),
         "programming_language": details["programming_language"],
-        "problem_statement": details["problem_statement"],
+        "problem_statement": _display_problem_statement(
+            cast("str", details["problem_statement"]),
+            cast("str", details["unit_title"]),
+        ),
         "input_format": details["input_format"],
         "output_format": details["output_format"],
         "constraints": details["constraints"],

@@ -312,14 +312,115 @@ def test_start_session_does_not_list_unsubmitted_attempt() -> None:
     assert data["allowed_knowledge"] == ["存在判定", "ハッシュセット"]
     assert data["forbidden_knowledge"] == ["尺取り法"]
     session_id = data["session_id"]
+    container = client.app.state.container
+    container.algorithm_foundation_store.sessions[session_id]["problem_statement"] = (
+        "知識をそのまま使う確認として、存在判定をハッシュで高速化 を使う 1 問です。\n\n"
+        "- カテゴリ: データ構造\n"
+        "- 学習単位: 存在判定をハッシュで高速化\n"
+        "- ねらい: この unit の知識だけで解けるように作ってあります。\n"
+        "- 補足: 前提として他の知識は要求しません。\n\n"
+        "問題文"
+    )
+    container.algorithm_foundation_store.sessions[session_id]["problem_title"] = (
+        "知識をそのまま使う確認: 存在判定をハッシュで高速化"
+    )
 
     detail = client.get(f"/algorithm-foundations/sessions/{session_id}")
     assert detail.status_code == 200
-    assert detail.json()["problem_statement"] == "問題文"
+    assert (
+        detail.json()["problem_statement"]
+        == "この問題で扱う知識は「存在判定をハッシュで高速化」です。\n\n"
+        "- カテゴリ: データ構造\n"
+        "- 学習単位: 存在判定をハッシュで高速化\n\n"
+        "問題文"
+    )
+    assert detail.json()["problem_title"] == "存在判定をハッシュで高速化 / 基本確認"
 
     listed = client.get("/algorithm-foundations/sessions")
     assert listed.status_code == 200
     assert listed.json()["sessions"] == []
+
+
+def test_submit_answer_uses_saved_session_problem_definition() -> None:
+    client = _client()
+    response = client.post("/algorithm-foundations/sessions")
+
+    assert response.status_code == 201
+    session_id = response.json()["session_id"]
+    container = client.app.state.container
+    container.algorithm_foundation_store.sessions[session_id]["problem_statement"] = (
+        "保存済み問題文"
+    )
+    container.algorithm_foundation_store.sessions[session_id]["input_format"] = (
+        "保存済み入力形式"
+    )
+    container.algorithm_foundation_store.sessions[session_id]["output_format"] = (
+        "保存済み出力形式"
+    )
+    container.algorithm_foundation_store.sessions[session_id]["constraints"] = (
+        "保存済み制約"
+    )
+    container.algorithm_foundation_store.sessions[session_id]["examples"] = [
+        {"input": "9", "output": "8"},
+    ]
+
+    submit = client.post(
+        f"/algorithm-foundations/sessions/{session_id}/answer",
+        json={"user_code": "print(1)"},
+    )
+
+    assert submit.status_code == 200
+    evaluator = container.algorithm_foundation_solution_evaluator
+    assert evaluator.last_kwargs is not None
+    assert evaluator.last_kwargs["problem_statement"] == "保存済み問題文"
+    assert evaluator.last_kwargs["input_format"] == "保存済み入力形式"
+    assert evaluator.last_kwargs["output_format"] == "保存済み出力形式"
+    assert evaluator.last_kwargs["constraints"] == "保存済み制約"
+    assert evaluator.last_kwargs["examples"] == [{"input": "9", "output": "8"}]
+    assert evaluator.last_kwargs["reference_solution"] == "def solve():\n    print(1)\n"
+
+
+def test_completed_session_detail_and_list_normalize_legacy_problem_title() -> None:
+    client = _client()
+    response = client.post("/algorithm-foundations/sessions")
+
+    assert response.status_code == 201
+    session_id = response.json()["session_id"]
+    container = client.app.state.container
+    container.algorithm_foundation_store.sessions[session_id]["problem_statement"] = (
+        "知識をそのまま使う確認として、存在判定をハッシュで高速化 を使う 1 問です。\n\n"
+        "- カテゴリ: データ構造\n"
+        "- 学習単位: 存在判定をハッシュで高速化\n"
+        "- ねらい: この unit の知識だけで解けるように作ってあります。\n"
+        "- 補足: 前提として他の知識は要求しません。\n\n"
+        "問題文"
+    )
+    container.algorithm_foundation_store.sessions[session_id]["problem_title"] = (
+        "知識をそのまま使う確認: 存在判定をハッシュで高速化"
+    )
+    submit = client.post(
+        f"/algorithm-foundations/sessions/{session_id}/answer",
+        json={"user_code": "print(1)"},
+    )
+
+    assert submit.status_code == 200
+
+    detail = client.get(f"/algorithm-foundations/sessions/{session_id}")
+    assert detail.status_code == 200
+    assert detail.json()["problem_title"] == "存在判定をハッシュで高速化 / 基本確認"
+    assert (
+        detail.json()["problem_statement"]
+        == "この問題で扱う知識は「存在判定をハッシュで高速化」です。\n\n"
+        "- カテゴリ: データ構造\n"
+        "- 学習単位: 存在判定をハッシュで高速化\n\n"
+        "問題文"
+    )
+
+    listed = client.get("/algorithm-foundations/sessions")
+    assert listed.status_code == 200
+    assert listed.json()["sessions"][0]["problem_title"] == (
+        "存在判定をハッシュで高速化 / 基本確認"
+    )
 
 
 def test_start_session_with_problem_id() -> None:

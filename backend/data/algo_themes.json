@@ -379,8 +379,8 @@
   },
   {
     "id": "algo-064",
-    "category": "分割統治",
-    "label": "逆元を用いた分割統治",
+    "category": "数学",
+    "label": "逆元を用いた多項式補間",
     "display_order": 110
   },
   {
@@ -548,7 +548,7 @@
   {
     "id": "algo-092",
     "category": "数学",
-    "label": "メビウス関数・メビウスの反転公式",
+    "label": "メビウス関数 μ(N)",
     "display_order": 116
   },
   {
@@ -602,7 +602,7 @@
   {
     "id": "algo-101",
     "category": "データ構造",
-    "label": "平衡二分探索木",
+    "label": "順序つき集合の境界検索",
     "display_order": 106
   },
   {

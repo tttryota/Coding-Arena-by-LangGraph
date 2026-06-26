@@ -1,4 +1,7 @@
 import json
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -6,6 +9,23 @@ import pytest
 from algorithm_foundations.infrastructure.foundation_catalog import (
     AlgorithmFoundationCatalog,
 )
+
+
+def _run_reference_solution(code: str, sample_input: str) -> str:
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as tmp:
+        tmp.write(code)
+        tmp_path = Path(tmp.name)
+    try:
+        completed = subprocess.run(  # noqa: S603
+            [sys.executable, str(tmp_path)],
+            check=True,
+            input=sample_input,
+            text=True,
+            capture_output=True,
+        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    return completed.stdout.rstrip("\n")
 
 
 def test_catalog_groups_are_split_by_category() -> None:
@@ -31,26 +51,28 @@ def test_pick_problem_rotates_when_recent_history_covers_all_problems() -> None:
     catalog = AlgorithmFoundationCatalog()
 
     assert (
-        catalog.pick_problem("algo-079-integration", [])["problem_id"]
-        == "algo-079-integration-p1"
+        catalog.pick_problem("algo-093-stack-basics", [])["problem_id"]
+        == "algo-093-stack-basics-p1"
     )
     assert (
         catalog.pick_problem(
-            "algo-079-integration",
-            ["algo-079-integration-p1"],
+            "algo-093-stack-basics",
+            ["algo-093-stack-basics-p1"],
         )["problem_id"]
-        == "algo-079-integration-p2"
+        == "algo-093-stack-basics-p2"
     )
     assert (
         catalog.pick_problem(
-            "algo-079-integration",
+            "algo-093-stack-basics",
             [
-                "algo-079-integration-p3",
-                "algo-079-integration-p2",
-                "algo-079-integration-p1",
+                "algo-093-stack-basics-p5",
+                "algo-093-stack-basics-p4",
+                "algo-093-stack-basics-p3",
+                "algo-093-stack-basics-p2",
+                "algo-093-stack-basics-p1",
             ],
         )["problem_id"]
-        == "algo-079-integration-p1"
+        == "algo-093-stack-basics-p1"
     )
 
 
@@ -63,15 +85,15 @@ def test_special_units_map_to_matching_problem_templates() -> None:
     )
     assert (
         catalog.get_unit("algo-093-stack-basics")["problem_bank"][1]["title"]
-        == "スタックの基本操作 / size 問い合わせを含む操作列を処理する"
+        == "スタックの基本操作 / pop した値を順に出力する"
     )
     assert (
         catalog.get_unit("algo-079-integration")["problem_bank"][0]["title"]
-        == "最大公約数・最小公倍数（GCD/LCM） の総合演習 / 1 ケースをそのまま解く"
+        == "最大公約数・最小公倍数（GCD/LCM） の総合演習 / 全要素の最小公倍数を求める"
     )
     assert (
         catalog.get_unit("algo-001-basic")["concept_overview"]
-        == "全探索（ブルートフォース）は、ありえる候補を順番に全部試し、条件を満たすものを見つける解き方です。まずは漏れなく列挙し、1 つずつ判定する形を身につけます。"
+        == "全探索（ブルートフォース）は、候補を順番に全部試し、条件を満たすものを見つける解き方です。まずは連続部分列を二重ループで漏れなく調べる形を身につけます。"
     )
     statement = catalog.get_unit("algo-093-stack-basics")["problem_bank"][0][
         "problem_statement"
@@ -95,7 +117,7 @@ def test_special_units_map_to_matching_problem_templates() -> None:
     assert "分割してよい" in catalog.get_unit("algo-054-basic")["problem_bank"][0][
         "problem_statement"
     ]
-    assert "要素数" in catalog.get_unit("algo-094-queue-basics")["problem_bank"][1][
+    assert "取り出して出力" in catalog.get_unit("algo-094-queue-basics")["problem_bank"][1][
         "problem_statement"
     ]
     assert "末尾の値を出力" in catalog.get_unit("algo-094-deque-basics")["problem_bank"][1][
@@ -129,13 +151,22 @@ def test_special_units_map_to_matching_problem_templates() -> None:
     assert "順列" in catalog.get_unit("algo-007-basic")["problem_bank"][0][
         "problem_statement"
     ]
-    assert "下に凸" in catalog.get_unit("algo-003-basic")["problem_bank"][0][
+    assert "谷型" in catalog.get_unit("algo-003-basic")["problem_bank"][0][
         "problem_statement"
     ]
     assert "半分全列挙" in catalog.get_unit("algo-008-basic")["problem_bank"][0][
         "problem_statement"
     ]
-    assert "すべてのパターン" in catalog.get_unit("algo-076-basic")["problem_bank"][0][
+    assert "2 つの活動" in catalog.get_unit("algo-051-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "提案された順番どおり" in catalog.get_unit("algo-051-practice")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "休憩時間 D" in catalog.get_unit("algo-051-integration")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "出現回数の総和" in catalog.get_unit("algo-076-basic")["problem_bank"][0][
         "problem_statement"
     ]
     assert "ローリングハッシュ" in catalog.get_unit("algo-069-basic")["problem_bank"][0][
@@ -145,6 +176,33 @@ def test_special_units_map_to_matching_problem_templates() -> None:
         "problem_statement"
     ]
     assert "Z-algorithm" in catalog.get_unit("algo-071-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "最長共通接頭辞" in catalog.get_unit("algo-069-practice")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "suffix" in catalog.get_unit("algo-070-practice")["problem_bank"][0][
+        "problem_statement"
+    ] or "suffix" in catalog.get_unit("algo-070-practice")["problem_bank"][0][
+        "title"
+    ]
+    assert "prefix S[1..L]" in catalog.get_unit("algo-071-practice")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert catalog.get_unit("algo-102-hashmap-duplicate")["title"] == "既出状態をハッシュで追跡する"
+    assert "再登場" in catalog.get_unit("algo-102-hashmap-duplicate")["problem_bank"][0][
+        "title"
+    ]
+    assert "Q 個の整数" in catalog.get_unit("algo-080-practice")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "a * b = X" in catalog.get_unit("algo-080-integration")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "異なる素因数" in catalog.get_unit("algo-082-practice")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "K 以上" in catalog.get_unit("algo-090-practice")["problem_bank"][0][
         "problem_statement"
     ]
     assert "OR 畳み込み" in catalog.get_unit("algo-122-basic")["problem_bank"][0][
@@ -208,7 +266,7 @@ def test_special_units_map_to_matching_problem_templates() -> None:
     assert "隣接頂点を同時に選ばない" in catalog.get_unit("algo-043-basic")["problem_bank"][0][
         "problem_statement"
     ]
-    assert "期待手数" in catalog.get_unit("algo-047-basic")["problem_bank"][0][
+    assert "ちょうど K 回出る確率" in catalog.get_unit("algo-047-basic")["problem_bank"][0][
         "problem_statement"
     ]
     assert "1 回で 1 個または 3 個" in catalog.get_unit("algo-048-basic")["problem_bank"][0][
@@ -226,23 +284,20 @@ def test_special_units_map_to_matching_problem_templates() -> None:
     assert "Dinic" in catalog.get_unit("algo-124-basic")["problem_bank"][0][
         "problem_statement"
     ]
-    assert "最小カット値" in catalog.get_unit("algo-125-basic")["problem_bank"][0][
+    assert "source 側に属する頂点" in catalog.get_unit("algo-125-basic")["problem_bank"][0][
         "problem_statement"
     ]
 
 
 def test_static_problem_banks_are_fully_differentiated_within_units() -> None:
     catalog = AlgorithmFoundationCatalog()
-    forbidden_suffixes = {
-        "典型入力をそのまま処理する",
-        "状態を更新しながら最後まで処理する",
-        "境界ケースを含めて判定する",
-        "別の見方に読み替えて処理する",
-        "複数問い合わせをまとめて処理する",
-        "軽い複合条件を順にさばく",
-        "既習の知識を順につないで答えを出す",
-        "入出力が変わっても同じ流れで処理する",
-        "条件差し替え版を同じ発想で解く",
+    forbidden_fragments = {
+        "1 ケースをそのまま解く",
+        "2 ケースを連続して解く",
+        "3 ケースを連続して解く",
+        "4 ケースを連続して解く",
+        "5 ケースを連続して解く",
+        "T ケースをまとめて解く",
     }
 
     for unit_id in [
@@ -278,23 +333,23 @@ def test_static_problem_banks_are_fully_differentiated_within_units() -> None:
         }
         assert len(payloads) == len(unit["problem_bank"])
 
+    assert catalog.counts() == (320, 361)
+
     stack_titles = [
         problem["title"]
         for problem in catalog.get_unit("algo-093-stack-basics")["problem_bank"]
     ]
     assert stack_titles == [
         "スタックの基本操作 / push・pop・top を順に処理する",
-        "スタックの基本操作 / size 問い合わせを含む操作列を処理する",
-        "スタックの基本操作 / empty 判定を含む操作列を処理する",
+        "スタックの基本操作 / pop した値を順に出力する",
+        "スタックの基本操作 / 操作後に残った要素を上から並べる",
         "スタックの基本操作 / 取り出し順をまとめて出力する",
-        "スタックの基本操作 / 連続した top 問い合わせを処理する",
-        "スタックの基本操作 / 2 本の操作列を順に適用する",
+        "スタックの基本操作 / 上の 2 個をまとめて 1 個にする",
     ]
-    prefix_sum_titles = [
+    assert [
         problem["title"]
         for problem in catalog.get_unit("algo-099-prefix-sum-1d")["problem_bank"]
-    ]
-    assert prefix_sum_titles == [
+    ] == [
         "一次元累積和の基本 / 累積和配列をそのまま作る",
         "一次元累積和の基本 / 合計が X 以上になる最初の位置を探す",
         "一次元累積和の基本 / 非負な累積和がいくつあるか数える",
@@ -302,23 +357,72 @@ def test_static_problem_banks_are_fully_differentiated_within_units() -> None:
         "一次元累積和の基本 / 複数の位置までの和を答える",
         "一次元累積和の基本 / 最大の累積和を求める",
     ]
-    hashmap_exists_titles = [
+    assert [
         problem["title"]
         for problem in catalog.get_unit("algo-102-hashmap-exists")["problem_bank"]
-    ]
-    assert hashmap_exists_titles == [
-        "存在判定をハッシュで高速化 / 配列に含まれるかを即答する",
-        "存在判定をハッシュで高速化 / 追加と照会を同じ集合で処理する",
-        "存在判定をハッシュで高速化 / 含まれていた問い合わせの個数を数える",
-        "存在判定をハッシュで高速化 / 2 つの配列に共通要素があるか調べる",
-        "存在判定をハッシュで高速化 / 存在した値の種類数を数える",
-        "存在判定をハッシュで高速化 / 最初に見つからない問い合わせ位置を求める",
-    ]
+        ] == [
+            "存在判定をハッシュで高速化 / 配列に含まれるかを即答する",
+            "存在判定をハッシュで高速化 / 追加と照会を同じ集合で処理する",
+            "存在判定をハッシュで高速化 / 左側の接頭辞に含まれているかを各位置で判定する",
+            "存在判定をハッシュで高速化 / 2 つの配列に共通要素があるか調べる",
+            "存在判定をハッシュで高速化 / 2 本目の列から含まれる値だけを抜き出す",
+            "存在判定をハッシュで高速化 / 追加・削除・照会を同じ集合で処理する",
+        ]
 
     for group in catalog.list_catalog()["groups"]:
         for unit_summary in group["units"]:
             for problem in catalog.get_unit(unit_summary["unit_id"])["problem_bank"]:
-                assert problem["title"].split(" / ")[-1] not in forbidden_suffixes
+                assert all(fragment not in problem["title"] for fragment in forbidden_fragments)
+
+
+def test_multi_problem_unit_examples_match_reference_solutions() -> None:
+    catalog = AlgorithmFoundationCatalog()
+
+    for group in catalog.list_catalog()["groups"]:
+        for unit_summary in group["units"]:
+            unit = catalog.get_unit(unit_summary["unit_id"])
+            if len(unit["problem_bank"]) <= 1:
+                continue
+            for problem in unit["problem_bank"]:
+                example = problem["examples"][0]
+                actual = _run_reference_solution(
+                    problem["canonical_reference_solution"],
+                    example["input"],
+                )
+                assert actual == example["output"], problem["problem_id"]
+
+
+@pytest.mark.parametrize(
+    "unit_id",
+    [
+        "algo-008-basic",
+        "algo-008-practice",
+        "algo-051-basic",
+        "algo-051-practice",
+        "algo-051-integration",
+        "algo-069-practice",
+        "algo-070-practice",
+        "algo-071-practice",
+        "algo-080-practice",
+        "algo-080-integration",
+        "algo-082-practice",
+        "algo-090-practice",
+    ],
+)
+def test_selected_single_problem_units_examples_match_reference_solutions(
+    unit_id: str,
+) -> None:
+    catalog = AlgorithmFoundationCatalog()
+    unit = catalog.get_unit(unit_id)
+
+    assert len(unit["problem_bank"]) == 1
+    problem = unit["problem_bank"][0]
+    example = problem["examples"][0]
+    actual = _run_reference_solution(
+        problem["canonical_reference_solution"],
+        example["input"],
+    )
+    assert actual == example["output"], problem["problem_id"]
 
 
 def test_catalog_uses_fallback_theme_path(

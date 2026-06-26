@@ -59,7 +59,7 @@ UNIT_BANK = unit_bank(
             examples=[
                 {
                     'input': '5\n3 -5 4 -1 2',
-                    'output': '4',
+                    'output': '5',
                 },
             ],
             canonical_reference_solution="def solve() -> None:\n    input()\n    a = list(map(int, input().split()))\n    total = 0\n    ans = 1\n    for value in a:\n        total += value\n        if total >= 0:\n            ans += 1\n    print(ans)\n\nif __name__ == '__main__':\n    solve()\n",

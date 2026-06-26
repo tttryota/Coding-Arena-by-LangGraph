@@ -59,7 +59,7 @@ UNIT_BANK = unit_bank(
             examples=[
                 {
                     'input': 'CABABB',
-                    'output': 'C',
+                    'output': 'CB',
                 },
             ],
             canonical_reference_solution="def solve() -> None:\n    s = input().strip()\n    stack = []\n    for ch in s:\n        if stack and stack[-1] == 'A' and ch == 'B':\n            stack.pop()\n        else:\n            stack.append(ch)\n    print(''.join(stack))\n\nif __name__ == '__main__':\n    solve()\n",

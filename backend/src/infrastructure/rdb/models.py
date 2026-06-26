@@ -294,6 +294,66 @@ class AlgoThemeModel(Base):
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
+class AlgorithmFoundationSession(Base):
+    __tablename__ = "algorithm_foundation_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    unit_id: Mapped[str] = mapped_column(String, nullable=False)
+    group_id: Mapped[str] = mapped_column(String, nullable=False)
+    group_title: Mapped[str] = mapped_column(String, nullable=False)
+    unit_title: Mapped[str] = mapped_column(String, nullable=False)
+    target_skill: Mapped[str] = mapped_column(String, nullable=False)
+    unit_kind: Mapped[str] = mapped_column(String, nullable=False)
+    prerequisite_unit_ids_json: Mapped[str] = mapped_column(Text, nullable=False)
+    prerequisite_titles_json: Mapped[str] = mapped_column(Text, nullable=False)
+    allowed_knowledge_json: Mapped[str] = mapped_column(Text, nullable=False)
+    forbidden_knowledge_json: Mapped[str] = mapped_column(Text, nullable=False)
+    programming_language: Mapped[str] = mapped_column(String, nullable=False)
+    problem_id: Mapped[str] = mapped_column(String, nullable=False)
+    problem_title: Mapped[str] = mapped_column(String, nullable=False)
+    problem_statement: Mapped[str] = mapped_column(Text, nullable=False)
+    input_format: Mapped[str] = mapped_column(Text, nullable=False)
+    output_format: Mapped[str] = mapped_column(Text, nullable=False)
+    constraints: Mapped[str] = mapped_column(Text, nullable=False)
+    examples_json: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_solution: Mapped[str] = mapped_column(Text, nullable=False)
+    grading_rubric_json: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    answer: Mapped["AlgorithmFoundationAnswer | None"] = relationship(
+        "AlgorithmFoundationAnswer",
+        back_populates="session",
+        uselist=False,
+    )
+
+
+class AlgorithmFoundationAnswer(Base):
+    __tablename__ = "algorithm_foundation_answers"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("algorithm_foundation_sessions.id"),
+        nullable=False,
+        unique=True,
+    )
+    answer_text: Mapped[str] = mapped_column(Text, nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    feedback: Mapped[str] = mapped_column(Text, nullable=False)
+    time_complexity: Mapped[str] = mapped_column(String, nullable=False)
+    space_complexity: Mapped[str] = mapped_column(String, nullable=False)
+    improvement_suggestions: Mapped[str] = mapped_column(Text, nullable=False)
+    rubric_scores_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    session: Mapped["AlgorithmFoundationSession"] = relationship(
+        "AlgorithmFoundationSession",
+        back_populates="answer",
+    )
+
+
 class DiffSnapshot(Base):
     __tablename__ = "diff_snapshots"
 

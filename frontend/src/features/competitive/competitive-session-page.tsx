@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { AppShell } from "@/components/layout/app-shell";
 import { MarkdownContent } from "@/components/common/markdown-content";
+import { codePlaceholder } from "@/lib/programming-language";
 import {
   applyTextareaIndent,
   restoreTextareaSelection,
@@ -18,14 +19,6 @@ import {
   useCompetitiveSession,
 } from "./use-competitive";
 import type { CompetitiveChatMessage } from "@/types/api";
-
-function codePlaceholder(language: string) {
-  const placeholders: Record<string, string> = {
-    python: "# Python で解答を書いてください",
-    typescript: "// TypeScript で解答を書いてください",
-  };
-  return placeholders[language] ?? `// ${language} で解答を書いてください`;
-}
 
 export function CompetitiveSessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();

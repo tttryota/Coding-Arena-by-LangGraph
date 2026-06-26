@@ -28,6 +28,8 @@ EXPECTED_TABLES = {
     "diff_snapshots",
     "competitive_sessions",
     "competitive_answers",
+    "algorithm_foundation_sessions",
+    "algorithm_foundation_answers",
     "algo_themes",
     "sql_dojo_sessions",
     "sql_dojo_answers",

@@ -7,6 +7,7 @@ import {
   PanelLeft,
   Swords,
   Database,
+  Target,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
@@ -38,6 +39,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "競プロ",
     to: "/algorithm-quiz",
     match: (p) => p.startsWith("/algorithm-quiz"),
+  },
+  {
+    icon: Target,
+    label: "競プロうさぎ",
+    to: "/algorithm-foundations",
+    match: (p) => p.startsWith("/algorithm-foundations"),
   },
   {
     icon: Database,

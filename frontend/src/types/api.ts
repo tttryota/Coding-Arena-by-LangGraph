@@ -244,6 +244,139 @@ export interface CompetitiveSessionListResponse {
   sessions: CompetitiveSessionListItem[];
 }
 
+// --- Algorithm Foundations (GET/POST /algorithm-foundations/*) ---
+
+export type AlgorithmFoundationUnitKind = "foundation" | "integration";
+
+export interface AlgorithmFoundationUnitSummary {
+  unit_id: string;
+  theme_id: string;
+  title: string;
+  display_order: number;
+  prerequisite_unit_ids: string[];
+  prerequisite_titles: string[];
+  target_skill: string;
+  unit_kind: AlgorithmFoundationUnitKind;
+  problem_count: number;
+  best_score: number | null;
+  last_attempted_at: string | null;
+  recommended: boolean;
+  has_unmet_prerequisites: boolean;
+}
+
+export interface AlgorithmFoundationGroupSummary {
+  group_id: string;
+  group_title: string;
+  order: number;
+  units: AlgorithmFoundationUnitSummary[];
+}
+
+export interface AlgorithmFoundationCatalogResponse {
+  total_unit_count: number;
+  total_problem_count: number;
+  groups: AlgorithmFoundationGroupSummary[];
+}
+
+export interface AlgorithmFoundationProblemSummary {
+  problem_id: string;
+  title: string;
+  best_score: number | null;
+  last_attempted_at: string | null;
+}
+
+export interface AlgorithmFoundationUnitDetailResponse {
+  unit_id: string;
+  theme_id: string;
+  group_id: string;
+  group_title: string;
+  title: string;
+  concept_overview: string;
+  display_order: number;
+  prerequisite_unit_ids: string[];
+  prerequisite_titles: string[];
+  allowed_knowledge: string[];
+  forbidden_knowledge: string[];
+  target_skill: string;
+  unit_kind: AlgorithmFoundationUnitKind;
+  problem_count: number;
+  best_score: number | null;
+  last_attempted_at: string | null;
+  has_unmet_prerequisites: boolean;
+  problems: AlgorithmFoundationProblemSummary[];
+}
+
+export interface AlgorithmFoundationStartResponse {
+  session_id: string;
+  unit_id: string;
+  group_id: string;
+  group_title: string;
+  unit_title: string;
+  target_skill: string;
+  unit_kind: AlgorithmFoundationUnitKind;
+  prerequisite_unit_ids: string[];
+  prerequisite_titles: string[];
+  allowed_knowledge: string[];
+  forbidden_knowledge: string[];
+  problem_id: string;
+  problem_title: string;
+  programming_language: string;
+  problem_statement: string;
+  input_format: string;
+  output_format: string;
+  constraints: string;
+  examples: ProblemExample[];
+  recommended: boolean;
+  has_unmet_prerequisites: boolean;
+}
+
+export interface AlgorithmFoundationAnswerResponse {
+  session_id: string;
+  score: number;
+  feedback: string;
+  time_complexity: string;
+  space_complexity: string;
+  improvement_suggestions: string;
+  rubric_scores_json: string;
+  reference_solution: string;
+}
+
+export interface AlgorithmFoundationSessionResponse
+  extends AlgorithmFoundationStartResponse {
+  prerequisite_unit_ids: string[];
+  prerequisite_titles: string[];
+  allowed_knowledge: string[];
+  forbidden_knowledge: string[];
+  status: "in_progress" | "completed";
+  created_at: string;
+  score?: number;
+  feedback?: string;
+  time_complexity?: string;
+  space_complexity?: string;
+  improvement_suggestions?: string;
+  rubric_scores_json?: string;
+  reference_solution?: string;
+}
+
+export interface AlgorithmFoundationSessionListItem {
+  session_id: string;
+  unit_id: string;
+  group_id: string;
+  group_title: string;
+  unit_title: string;
+  target_skill: string;
+  unit_kind: AlgorithmFoundationUnitKind;
+  problem_id: string;
+  problem_title: string;
+  programming_language: string;
+  status: "completed";
+  created_at: string;
+  score: number;
+}
+
+export interface AlgorithmFoundationSessionListResponse {
+  sessions: AlgorithmFoundationSessionListItem[];
+}
+
 // --- SQL Dojo (GET/POST /sql-dojo/*) ---
 
 export type SqlDojoDifficulty = "beginner" | "intermediate" | "advanced";

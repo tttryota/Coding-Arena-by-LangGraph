@@ -1,0 +1,31 @@
+from __future__ import annotations
+
+from algorithm_foundations.infrastructure.foundation_banks.common import (
+    default_rubric,
+    problem,
+    unit_bank,
+)
+
+RUBRIC = default_rubric('foundation')
+
+UNIT_BANK = unit_bank(
+    unit_id='algo-043-basic',
+    title='木DP の基本',
+    unit_kind='foundation',
+    target_skill='木DP の基本',
+    concept_overview='木DPでは、根を決めて部分木ごとの答えを子から親へ集約します。この頂点を使うか使わないかのような状態を持ち、木構造に沿って合成する基本を身につけます。',
+    problem_bank=[
+        problem(
+            problem_id='algo-043-basic-p1',
+            title='木DP の基本 / 隣接頂点を同時に選ばないように頂点を選ぶとき、選べる頂点数の最大値を求める',
+            problem_statement='木が与えられる。隣接頂点を同時に選ばないように頂点を選ぶとき、選べる頂点数の最大値を求めよ。',
+            input_format='1 行目に N。\n続く N-1 行に辺 u v。',
+            output_format='最大値を出力する。',
+            constraints='1 <= N <= 2 * 10^5',
+            examples=[{'input': '5\n1 2\n1 3\n3 4\n3 5', 'output': '3'}],
+            canonical_reference_solution="def solve() -> None:\n    import sys\n    sys.setrecursionlimit(10 ** 7)\n    input = sys.stdin.readline\n    n = int(input())\n    graph = [[] for _ in range(n)]\n    for _ in range(n - 1):\n        u, v = map(int, input().split())\n        u -= 1\n        v -= 1\n        graph[u].append(v)\n        graph[v].append(u)\n\n    def dfs(node: int, parent: int) -> tuple[int, int]:\n        take = 1\n        skip = 0\n        for nxt in graph[node]:\n            if nxt == parent:\n                continue\n            child_take, child_skip = dfs(nxt, node)\n            take += child_skip\n            skip += max(child_take, child_skip)\n        return take, skip\n\n    take, skip = dfs(0, -1)\n    print(max(take, skip))\n\nif __name__ == '__main__':\n    solve()\n",
+            canonical_language='python',
+            grading_rubric=RUBRIC,
+        ),
+    ],
+)

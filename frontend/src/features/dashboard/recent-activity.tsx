@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { BookOpenText, MessageSquare, Swords, Database } from "lucide-react";
+import { BookOpenText, MessageSquare, Swords, Database, Target } from "lucide-react";
 import { ScoreBadge } from "@/components/common/score-badge";
 import { formatRelativeTime } from "@/lib/relative-time";
 import type { ActivityItem } from "./use-dashboard-data";
@@ -36,6 +36,7 @@ export function RecentActivity({ activity }: RecentActivityProps) {
         {activity.map((item, i) => {
           const isQuiz = item.kind === "quiz";
           const isCompetitive = item.kind === "competitive";
+          const isAlgorithmFoundations = item.kind === "algorithm_foundations";
           const isSqlDojo = item.kind === "sql_dojo";
           const isFeedback = item.kind === "feedback";
           const time = isQuiz
@@ -49,6 +50,8 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                   ? `q-${item.itemId}`
                   : isCompetitive
                     ? `c-${item.sessionId}`
+                    : isAlgorithmFoundations
+                      ? `a-${item.sessionId}`
                     : isSqlDojo
                       ? `s-${item.sessionId}`
                     : `f-${item.id}`
@@ -66,6 +69,8 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                   navigate(`/roadmaps/${item.roadmapId}`);
                 } else if (isCompetitive) {
                   navigate(`/algorithm-quiz/${item.sessionId}`);
+                } else if (isAlgorithmFoundations) {
+                  navigate(`/algorithm-foundations/${item.sessionId}`);
                 } else if (isSqlDojo) {
                   navigate(`/sql-dojo/${item.sessionId}`);
                 } else {
@@ -86,6 +91,8 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                     ? "border-[rgb(59_130_246/0.25)] bg-[rgb(59_130_246/0.1)] text-[#93c5fd]"
                     : isCompetitive
                       ? "border-[rgb(234_179_8/0.25)] bg-[rgb(234_179_8/0.1)] text-[#fde047]"
+                      : isAlgorithmFoundations
+                        ? "border-[rgb(16_185_129/0.25)] bg-[rgb(16_185_129/0.1)] text-[#6ee7b7]"
                       : isSqlDojo
                         ? "border-[rgb(34_211_238/0.25)] bg-[rgb(34_211_238/0.1)] text-[#67e8f9]"
                       : "border-[rgb(168_85_247/0.22)] bg-[rgb(168_85_247/0.1)] text-[#c4b5fd]",
@@ -95,6 +102,8 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                   <BookOpenText size={13} />
                 ) : isCompetitive ? (
                   <Swords size={13} />
+                ) : isAlgorithmFoundations ? (
+                  <Target size={13} />
                 ) : isSqlDojo ? (
                   <Database size={13} />
                 ) : (
@@ -107,12 +116,14 @@ export function RecentActivity({ activity }: RecentActivityProps) {
                 <span className="truncate text-[13px] font-medium tracking-[-0.005em] text-foreground">
                   {isCompetitive
                     ? item.themeLabel
+                    : isAlgorithmFoundations
+                      ? item.unitTitle
                     : isSqlDojo
                       ? item.topicTitle ?? item.themeTitle
                       : item.title}
                 </span>
                 <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  {isQuiz || isCompetitive || isSqlDojo ? (
+                  {isQuiz || isCompetitive || isAlgorithmFoundations || isSqlDojo ? (
                     <>
                       <ScoreBadge score={item.score} />
                       <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-border" />
@@ -160,6 +171,12 @@ export function RecentActivity({ activity }: RecentActivityProps) {
               <Swords size={11} />
             </span>
             競プロ
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] border border-[rgb(16_185_129/0.25)] bg-[rgb(16_185_129/0.1)] text-[#6ee7b7]">
+              <Target size={11} />
+            </span>
+            競プロうさぎ
           </span>
           <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] border border-[rgb(34_211_238/0.25)] bg-[rgb(34_211_238/0.1)] text-[#67e8f9]">

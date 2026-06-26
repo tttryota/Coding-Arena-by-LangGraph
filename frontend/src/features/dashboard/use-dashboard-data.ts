@@ -3,8 +3,10 @@ import { useQuery, useQueries } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useRoadmaps } from "@/features/roadmap/use-roadmaps";
 import { useCompetitiveSessions } from "@/features/competitive/use-competitive";
+import { useAlgorithmFoundationSessions } from "@/features/algorithm-foundations/use-algorithm-foundations";
 import { useSqlDojoSessions } from "@/features/sql-dojo/use-sql-dojo";
 import type {
+  AlgorithmFoundationSessionListItem,
   RoadmapListItem,
   RoadmapTree,
   RoadmapTreeNode,
@@ -58,10 +60,19 @@ export interface SqlDojoActivity {
   createdAt: string;
 }
 
+export interface AlgorithmFoundationsActivity {
+  kind: "algorithm_foundations";
+  sessionId: string;
+  unitTitle: string;
+  score: number;
+  createdAt: string;
+}
+
 export type ActivityItem =
   | QuizActivity
   | FeedbackActivity
   | CompetitiveActivity
+  | AlgorithmFoundationsActivity
   | SqlDojoActivity;
 
 export interface CompetitiveStats {
@@ -76,9 +87,16 @@ export interface SqlDojoStats {
   isError: boolean;
 }
 
+export interface AlgorithmFoundationsStats {
+  totalCount: number | null;
+  avgScore: number | null;
+  isError: boolean;
+}
+
 export interface DashboardData {
   stats: DashboardStats | null;
   competitiveStats: CompetitiveStats;
+  algorithmFoundationsStats: AlgorithmFoundationsStats;
   sqlDojoStats: SqlDojoStats;
   roadmaps: RoadmapListItem[];
   totalRoadmapCount: number;
@@ -141,6 +159,7 @@ export function useDashboardData(): DashboardData {
 
   // 3. Competitive sessions (for activity timeline)
   const competitiveQuery = useCompetitiveSessions();
+  const algorithmFoundationsQuery = useAlgorithmFoundationSessions();
   const sqlDojoQuery = useSqlDojoSessions();
 
   // 4. Unread feedbacks (provides both total_count for stat card and items
@@ -202,6 +221,10 @@ export function useDashboardData(): DashboardData {
   const sqlDojoSessions = useMemo(
     () => sqlDojoQuery.data?.sessions ?? [],
     [sqlDojoQuery.data],
+  );
+  const algorithmFoundationSessions = useMemo(
+    () => algorithmFoundationsQuery.data?.sessions ?? [],
+    [algorithmFoundationsQuery.data],
   );
 
   // Stats
@@ -321,11 +344,26 @@ export function useDashboardData(): DashboardData {
         createdAt: s.created_at,
       }));
 
+    const algorithmFoundationsItems: AlgorithmFoundationsActivity[] =
+      algorithmFoundationSessions
+        .filter(
+          (s: AlgorithmFoundationSessionListItem) =>
+            s.status === "completed" && s.score != null,
+        )
+        .map((s: AlgorithmFoundationSessionListItem) => ({
+          kind: "algorithm_foundations" as const,
+          sessionId: s.session_id,
+          unitTitle: s.unit_title,
+          score: s.score!,
+          createdAt: s.created_at,
+        }));
+
     // Merge by timestamp descending
     const merged: ActivityItem[] = [
       ...quizItems,
       ...feedbackActivities,
       ...competitiveItems,
+      ...algorithmFoundationsItems,
       ...sqlDojoItems,
     ];
     merged.sort((a, b) => {
@@ -337,7 +375,13 @@ export function useDashboardData(): DashboardData {
     });
 
     return merged.slice(0, ACTIVITY_LIMIT);
-  }, [detailTrees, unreadFeedbackItems, competitiveSessions, sqlDojoSessions]);
+  }, [
+    detailTrees,
+    unreadFeedbackItems,
+    competitiveSessions,
+    algorithmFoundationSessions,
+    sqlDojoSessions,
+  ]);
 
   // Refetch all
   const refetch = useCallback(() => {
@@ -347,8 +391,16 @@ export function useDashboardData(): DashboardData {
     }
     void feedbacksQuery.refetch();
     void competitiveQuery.refetch();
+    void algorithmFoundationsQuery.refetch();
     void sqlDojoQuery.refetch();
-  }, [roadmapList, detailQueries, feedbacksQuery, competitiveQuery, sqlDojoQuery]);
+  }, [
+    roadmapList,
+    detailQueries,
+    feedbacksQuery,
+    competitiveQuery,
+    algorithmFoundationsQuery,
+    sqlDojoQuery,
+  ]);
 
   const competitiveStats = useMemo<CompetitiveStats>(() => {
     if (competitiveQuery.isError && !competitiveQuery.data) {
@@ -394,9 +446,39 @@ export function useDashboardData(): DashboardData {
     };
   }, [sqlDojoQuery.isError, sqlDojoQuery.isLoading, sqlDojoQuery.data]);
 
+  const algorithmFoundationsStats = useMemo<AlgorithmFoundationsStats>(() => {
+    if (algorithmFoundationsQuery.isError && !algorithmFoundationsQuery.data) {
+      return { totalCount: null, avgScore: null, isError: true };
+    }
+    if (
+      algorithmFoundationsQuery.isLoading ||
+      !algorithmFoundationsQuery.data
+    ) {
+      return { totalCount: null, avgScore: null, isError: false };
+    }
+    const sessions = algorithmFoundationsQuery.data.sessions;
+    const completed = sessions.filter((s) => s.status === "completed");
+    return {
+      totalCount: sessions.length,
+      avgScore:
+        completed.length > 0
+          ? Math.round(
+              completed.reduce((sum, s) => sum + (s.score ?? 0), 0) /
+                completed.length,
+            )
+          : null,
+      isError: false,
+    };
+  }, [
+    algorithmFoundationsQuery.isError,
+    algorithmFoundationsQuery.isLoading,
+    algorithmFoundationsQuery.data,
+  ]);
+
   return {
     stats,
     competitiveStats,
+    algorithmFoundationsStats,
     sqlDojoStats,
     roadmaps,
     totalRoadmapCount,

@@ -102,6 +102,8 @@ function mockSuccess(
       return mockJsonResponse(feedbacks);
     if (path === "/algorithm-quiz/sessions")
       return mockJsonResponse({ sessions: [] });
+    if (path === "/algorithm-foundations/sessions")
+      return mockJsonResponse({ sessions: [] });
     if (path === "/sql-dojo/sessions")
       return mockJsonResponse({ sessions: [] });
     throw new Error(`Unexpected path: ${path}`);
@@ -144,6 +146,7 @@ describe("DashboardPage", () => {
     expect(screen.getByText("学習中のロードマップ")).toBeInTheDocument();
     // 未読フィードバック
     expect(screen.getByText("未読フィードバック")).toBeInTheDocument();
+    expect(screen.getByText("競プロうさぎ(直近)")).toBeInTheDocument();
     expect(screen.getByText("SQL道場(直近)")).toBeInTheDocument();
   });
 
@@ -193,6 +196,9 @@ describe("DashboardPage", () => {
       if (path === "/algorithm-quiz/sessions") {
         return mockJsonResponse({ sessions: [] });
       }
+      if (path === "/algorithm-foundations/sessions") {
+        return mockJsonResponse({ sessions: [] });
+      }
       if (path === "/sql-dojo/sessions") {
         throw new ApiError(500, "sql dojo failed");
       }
@@ -219,6 +225,27 @@ describe("DashboardPage", () => {
       if (path === "/algorithm-quiz/sessions") {
         return mockJsonResponse({ sessions: [] });
       }
+      if (path === "/algorithm-foundations/sessions") {
+        return mockJsonResponse({
+          sessions: [
+            {
+              session_id: "af-1",
+              unit_id: "algo-102-hashmap-count",
+              group_id: "group-0",
+              group_title: "データ構造",
+              unit_title: "出現回数カウント",
+              target_skill: "出現回数カウント",
+              unit_kind: "foundation",
+              problem_id: "p-1",
+              problem_title: "問題1",
+              programming_language: "python",
+              status: "completed",
+              created_at: now.toISOString(),
+              score: 81,
+            },
+          ],
+        });
+      }
       if (path === "/sql-dojo/sessions") {
         return mockJsonResponse({
           sessions: [
@@ -242,6 +269,7 @@ describe("DashboardPage", () => {
 
     renderWithProviders(<DashboardPage />);
 
+    expect(await screen.findByText("出現回数カウント")).toBeInTheDocument();
     expect(await screen.findByText("shipped注文件数")).toBeInTheDocument();
     expect(screen.queryByText("JOIN で件数集計を作る")).not.toBeInTheDocument();
   });

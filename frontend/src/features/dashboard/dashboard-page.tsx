@@ -9,6 +9,7 @@ import {
   X,
   Swords,
   Database,
+  Target,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { scoreLevel } from "@/lib/score";
@@ -28,6 +29,7 @@ export function DashboardPage() {
   const {
     stats,
     competitiveStats,
+    algorithmFoundationsStats,
     sqlDojoStats,
     roadmaps,
     totalRoadmapCount,
@@ -54,7 +56,7 @@ export function DashboardPage() {
 
   // Stat card rendering — shared between loaded and empty states
   const statCards = stats && (
-    <div className="grid grid-cols-6 gap-4 max-[1280px]:grid-cols-3 max-[780px]:grid-cols-2">
+    <div className="grid grid-cols-7 gap-4 max-[1280px]:grid-cols-4 max-[780px]:grid-cols-2">
       <StatCard
         icon={Map}
         label="学習中のロードマップ"
@@ -100,6 +102,21 @@ export function DashboardPage() {
         }
       />
       <StatCard
+        icon={Target}
+        label="競プロうさぎ(直近)"
+        value={algorithmFoundationsStats.totalCount ?? "—"}
+        onClick={() => navigate("/algorithm-foundations")}
+        hint={
+          algorithmFoundationsStats.isError
+            ? "取得失敗"
+            : algorithmFoundationsStats.totalCount == null
+            ? "読み込み中"
+            : algorithmFoundationsStats.avgScore != null
+              ? `平均 ${algorithmFoundationsStats.avgScore} 点`
+              : "未挑戦"
+        }
+      />
+      <StatCard
         icon={Database}
         label="SQL道場(直近)"
         value={sqlDojoStats.totalCount ?? "—"}
@@ -136,8 +153,8 @@ export function DashboardPage() {
         {/* Loading skeleton */}
         {showSkeleton && (
           <>
-            <div className="grid grid-cols-6 gap-4 max-[1280px]:grid-cols-3 max-[780px]:grid-cols-2">
-              {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div className="grid grid-cols-7 gap-4 max-[1280px]:grid-cols-4 max-[780px]:grid-cols-2">
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
                 <StatSkeleton key={i} />
               ))}
             </div>

@@ -336,7 +336,7 @@ def test_start_session_does_not_list_unsubmitted_attempt() -> None:
         "- 学習単位: 存在判定をハッシュで高速化\n\n"
         "問題文"
     )
-    assert detail.json()["problem_title"] == "存在判定をハッシュで高速化 / 基本確認"
+    assert detail.json()["problem_title"] == "存在判定をハッシュで高速化 / 典型入力をそのまま処理する"
 
     listed = client.get("/algorithm-foundations/sessions")
     assert listed.status_code == 200
@@ -409,7 +409,7 @@ def test_completed_session_detail_and_list_normalize_legacy_problem_title() -> N
 
     detail = client.get(f"/algorithm-foundations/sessions/{session_id}")
     assert detail.status_code == 200
-    assert detail.json()["problem_title"] == "存在判定をハッシュで高速化 / 基本確認"
+    assert detail.json()["problem_title"] == "存在判定をハッシュで高速化 / 典型入力をそのまま処理する"
     assert (
         detail.json()["problem_statement"]
         == "値を見たかどうかをハッシュ集合に記録し、あとで同じ値があるかをすぐ調べる考え方です。探索を繰り返さず membership 判定で済ませる形を身につけます。\n\n"
@@ -421,7 +421,7 @@ def test_completed_session_detail_and_list_normalize_legacy_problem_title() -> N
     listed = client.get("/algorithm-foundations/sessions")
     assert listed.status_code == 200
     assert listed.json()["sessions"][0]["problem_title"] == (
-        "存在判定をハッシュで高速化 / 基本確認"
+        "存在判定をハッシュで高速化 / 典型入力をそのまま処理する"
     )
 
 

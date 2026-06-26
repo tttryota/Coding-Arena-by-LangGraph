@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+from algorithm_foundations.infrastructure.foundation_banks.common import (
+    default_rubric,
+    problem,
+    unit_bank,
+)
+
+RUBRIC = default_rubric('foundation')
+
+UNIT_BANK = unit_bank(
+    unit_id='algo-094-deque-basics',
+    title='デックの基本操作',
+    unit_kind='foundation',
+    target_skill='デックの基本操作',
+    concept_overview='デックは、前後どちらの端にも追加・削除できる入れ物です。どちらの端を使う操作なのかを整理して扱う練習をします。',
+    problem_bank=[
+        problem(
+            problem_id='algo-094-deque-basics-p1',
+            title='デックの基本操作 / 前後から追加して取り出す',
+            problem_statement='Q 個の操作が与えられる。`1 x` は先頭に追加、`2 x` は末尾に追加、`3` は先頭を出力して削除、`4` は末尾を出力して削除せよ。',
+            input_format='1 行目に Q。\n続く Q 行に操作。',
+            output_format='type=3,4 のたびに取り出した値を 1 行ずつ出力する。',
+            constraints='1 <= Q <= 2 * 10^5',
+            examples=[
+                {
+                    'input': '6\n1 3\n2 8\n3\n1 2\n4\n3',
+                    'output': '3\n8\n2',
+                },
+            ],
+            canonical_reference_solution="from collections import deque\n\ndef solve() -> None:\n    import sys\n    input = sys.stdin.readline\n    q = int(input())\n    dq = deque()\n    out = []\n    for _ in range(q):\n        parts = list(map(int, input().split()))\n        t = parts[0]\n        if t == 1:\n            dq.appendleft(parts[1])\n        elif t == 2:\n            dq.append(parts[1])\n        elif t == 3:\n            out.append(str(dq.popleft()))\n        else:\n            out.append(str(dq.pop()))\n    sys.stdout.write('\\n'.join(out))\n\nif __name__ == '__main__':\n    solve()\n",
+            canonical_language='python',
+            grading_rubric=RUBRIC,
+        ),
+        problem(
+            problem_id='algo-094-deque-basics-p2',
+            title='デックの基本操作 / 先頭と末尾を覗き分ける',
+            problem_statement='Q 個の操作が与えられる。`1 x` は先頭に追加、`2 x` は末尾に追加、`3` は先頭の値を出力、`4` は末尾の値を出力せよ。type=3,4 では削除しない。',
+            input_format='1 行目に Q。\n続く Q 行に操作。',
+            output_format='type=3,4 のたびに答えを 1 行ずつ出力する。',
+            constraints='1 <= Q <= 2 * 10^5',
+            examples=[
+                {
+                    'input': '6\n1 3\n2 8\n3\n4\n1 2\n3',
+                    'output': '3\n8\n2',
+                },
+            ],
+            canonical_reference_solution="from collections import deque\n\ndef solve() -> None:\n    import sys\n    input = sys.stdin.readline\n    q = int(input())\n    dq = deque()\n    out = []\n    for _ in range(q):\n        parts = list(map(int, input().split()))\n        t = parts[0]\n        if t == 1:\n            dq.appendleft(parts[1])\n        elif t == 2:\n            dq.append(parts[1])\n        elif t == 3:\n            out.append(str(dq[0]))\n        else:\n            out.append(str(dq[-1]))\n    sys.stdout.write('\\n'.join(out))\n\nif __name__ == '__main__':\n    solve()\n",
+            canonical_language='python',
+            grading_rubric=RUBRIC,
+        ),
+        problem(
+            problem_id='algo-094-deque-basics-p3',
+            title='デックの基本操作 / size を見ながら前後を使い分ける',
+            problem_statement='Q 個の操作が与えられる。`1 x` は先頭に追加、`2 x` は末尾に追加、`3` は先頭を削除、`4` は末尾を削除、`5` は現在の要素数を出力せよ。',
+            input_format='1 行目に Q。\n続く Q 行に操作。',
+            output_format='type=5 のたびに要素数を 1 行ずつ出力する。',
+            constraints='1 <= Q <= 2 * 10^5',
+            examples=[
+                {
+                    'input': '8\n1 3\n2 8\n5\n3\n5\n1 2\n4\n5',
+                    'output': '2\n1\n1',
+                },
+            ],
+            canonical_reference_solution="from collections import deque\n\ndef solve() -> None:\n    import sys\n    input = sys.stdin.readline\n    q = int(input())\n    dq = deque()\n    out = []\n    for _ in range(q):\n        parts = list(map(int, input().split()))\n        t = parts[0]\n        if t == 1:\n            dq.appendleft(parts[1])\n        elif t == 2:\n            dq.append(parts[1])\n        elif t == 3:\n            dq.popleft()\n        elif t == 4:\n            dq.pop()\n        else:\n            out.append(str(len(dq)))\n    sys.stdout.write('\\n'.join(out))\n\nif __name__ == '__main__':\n    solve()\n",
+            canonical_language='python',
+            grading_rubric=RUBRIC,
+        ),
+    ],
+)

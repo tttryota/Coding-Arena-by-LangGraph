@@ -49,6 +49,15 @@ class AlgorithmFoundationUnit(TypedDict):
     problem_bank: list[AlgorithmFoundationProblem]
 
 
+class AlgorithmFoundationUnitBank(TypedDict):
+    unit_id: str
+    title: str
+    unit_kind: AlgorithmFoundationUnitKind
+    target_skill: str
+    concept_overview: str
+    problem_bank: list[AlgorithmFoundationProblem]
+
+
 class AlgorithmFoundationUnitSummary(TypedDict):
     unit_id: str
     theme_id: str
@@ -186,6 +195,7 @@ __all__ = [
     "AlgorithmFoundationSessionSummary",
     "AlgorithmFoundationStartPayload",
     "AlgorithmFoundationUnit",
+    "AlgorithmFoundationUnitBank",
     "AlgorithmFoundationUnitDetailResponse",
     "AlgorithmFoundationUnitKind",
     "AlgorithmFoundationUnitSummary",

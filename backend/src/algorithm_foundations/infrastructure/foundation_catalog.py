@@ -6,7 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, cast
+from typing import Final
 
 from algorithm_foundations.domain.foundation_types import (
     AlgorithmFoundationCatalogError,
@@ -16,13 +16,14 @@ from algorithm_foundations.domain.foundation_types import (
     AlgorithmFoundationProblem,
     AlgorithmFoundationRubricItem,
     AlgorithmFoundationUnit,
+    AlgorithmFoundationUnitBank,
     AlgorithmFoundationUnitSummary,
+)
+from algorithm_foundations.infrastructure.foundation_banks import (
+    UNIT_BANK_REGISTRY as _UNIT_BANK_REGISTRY,
 )
 from algorithm_foundations.infrastructure.foundation_units import (
     SPECIAL_THEME_UNITS as _SPECIAL_THEME_UNITS,
-)
-from algorithm_foundations.infrastructure.foundation_units import (
-    SPECIAL_UNIT_CONCEPT_OVERVIEWS as _SPECIAL_UNIT_CONCEPT_OVERVIEWS,
 )
 from algorithm_foundations.infrastructure.foundation_units import (
     build_family_problem_template,
@@ -301,26 +302,24 @@ class AlgorithmFoundationCatalog:
         if unit_kind == "integration":
             allowed.extend(prerequisite_titles)
         forbidden = self._forbidden_knowledge(theme, title)
-        important_unit = self._is_important_unit(theme.id, unit_id)
-        problem_count = 6 if important_unit else 3
-        concept_overview = self._concept_overview(
-            theme=theme,
-            unit_id=unit_id,
-            title=title,
-            unit_kind=unit_kind,
-            prerequisite_titles=prerequisite_titles,
-        )
-        problem_bank = [
-            self._build_problem(
-                unit_id=unit_id,
-                unit_title=title,
-                concept_overview=concept_overview,
-                theme=theme,
-                problem_index=index,
-                unit_kind=unit_kind,
+        unit_bank = self._get_unit_bank(unit_id)
+        if unit_bank["title"] != title:
+            raise AlgorithmFoundationCatalogError(
+                error_code="unit_title_mismatch",
+                message=f"Static unit bank title mismatch for {unit_id}: {unit_bank['title']} != {title}",
             )
-            for index in range(problem_count)
-        ]
+        if unit_bank["unit_kind"] != unit_kind:
+            raise AlgorithmFoundationCatalogError(
+                error_code="unit_kind_mismatch",
+                message=f"Static unit bank kind mismatch for {unit_id}: {unit_bank['unit_kind']} != {unit_kind}",
+            )
+        concept_overview = unit_bank["concept_overview"]
+        problem_bank = self._decorate_problem_bank(
+            theme=theme,
+            unit_title=title,
+            concept_overview=concept_overview,
+            problem_bank=unit_bank["problem_bank"],
+        )
         return {
             "unit_id": unit_id,
             "theme_id": theme.id,
@@ -333,61 +332,45 @@ class AlgorithmFoundationCatalog:
             "prerequisite_titles": prerequisite_titles,
             "allowed_knowledge": allowed,
             "forbidden_knowledge": forbidden,
-            "target_skill": title,
-            "unit_kind": unit_kind,  # type: ignore[typeddict-item]
+            "target_skill": unit_bank["target_skill"],
+            "unit_kind": unit_kind,
             "problem_bank": problem_bank,
         }
 
-    def _build_problem(  # noqa: PLR0913
+    def _decorate_problem_bank(
         self,
         *,
-        unit_id: str,
+        theme: _Theme,
         unit_title: str,
         concept_overview: str,
-        theme: _Theme,
-        problem_index: int,
-        unit_kind: str,
-    ) -> AlgorithmFoundationProblem:
-        template = self._problem_template(theme, unit_id, unit_title)
-        difficulty_labels = (
-            (
-                "2unit組み合わせ確認",
-                "実装つなぎ込み",
-                "条件違い確認",
-            )
-            if unit_kind == "integration"
-            else (
-                "基本確認",
-                "実装確認",
-                "境界条件確認",
-                "別視点確認",
-                "条件整理",
-                "軽い総合確認",
-            )
-        )
-        prompt_kind = difficulty_labels[problem_index]
-        statement = (
+        problem_bank: list[AlgorithmFoundationProblem],
+    ) -> list[AlgorithmFoundationProblem]:
+        prefix = (
             f"{concept_overview}\n\n"
             f"- カテゴリ: {theme.category}\n"
-            f"- 学習単位: {unit_title}\n"
-            "\n"
-            + cast("str", template["statement"])
+            f"- 学習単位: {unit_title}\n\n"
         )
-        return {
-            "problem_id": f"{unit_id}-p{problem_index + 1}",
-            "title": f"{unit_title} / {prompt_kind}",
-            "problem_statement": statement,
-            "input_format": cast("str", template["input_format"]),
-            "output_format": cast("str", template["output_format"]),
-            "constraints": cast("str", template["constraints"]),
-            "examples": cast("list[AlgorithmFoundationExample]", template["examples"]),
-            "canonical_reference_solution": cast(
-                "str",
-                template["reference_solution"],
-            ),
-            "canonical_language": "python",
-            "grading_rubric": _default_rubric(unit_kind),
-        }
+        decorated: list[AlgorithmFoundationProblem] = []
+        for problem in problem_bank:
+            statement = problem["problem_statement"]
+            if not statement.startswith(prefix):
+                statement = prefix + statement
+            decorated.append(
+                {
+                    **problem,
+                    "problem_statement": statement,
+                },
+            )
+        return decorated
+
+    def _get_unit_bank(self, unit_id: str) -> AlgorithmFoundationUnitBank:
+        try:
+            return _UNIT_BANK_REGISTRY[unit_id]
+        except KeyError as exc:
+            raise AlgorithmFoundationCatalogError(
+                error_code="unit_bank_not_found",
+                message=f"Static unit bank not found for {unit_id}",
+            ) from exc
 
     def _concept_overview(  # noqa: PLR0913
         self,
@@ -398,9 +381,7 @@ class AlgorithmFoundationCatalog:
         unit_kind: str,
         prerequisite_titles: list[str],
     ) -> str:
-        if unit_id in _SPECIAL_UNIT_CONCEPT_OVERVIEWS:
-            return _SPECIAL_UNIT_CONCEPT_OVERVIEWS[unit_id]
-
+        del unit_id
         base_title = title
         for suffix in (" の基本", " を素直に実装する", " の総合演習"):
             if base_title.endswith(suffix):
@@ -4020,13 +4001,72 @@ class AlgorithmFoundationCatalog:
     ) -> bool:
         return any((best_scores.get(unit_id) or 0) < 80 for unit_id in prerequisite_unit_ids)
 
-    def _validate_units(self) -> None:
+    def _validate_units(self) -> None:  # noqa: C901, PLR0915
         unit_ids = [unit["unit_id"] for unit in self._units]
         if len(unit_ids) != len(set(unit_ids)):
             raise AlgorithmFoundationCatalogError(
                 error_code="duplicate_unit_id",
                 message="algorithm foundations catalog contains duplicate unit_id",
             )
+        if len(_UNIT_BANK_REGISTRY) != len(self._units):
+            raise AlgorithmFoundationCatalogError(
+                error_code="unit_bank_count_mismatch",
+                message=(
+                    "static unit bank registry size does not match built units: "
+                    f"{len(_UNIT_BANK_REGISTRY)} != {len(self._units)}"
+                ),
+            )
+        problem_ids: set[str] = set()
+        for unit in self._units:
+            expected_count = 6 if self._is_important_unit(unit["theme_id"], unit["unit_id"]) else 3
+            if len(unit["problem_bank"]) != expected_count:
+                raise AlgorithmFoundationCatalogError(
+                    error_code="problem_count_mismatch",
+                    message=(
+                        f"unit {unit['unit_id']} expected {expected_count} problems "
+                        f"but got {len(unit['problem_bank'])}"
+                    ),
+                )
+            seen_payloads: set[tuple[str, str, str, str, str]] = set()
+            for index, problem in enumerate(unit["problem_bank"], start=1):
+                expected_problem_id = f"{unit['unit_id']}-p{index}"
+                if problem["problem_id"] != expected_problem_id:
+                    raise AlgorithmFoundationCatalogError(
+                        error_code="problem_id_sequence_mismatch",
+                        message=(
+                            f"unit {unit['unit_id']} expected problem_id "
+                            f"{expected_problem_id} but got {problem['problem_id']}"
+                        ),
+                    )
+                if problem["problem_id"] in problem_ids:
+                    raise AlgorithmFoundationCatalogError(
+                        error_code="duplicate_problem_id",
+                        message=f"duplicate problem_id found: {problem['problem_id']}",
+                    )
+                problem_ids.add(problem["problem_id"])
+                if problem["canonical_language"] != "python":
+                    raise AlgorithmFoundationCatalogError(
+                        error_code="unsupported_canonical_language",
+                        message=(
+                            f"unit {unit['unit_id']} problem {problem['problem_id']} "
+                            f"must use canonical_language='python'"
+                        ),
+                    )
+                payload = (
+                    problem["problem_statement"],
+                    problem["input_format"],
+                    problem["output_format"],
+                    problem["constraints"],
+                    repr(problem["examples"]),
+                )
+                if payload in seen_payloads:
+                    raise AlgorithmFoundationCatalogError(
+                        error_code="duplicate_problem_payload",
+                        message=(
+                            f"unit {unit['unit_id']} contains duplicated problem payloads"
+                        ),
+                    )
+                seen_payloads.add(payload)
         counts = self.counts()
         if counts[0] < 300 or counts[1] < 1000:
             raise AlgorithmFoundationCatalogError(

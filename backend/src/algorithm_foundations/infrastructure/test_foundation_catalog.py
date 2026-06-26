@@ -59,15 +59,15 @@ def test_special_units_map_to_matching_problem_templates() -> None:
 
     assert (
         catalog.get_unit("algo-093-stack-basics")["problem_bank"][0]["title"]
-        == "スタックの基本操作 / 基本確認"
+        == "スタックの基本操作 / push・pop・top を順に処理する"
     )
     assert (
         catalog.get_unit("algo-093-stack-basics")["problem_bank"][1]["title"]
-        == "スタックの基本操作 / 実装確認"
+        == "スタックの基本操作 / size 問い合わせを含む操作列を処理する"
     )
     assert (
         catalog.get_unit("algo-079-integration")["problem_bank"][0]["title"]
-        == "最大公約数・最小公倍数（GCD/LCM） の総合演習 / 2unit組み合わせ確認"
+        == "最大公約数・最小公倍数（GCD/LCM） の総合演習 / 1 ケースをそのまま解く"
     )
     assert (
         catalog.get_unit("algo-001-basic")["concept_overview"]
@@ -87,6 +87,18 @@ def test_special_units_map_to_matching_problem_templates() -> None:
         "problem_statement"
     ]
     assert "出現回数" in catalog.get_unit("algo-102-hashmap-count")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "コスト合計の最小値" in catalog.get_unit("algo-053-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "分割してよい" in catalog.get_unit("algo-054-basic")["problem_bank"][0][
+        "problem_statement"
+    ]
+    assert "要素数" in catalog.get_unit("algo-094-queue-basics")["problem_bank"][1][
+        "problem_statement"
+    ]
+    assert "末尾の値を出力" in catalog.get_unit("algo-094-deque-basics")["problem_bank"][1][
         "problem_statement"
     ]
     assert "Binary Indexed Tree" in catalog.get_unit("algo-098-basic")["concept_overview"]
@@ -217,6 +229,96 @@ def test_special_units_map_to_matching_problem_templates() -> None:
     assert "最小カット値" in catalog.get_unit("algo-125-basic")["problem_bank"][0][
         "problem_statement"
     ]
+
+
+def test_static_problem_banks_are_fully_differentiated_within_units() -> None:
+    catalog = AlgorithmFoundationCatalog()
+    forbidden_suffixes = {
+        "典型入力をそのまま処理する",
+        "状態を更新しながら最後まで処理する",
+        "境界ケースを含めて判定する",
+        "別の見方に読み替えて処理する",
+        "複数問い合わせをまとめて処理する",
+        "軽い複合条件を順にさばく",
+        "既習の知識を順につないで答えを出す",
+        "入出力が変わっても同じ流れで処理する",
+        "条件差し替え版を同じ発想で解く",
+    }
+
+    for unit_id in [
+        "algo-093-stack-basics",
+        "algo-093-stack-brackets",
+        "algo-093-stack-cancel",
+        "algo-079-integration",
+        "algo-099-prefix-sum-1d",
+        "algo-099-prefix-sum-range",
+        "algo-099-prefix-sum-2d",
+        "algo-102-hashmap-exists",
+        "algo-102-hashmap-duplicate",
+        "algo-102-hashmap-count",
+        "algo-102-hashmap-index",
+        "algo-102-hashmap-match",
+        "algo-094-queue-basics",
+        "algo-094-deque-basics",
+        "algo-051-basic",
+        "algo-053-basic",
+        "algo-054-basic",
+    ]:
+        unit = catalog.get_unit(unit_id)
+        payloads = {
+            (
+                problem["title"],
+                problem["problem_statement"],
+                problem["input_format"],
+                problem["output_format"],
+                problem["constraints"],
+                repr(problem["examples"]),
+            )
+            for problem in unit["problem_bank"]
+        }
+        assert len(payloads) == len(unit["problem_bank"])
+
+    stack_titles = [
+        problem["title"]
+        for problem in catalog.get_unit("algo-093-stack-basics")["problem_bank"]
+    ]
+    assert stack_titles == [
+        "スタックの基本操作 / push・pop・top を順に処理する",
+        "スタックの基本操作 / size 問い合わせを含む操作列を処理する",
+        "スタックの基本操作 / empty 判定を含む操作列を処理する",
+        "スタックの基本操作 / 取り出し順をまとめて出力する",
+        "スタックの基本操作 / 連続した top 問い合わせを処理する",
+        "スタックの基本操作 / 2 本の操作列を順に適用する",
+    ]
+    prefix_sum_titles = [
+        problem["title"]
+        for problem in catalog.get_unit("algo-099-prefix-sum-1d")["problem_bank"]
+    ]
+    assert prefix_sum_titles == [
+        "一次元累積和の基本 / 累積和配列をそのまま作る",
+        "一次元累積和の基本 / 合計が X 以上になる最初の位置を探す",
+        "一次元累積和の基本 / 非負な累積和がいくつあるか数える",
+        "一次元累積和の基本 / 累積和配列から元の配列を復元する",
+        "一次元累積和の基本 / 複数の位置までの和を答える",
+        "一次元累積和の基本 / 最大の累積和を求める",
+    ]
+    hashmap_exists_titles = [
+        problem["title"]
+        for problem in catalog.get_unit("algo-102-hashmap-exists")["problem_bank"]
+    ]
+    assert hashmap_exists_titles == [
+        "存在判定をハッシュで高速化 / 配列に含まれるかを即答する",
+        "存在判定をハッシュで高速化 / 追加と照会を同じ集合で処理する",
+        "存在判定をハッシュで高速化 / 含まれていた問い合わせの個数を数える",
+        "存在判定をハッシュで高速化 / 2 つの配列に共通要素があるか調べる",
+        "存在判定をハッシュで高速化 / 存在した値の種類数を数える",
+        "存在判定をハッシュで高速化 / 最初に見つからない問い合わせ位置を求める",
+    ]
+
+    for group in catalog.list_catalog()["groups"]:
+        for unit_summary in group["units"]:
+            for problem in catalog.get_unit(unit_summary["unit_id"])["problem_bank"]:
+                assert problem["title"].split(" / ")[-1] not in forbidden_suffixes
 
 
 def test_catalog_uses_fallback_theme_path(

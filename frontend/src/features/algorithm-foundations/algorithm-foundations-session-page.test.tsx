@@ -21,7 +21,7 @@ const inProgressSession: AlgorithmFoundationSessionResponse = {
   allowed_knowledge: ["出現回数カウント", "ハッシュマップ・ハッシュセット"],
   forbidden_knowledge: ["尺取り法"],
   problem_id: "p-1",
-  problem_title: "出現回数カウント / 基本確認",
+  problem_title: "出現回数カウント / 典型入力をそのまま処理する",
   programming_language: "python",
   problem_statement:
     "値ごとの出現回数を連想配列にため、あとで必要な回数をすぐ取り出せるようにする考え方です。数え上げを map の更新に置き換える形を身につけます。\n\n問題文です",
@@ -150,7 +150,7 @@ describe("AlgorithmFoundationsSessionPage", () => {
 
     renderPage();
 
-    await screen.findByText("出現回数カウント / 基本確認");
+    await screen.findByText("出現回数カウント / 典型入力をそのまま処理する");
 
     expect(screen.queryByText("この unit で見るもの")).not.toBeInTheDocument();
     expect(screen.queryByText("この 1 問のルール")).not.toBeInTheDocument();

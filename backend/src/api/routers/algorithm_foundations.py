@@ -68,6 +68,13 @@ def _problem_history_map(
     }
 
 
+def _started_problem_counts(c: Container) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in c.algorithm_foundation_store.list_problem_history():
+        counts[row.unit_id] = counts.get(row.unit_id, 0) + 1
+    return counts
+
+
 def _evaluation_error_to_http(exc: SolutionEvaluationError) -> HTTPException:
     error_code = getattr(exc, "error_code", None)
     if error_code == "llm_response_parse_failed":
@@ -234,9 +241,11 @@ def _display_problem_statement(
 def get_catalog(request: Request) -> AlgorithmFoundationCatalogResponse:
     c = _container(request)
     best_scores, last_attempted_at = _history_maps(c)
+    started_problem_counts = _started_problem_counts(c)
     return c.algorithm_foundation_catalog.list_catalog(
         best_scores=best_scores,
         last_attempted_at=last_attempted_at,
+        started_problem_counts=started_problem_counts,
     )
 
 

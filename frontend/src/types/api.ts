@@ -258,6 +258,7 @@ export interface AlgorithmFoundationUnitSummary {
   target_skill: string;
   unit_kind: AlgorithmFoundationUnitKind;
   problem_count: number;
+  started_problem_count: number;
   best_score: number | null;
   last_attempted_at: string | null;
   recommended: boolean;

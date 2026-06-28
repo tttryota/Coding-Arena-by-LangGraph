@@ -263,7 +263,7 @@ function UnitCard({
           )}
 
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-            <span>{unit.problem_count} 問</span>
+            <span>{`着手 ${unit.started_problem_count}/${unit.problem_count}`}</span>
             <span className={scoreTone(unit.best_score)}>
               {unit.best_score != null ? `最高 ${unit.best_score} 点` : "未着手"}
             </span>

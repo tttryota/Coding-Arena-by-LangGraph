@@ -68,6 +68,7 @@ class AlgorithmFoundationUnitSummary(TypedDict):
     target_skill: str
     unit_kind: AlgorithmFoundationUnitKind
     problem_count: int
+    started_problem_count: int
     best_score: int | None
     last_attempted_at: str | None
     recommended: bool

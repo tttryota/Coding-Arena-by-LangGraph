@@ -74,6 +74,7 @@ export function SqlDojoSessionPage() {
         schema_markdown: restored.schema_markdown,
         sample_data_json: restored.sample_data_json,
         expected_focus: restored.expected_focus,
+        allow_multiple_statements: restored.allow_multiple_statements,
       });
       if (restored.status === "completed" && restored.score != null) {
         setResult({
@@ -179,6 +180,9 @@ export function SqlDojoSessionPage() {
   };
 
   const displayTitle = session.topic_title ?? session.theme_title;
+  const sqlPlaceholder = session.allow_multiple_statements
+    ? "PostgreSQL で SQL を書いてください（必要なら複数文可）"
+    : "PostgreSQL で 1 文を書いてください";
 
   if (phase === "result" && result) {
     return (
@@ -254,7 +258,7 @@ export function SqlDojoSessionPage() {
               value={sqlDraft}
               onChange={(e) => setSqlDraft(e.target.value)}
               onKeyDown={handleSqlKeyDown}
-              placeholder="PostgreSQL で 1 文を書いてください"
+              placeholder={sqlPlaceholder}
               className="font-mono min-h-[260px]"
             />
             <Button

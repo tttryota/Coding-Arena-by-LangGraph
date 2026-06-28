@@ -425,6 +425,7 @@ export interface SqlDojoStartResponse {
   schema_markdown: string;
   sample_data_json: string;
   expected_focus: string;
+  allow_multiple_statements: boolean;
 }
 
 export interface SqlDojoAnswerResponse {

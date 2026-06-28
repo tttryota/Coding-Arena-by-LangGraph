@@ -23,6 +23,16 @@ if TYPE_CHECKING:
 router = APIRouter(prefix="/sql-dojo", tags=["sql-dojo"])
 
 
+def _allow_multiple_statements(grading_contract_json: str) -> bool:
+    try:
+        parsed = json.loads(grading_contract_json)
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(parsed, dict):
+        return False
+    return parsed.get("allow_multiple_statements") is True
+
+
 class _StartSessionRequest(BaseModel):
     difficulty: SqlDojoDifficulty = "beginner"
     theme_family: str | None = None
@@ -203,6 +213,9 @@ def start_session(request: Request, body: _StartSessionRequest) -> dict[str, obj
         "schema_markdown": problem["schema_markdown"],
         "sample_data_json": problem["sample_data_json"],
         "expected_focus": problem["expected_focus"],
+        "allow_multiple_statements": (
+            problem["grading_contract"].get("allow_multiple_statements") is True
+        ),
     }
 
 
@@ -227,6 +240,9 @@ def get_session(session_id: str, request: Request) -> dict[str, object]:
         "schema_markdown": details["schema_markdown"],
         "sample_data_json": details["sample_data_json"],
         "expected_focus": details["expected_focus"],
+        "allow_multiple_statements": _allow_multiple_statements(
+            str(details["grading_contract_json"]),
+        ),
         "status": details["status"],
         "created_at": details["created_at"],
     }

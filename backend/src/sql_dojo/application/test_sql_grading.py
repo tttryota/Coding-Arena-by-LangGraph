@@ -1249,3 +1249,268 @@ def test_keyset_pagination_requires_tiebreaker_order_key() -> None:
     )
     assert result.score < 90
     assert order_rule["passed"] is False
+
+
+def test_grades_predicate_patterns_and_distinguishes_ilike() -> None:
+    result = grade_sql_answer(
+        "SELECT id, name FROM customers WHERE name ILIKE '%shop%'",
+        {
+            "statement_kind": "select",
+            "required_tables": ["customers"],
+            "required_predicate_columns": ["name"],
+            "required_predicate_patterns": ["ILIKE"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_set_operation_and_subquery_patterns() -> None:
+    union_result = grade_sql_answer(
+        "SELECT user_id FROM email_targets UNION SELECT user_id FROM push_targets",
+        {
+            "statement_kind": "select",
+            "required_tables": ["email_targets", "push_targets"],
+            "required_set_operations": ["UNION"],
+        },
+    )
+    subquery_result = grade_sql_answer(
+        (
+            "SELECT a.id, ("
+            "SELECT MAX(o.created_at) FROM orders AS o WHERE o.account_id = a.id"
+            ") AS latest_order_at "
+            "FROM accounts AS a"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["accounts", "orders"],
+            "required_subquery_patterns": ["SCALAR_SUBQUERY"],
+            "required_aggregates": [{"function": "MAX", "column": "created_at"}],
+        },
+    )
+
+    assert union_result.score >= 90
+    assert subquery_result.score >= 90
+
+
+def test_grades_recursive_cte() -> None:
+    result = grade_sql_answer(
+        (
+            "WITH RECURSIVE category_tree AS ("
+            "SELECT id, parent_id, 0 AS depth FROM categories WHERE id = 10 "
+            "UNION ALL "
+            "SELECT c.id, c.parent_id, ct.depth + 1 AS depth "
+            "FROM categories AS c "
+            "INNER JOIN category_tree AS ct ON c.parent_id = ct.id"
+            ") "
+            "SELECT id, parent_id, depth FROM category_tree"
+        ),
+        {
+            "statement_kind": "select",
+            "required_tables": ["categories"],
+            "required_cte_names": ["category_tree"],
+            "required_recursive_cte": True,
+            "required_set_operations": ["UNION ALL"],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_grades_update_delete_and_returning() -> None:
+    update_result = grade_sql_answer(
+        (
+            "UPDATE orders AS o "
+            "SET status = 'archived' "
+            "FROM accounts AS a "
+            "WHERE o.account_id = a.id AND a.billing_status = 'delinquent' "
+            "RETURNING o.id"
+        ),
+        {
+            "statement_kind": "update",
+            "required_tables": ["orders", "accounts"],
+            "required_predicate_columns": ["account_id", "id", "billing_status"],
+            "required_returning": True,
+            "required_sql_fragments": ["FROM accounts AS a"],
+        },
+    )
+    delete_result = grade_sql_answer(
+        (
+            "DELETE FROM sessions AS s "
+            "USING cancelled_accounts AS c "
+            "WHERE s.account_id = c.account_id "
+            "RETURNING s.id"
+        ),
+        {
+            "statement_kind": "delete",
+            "required_tables": ["sessions", "cancelled_accounts"],
+            "required_predicate_columns": ["account_id"],
+            "required_returning": True,
+            "required_sql_fragments": ["USING cancelled_accounts AS c"],
+        },
+    )
+
+    assert update_result.score >= 90
+    assert delete_result.score >= 90
+
+
+def test_grades_create_table_and_alter_table_constraints() -> None:
+    create_result = grade_sql_answer(
+        (
+            "CREATE TABLE subscriptions ("
+            "id bigint PRIMARY KEY, "
+            "user_id bigint REFERENCES users(id), "
+            "external_key text UNIQUE, "
+            "seat_count int CHECK (seat_count >= 1)"
+            ")"
+        ),
+        {
+            "statement_kind": "create_table",
+            "required_tables": ["subscriptions", "users"],
+            "required_constraint_types": [
+                "PRIMARY_KEY",
+                "FOREIGN_KEY",
+                "UNIQUE",
+                "CHECK",
+            ],
+        },
+    )
+    alter_result = grade_sql_answer(
+        (
+            "ALTER TABLE subscriptions "
+            "ADD CONSTRAINT subscriptions_user_id_fkey "
+            "FOREIGN KEY (user_id) REFERENCES users(id)"
+        ),
+        {
+            "statement_kind": "alter_table",
+            "required_tables": ["subscriptions", "users"],
+            "required_constraint_types": ["FOREIGN_KEY"],
+            "required_sql_fragments": ["ADD CONSTRAINT subscriptions_user_id_fkey"],
+        },
+    )
+
+    assert create_result.score >= 90
+    assert alter_result.score >= 90
+
+
+def test_grades_multiple_statement_transaction_when_allowed() -> None:
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "WITH locked_job AS ("
+            "SELECT id FROM queue_jobs "
+            "WHERE status = 'queued' "
+            "ORDER BY created_at ASC "
+            "LIMIT 1 "
+            "FOR UPDATE SKIP LOCKED"
+            ") "
+            "UPDATE queue_jobs "
+            "SET status = 'claimed' "
+            "FROM locked_job "
+            "WHERE queue_jobs.id = locked_job.id "
+            "RETURNING queue_jobs.id; "
+            "COMMIT;"
+        ),
+        {
+            "allow_multiple_statements": True,
+            "required_statement_sequence": [
+                "transaction_begin",
+                "update",
+                "commit",
+            ],
+            "required_tables": ["queue_jobs"],
+            "required_lock_clauses": ["FOR_UPDATE", "SKIP_LOCKED"],
+            "required_cte_names": ["locked_job"],
+            "required_returning": True,
+            "required_sql_fragments": [
+                "SET status = 'claimed'",
+                "FROM locked_job",
+                "WHERE queue_jobs.id = locked_job.id",
+            ],
+        },
+    )
+
+    assert result.score >= 90
+    assert all(rule["passed"] for rule in _rules(result.rule_breakdown_json))
+
+
+def test_multiple_statement_transaction_fails_sequence_rule_when_out_of_order() -> None:
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "COMMIT; "
+            "UPDATE queue_jobs SET status = 'claimed' WHERE id = 42;"
+        ),
+        {
+            "allow_multiple_statements": True,
+            "required_statement_sequence": [
+                "transaction_begin",
+                "update",
+                "commit",
+            ],
+        },
+    )
+
+    sequence_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "statement_sequence"
+    )
+    assert result.score < 90
+    assert sequence_rule["passed"] is False
+
+
+def test_transaction_update_requires_using_locked_row_in_update() -> None:
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "SELECT id FROM queue_jobs "
+            "WHERE status = 'queued' "
+            "ORDER BY created_at ASC "
+            "LIMIT 1 "
+            "FOR UPDATE SKIP LOCKED; "
+            "UPDATE queue_jobs SET status = 'claimed' WHERE id = 42; "
+            "COMMIT;"
+        ),
+        {
+            "allow_multiple_statements": True,
+            "required_statement_sequence": [
+                "transaction_begin",
+                "select",
+                "update",
+                "commit",
+            ],
+            "required_tables": ["queue_jobs"],
+            "required_lock_clauses": ["FOR_UPDATE", "SKIP_LOCKED"],
+            "required_sql_fragments": [
+                "FROM locked_job",
+                "WHERE queue_jobs.id = locked_job.id",
+            ],
+        },
+    )
+
+    fragment_rule = next(
+        rule for rule in _rules(result.rule_breakdown_json)
+        if rule["name"] == "sql_fragments"
+    )
+    assert result.score < 90
+    assert fragment_rule["passed"] is False
+
+
+def test_multiple_statement_sequence_recognizes_create_materialized_view() -> None:
+    result = grade_sql_answer(
+        (
+            "CREATE MATERIALIZED VIEW monthly_revenue AS SELECT 1 AS revenue; "
+            "CREATE TABLE audit_logs (id bigint PRIMARY KEY);"
+        ),
+        {
+            "allow_multiple_statements": True,
+            "required_statement_sequence": [
+                "create_materialized_view",
+                "create_table",
+            ],
+        },
+    )
+
+    assert result.score >= 90

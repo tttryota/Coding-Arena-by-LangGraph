@@ -72,6 +72,7 @@ class _FakeSqlThemeBank:
                 "schema_markdown": "schema",
                 "sample_data_json": '[{"table":"customers","rows":10}]',
                 "expected_focus": "JOIN, COUNT",
+                "allow_multiple_statements": False,
                 "reference_sql": "SELECT 1",
                 "grading_contract": {
                     "statement_kind": "select",
@@ -92,6 +93,7 @@ class _FakeSqlThemeBank:
                 "schema_markdown": "events(id bigint, account_id bigint, created_at timestamptz)",
                 "sample_data_json": '[{"table":"events","rows":8200000}]',
                 "expected_focus": "EXPLAIN ANALYZE, BUFFERS",
+                "allow_multiple_statements": False,
                 "reference_sql": (
                     "EXPLAIN (ANALYZE, BUFFERS) "
                     "SELECT * FROM events "
@@ -118,6 +120,7 @@ class _FakeSqlThemeBank:
             "schema_markdown": "schema",
             "sample_data_json": '[{"table":"customers","rows":10}]',
             "expected_focus": "JOIN, COUNT",
+            "allow_multiple_statements": False,
             "reference_sql": "SELECT 1",
             "grading_contract": {
                 "statement_kind": "select",
@@ -287,6 +290,7 @@ class TestStartSession:
         assert data["topic_id"] == "join-basics-shipped-orders"
         assert data["topic_title"] == "shipped注文件数"
         assert "reference_sql" not in data
+        assert data["allow_multiple_statements"] is False
 
     def test_creates_session_for_topic(self) -> None:
         client = _make_client()
@@ -301,6 +305,7 @@ class TestStartSession:
         assert data["theme_family"] == "join-basics"
         assert data["topic_id"] == "join-basics-shipped-orders"
         assert data["topic_title"] == "shipped注文件数"
+        assert data["allow_multiple_statements"] is False
 
     def test_rejects_unknown_topic(self) -> None:
         client = _make_client()
@@ -378,6 +383,7 @@ class TestGetSession:
         assert resp.json()["reference_sql"] == "SELECT 1"
         assert resp.json()["topic_id"] == "join-basics-shipped-orders"
         assert resp.json()["topic_title"] == "shipped注文件数"
+        assert resp.json()["allow_multiple_statements"] is False
 
 
 class TestListSessions:

@@ -169,6 +169,7 @@ describe("SqlDojoPage", () => {
             schema_markdown: "schema",
             sample_data_json: "[]",
             expected_focus: "ROW_NUMBER",
+            allow_multiple_statements: false,
           });
         }
         throw new Error(`Unexpected fetch: ${url}`);
@@ -217,6 +218,7 @@ describe("SqlDojoPage", () => {
             schema_markdown: "schema",
             sample_data_json: "[]",
             expected_focus: "ROW_NUMBER",
+            allow_multiple_statements: false,
           });
         }
         throw new Error(`Unexpected fetch: ${url}`);

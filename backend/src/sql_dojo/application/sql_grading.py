@@ -162,6 +162,106 @@ def _predicate_columns(parsed: exp.Expression) -> set[str]:
     )
 
 
+def _group_by_columns(parsed: exp.Expression) -> set[str]:
+    group_exp = parsed.find(exp.Group)
+    return _column_names(group_exp.find_all(exp.Column)) if group_exp else set()
+
+
+def _table_names_for_statements(statements: list[exp.Expression]) -> set[str]:
+    return {
+        table_name
+        for statement in statements
+        for table_name in _table_names(statement)
+    }
+
+
+def _join_signatures_for_statements(
+    statements: list[exp.Expression],
+) -> set[tuple[str, str, str]]:
+    return {
+        signature
+        for statement in statements
+        for signature in _join_signatures(statement)
+    }
+
+
+def _predicate_columns_for_statements(statements: list[exp.Expression]) -> set[str]:
+    return {
+        column
+        for statement in statements
+        for column in _predicate_columns(statement)
+    }
+
+
+def _group_by_columns_for_statements(statements: list[exp.Expression]) -> set[str]:
+    return {
+        column
+        for statement in statements
+        for column in _group_by_columns(statement)
+    }
+
+
+def _aggregate_signatures_for_statements(
+    statements: list[exp.Expression],
+) -> set[tuple[str, str]]:
+    return {
+        signature
+        for statement in statements
+        for signature in _aggregate_signatures(statement)
+    }
+
+
+def _window_functions_for_statements(statements: list[exp.Expression]) -> set[str]:
+    return {
+        function_name
+        for statement in statements
+        for function_name in _window_functions(statement)
+    }
+
+
+def _cte_names_for_statements(statements: list[exp.Expression]) -> set[str]:
+    return {
+        cte_name
+        for statement in statements
+        for cte_name in _cte_names(statement)
+    }
+
+
+def _statement_kind_from_parsed(parsed: exp.Expression) -> str:
+    if isinstance(parsed, exp.Create):
+        return _create_statement_kind(parsed)
+    if isinstance(parsed, exp.Alter):
+        return "alter_table"
+    if isinstance(parsed, exp.Update):
+        return "update"
+    if isinstance(parsed, exp.Delete):
+        return "delete"
+    if isinstance(parsed, exp.Insert):
+        return "insert"
+    if isinstance(parsed, exp.Transaction):
+        return "transaction_begin"
+    if isinstance(parsed, exp.Commit):
+        return "commit"
+    if isinstance(parsed, exp.Select) or parsed.find(exp.Select) is not None:
+        return "select"
+    return parsed.key
+
+
+def _create_statement_kind(parsed: exp.Create) -> str:
+    kind = _normalize_identifier(str(parsed.args.get("kind") or ""))
+    properties = parsed.args.get("properties")
+    if isinstance(properties, exp.Properties) and any(
+        isinstance(item, exp.MaterializedProperty)
+        for item in properties.expressions
+    ):
+        return "create_materialized_view"
+    kind_map = {
+        "index": "create_index",
+        "table": "create_table",
+    }
+    return kind_map.get(kind, parsed.key)
+
+
 def _statement_kind(parsed: exp.Expression, raw_sql: str) -> str:
     sql_without_comments = _strip_sql_comments_preserving_offsets(raw_sql)
     normalized_prefix = sql_without_comments.strip().upper()
@@ -169,13 +269,7 @@ def _statement_kind(parsed: exp.Expression, raw_sql: str) -> str:
         return "explain"
     if normalized_prefix.startswith("CREATE MATERIALIZED VIEW"):
         return "create_materialized_view"
-    if isinstance(parsed, exp.Create) and parsed.args.get("kind") == "INDEX":
-        return "create_index"
-    if isinstance(parsed, exp.Insert):
-        return "insert"
-    if isinstance(parsed, exp.Select) or parsed.find(exp.Select) is not None:
-        return "select"
-    return parsed.key
+    return _statement_kind_from_parsed(parsed)
 
 
 def _require_expression(
@@ -621,6 +715,92 @@ def _array_function_present(sql_lower: str, function_name: str) -> bool:
     return _required_function_present(sql_lower, normalized)
 
 
+def _predicate_pattern_present(sql_lower: str, pattern: str) -> bool:
+    normalized = _normalize_identifier(pattern)
+    if normalized == "in":
+        return re.search(r"\bin\s*\(", sql_lower) is not None
+    if normalized == "between":
+        return re.search(r"\bbetween\b.+\band\b", sql_lower) is not None
+    if normalized == "like":
+        return re.search(r"\blike\b", sql_lower) is not None
+    if normalized == "ilike":
+        return re.search(r"\bilike\b", sql_lower) is not None
+    return normalized in sql_lower
+
+
+def _set_operations(parsed: exp.Expression) -> set[str]:
+    result: set[str] = set()
+    if isinstance(parsed, exp.Union):
+        result.add("union all" if parsed.args.get("distinct") is False else "union")
+    for union_exp in parsed.find_all(exp.Union):
+        result.add("union all" if union_exp.args.get("distinct") is False else "union")
+    for _ in parsed.find_all(exp.Intersect):
+        result.add("intersect")
+    for _ in parsed.find_all(exp.Except):
+        result.add("except")
+    return result
+
+
+def _set_operations_for_statements(statements: list[exp.Expression]) -> set[str]:
+    return {
+        operation
+        for statement in statements
+        for operation in _set_operations(statement)
+    }
+
+
+def _subquery_pattern_present(sql_lower: str, pattern: str) -> bool:
+    normalized = _normalize_identifier(pattern)
+    if normalized == "in_subquery":
+        return re.search(r"\bin\s*\(\s*select\b", sql_lower) is not None
+    if normalized == "scalar_subquery":
+        return re.search(
+            r"(?<!\bfrom\s)(?<!\bjoin\s)(?<!\bin\s)(?<!\bexists\s)\(\s*select\b",
+            sql_lower,
+        ) is not None
+    if normalized == "derived_table":
+        return re.search(r"\b(from|join)\s*\(\s*select\b", sql_lower) is not None
+    return normalized in sql_lower
+
+
+def _recursive_cte_present(parsed: exp.Expression) -> bool:
+    with_clause = parsed.args.get("with") or parsed.args.get("with_")
+    return isinstance(with_clause, exp.With) and bool(with_clause.args.get("recursive"))
+
+
+def _recursive_cte_present_for_statements(statements: list[exp.Expression]) -> bool:
+    return any(_recursive_cte_present(statement) for statement in statements)
+
+
+def _lock_clause_present(sql_lower: str, clause: str) -> bool:
+    normalized = _normalize_identifier(clause)
+    if normalized == "for_update":
+        return re.search(r"\bfor\s+update\b", sql_lower) is not None
+    if normalized == "skip_locked":
+        return re.search(r"\bskip\s+locked\b", sql_lower) is not None
+    return normalized in sql_lower
+
+
+def _constraint_type_present(sql_lower: str, constraint_type: str) -> bool:
+    normalized = _normalize_identifier(constraint_type)
+    if normalized == "primary_key":
+        return re.search(r"\bprimary\s+key\b", sql_lower) is not None
+    if normalized == "foreign_key":
+        return (
+            re.search(r"\bforeign\s+key\b", sql_lower) is not None
+            or re.search(r"\breferences\b", sql_lower) is not None
+        )
+    if normalized == "unique":
+        return re.search(r"\bunique\b", sql_lower) is not None
+    if normalized == "check":
+        return re.search(r"\bcheck\s*\(", sql_lower) is not None
+    return normalized in sql_lower
+
+
+def _statement_kinds(parsed_statements: list[exp.Expression]) -> list[str]:
+    return [_statement_kind_from_parsed(statement) for statement in parsed_statements]
+
+
 def _index_include_columns(sql_lower: str) -> set[str]:
     matched = re.search(r"\binclude\s*\((?P<body>[^)]*)\)", sql_lower)
     if matched is None:
@@ -715,7 +895,7 @@ def grade_sql_answer(  # noqa: C901, PLR0915
     user_sql: str,
     grading_contract: SqlDojoGradingContract,
 ) -> SqlGradingResult:
-    """PostgreSQL 方言の 1 文を静的採点する。"""
+    """PostgreSQL 方言の SQL を静的採点する。"""
     try:
         parsed_statements = sqlglot.parse(user_sql, read="postgres")
     except sqlglot.errors.ParseError as exc:
@@ -723,17 +903,23 @@ def grade_sql_answer(  # noqa: C901, PLR0915
             error_code="sql_parse_failed",
             message=f"SQL parse failed: {exc}",
         ) from exc
-    if len(parsed_statements) != 1:
+    allow_multiple_statements = grading_contract.get("allow_multiple_statements") is True
+    if not allow_multiple_statements and len(parsed_statements) != 1:
         raise SqlDojoEvaluationError(
             error_code="multiple_statements_not_allowed",
             message="Only a single SQL statement is allowed per session",
         )
-    parsed = _require_expression(
-        parsed_statements[0],
-        message="SQL parse produced an empty statement",
-    )
+    expression_statements = [
+        _require_expression(
+            statement,
+            message="SQL parse produced an empty statement",
+        )
+        for statement in parsed_statements
+    ]
+    parsed = expression_statements[0]
     actual_kind = _statement_kind(parsed, user_sql)
     target_parsed = parsed
+    target_statements = [parsed]
     explain_options: set[str] = set()
     invalid_explain_options = False
     if actual_kind == "explain":
@@ -750,6 +936,9 @@ def grade_sql_answer(  # noqa: C901, PLR0915
                 error_code="sql_parse_failed",
                 message=f"EXPLAIN inner SQL parse failed: {exc}",
             ) from exc
+        target_statements = [target_parsed]
+    elif allow_multiple_statements:
+        target_statements = expression_statements
     rules: list[SqlDojoGradingRule] = []
 
     expected_kind = grading_contract.get("statement_kind")
@@ -762,9 +951,27 @@ def grade_sql_answer(  # noqa: C901, PLR0915
             message=f"Expected {expected_kind}, got {actual_kind}",
         )
 
+    required_statement_sequence = grading_contract.get("required_statement_sequence", [])
+    if required_statement_sequence:
+        actual_sequence = _statement_kinds(expression_statements)
+        expected_sequence = [
+            _normalize_identifier(statement_kind)
+            for statement_kind in required_statement_sequence
+        ]
+        _add_rule(
+            rules,
+            name="statement_sequence",
+            weight=20,
+            passed=actual_sequence == expected_sequence,
+            message=(
+                f"Expected statement sequence {expected_sequence}, "
+                f"got {actual_sequence}"
+            ),
+        )
+
     required_tables = grading_contract.get("required_tables", [])
     if required_tables:
-        actual_tables = _table_names(target_parsed)
+        actual_tables = _table_names_for_statements(target_statements)
         expected = {_normalize_identifier(table) for table in required_tables}
         _add_rule(
             rules,
@@ -776,7 +983,7 @@ def grade_sql_answer(  # noqa: C901, PLR0915
 
     required_joins = grading_contract.get("required_joins", [])
     if required_joins:
-        actual_joins = _join_signatures(target_parsed)
+        actual_joins = _join_signatures_for_statements(target_statements)
         expected_joins = {
             (
                 _normalize_identifier(str(item["left"])),
@@ -795,7 +1002,7 @@ def grade_sql_answer(  # noqa: C901, PLR0915
 
     predicate_columns = grading_contract.get("required_predicate_columns", [])
     if predicate_columns:
-        actual_predicates = _predicate_columns(target_parsed)
+        actual_predicates = _predicate_columns_for_statements(target_statements)
         expected = {_normalize_identifier(column) for column in predicate_columns}
         _add_rule(
             rules,
@@ -807,8 +1014,7 @@ def grade_sql_answer(  # noqa: C901, PLR0915
 
     group_by_columns = grading_contract.get("required_group_by_columns", [])
     if group_by_columns:
-        group_exp = target_parsed.find(exp.Group)
-        actual_group = _column_names(group_exp.find_all(exp.Column)) if group_exp else set()
+        actual_group = _group_by_columns_for_statements(target_statements)
         expected = {_normalize_identifier(column) for column in group_by_columns}
         _add_rule(
             rules,
@@ -820,7 +1026,7 @@ def grade_sql_answer(  # noqa: C901, PLR0915
 
     required_aggregates = grading_contract.get("required_aggregates", [])
     if required_aggregates:
-        actual_aggs = _aggregate_signatures(target_parsed)
+        actual_aggs = _aggregate_signatures_for_statements(target_statements)
         expected_aggs = {
             (
                 _normalize_identifier(str(item["function"])).upper(),
@@ -881,7 +1087,7 @@ def grade_sql_answer(  # noqa: C901, PLR0915
 
     window_functions = grading_contract.get("required_window_functions", [])
     if window_functions:
-        actual_windows = _window_functions(target_parsed)
+        actual_windows = _window_functions_for_statements(target_statements)
         expected = {_normalize_identifier(name).upper() for name in window_functions}
         _add_rule(
             rules,
@@ -893,7 +1099,7 @@ def grade_sql_answer(  # noqa: C901, PLR0915
 
     cte_names = grading_contract.get("required_cte_names", [])
     if cte_names:
-        actual_ctes = _cte_names(target_parsed)
+        actual_ctes = _cte_names_for_statements(target_statements)
         expected = {_normalize_identifier(name) for name in cte_names}
         _add_rule(
             rules,
@@ -905,6 +1111,77 @@ def grade_sql_answer(  # noqa: C901, PLR0915
 
     sql_lower = _normalized_structural_sql(user_sql)
     sql_compact = _compact_structural_sql(user_sql)
+
+    required_predicate_patterns = grading_contract.get("required_predicate_patterns", [])
+    if required_predicate_patterns:
+        expected = {
+            _normalize_identifier(pattern)
+            for pattern in required_predicate_patterns
+        }
+        actual = {
+            pattern
+            for pattern in expected
+            if _predicate_pattern_present(sql_lower, pattern)
+        }
+        _add_rule(
+            rules,
+            name="predicate_patterns",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=(
+                f"Expected predicate patterns {sorted(expected)}, "
+                f"got {sorted(actual)}"
+            ),
+        )
+
+    required_set_operations = grading_contract.get("required_set_operations", [])
+    if required_set_operations:
+        actual_set_operations = _set_operations_for_statements(target_statements)
+        expected = {
+            _normalize_identifier(operation)
+            for operation in required_set_operations
+        }
+        _add_rule(
+            rules,
+            name="set_operations",
+            weight=10,
+            passed=expected.issubset(actual_set_operations),
+            message=(
+                f"Expected set operations {sorted(expected)}, "
+                f"got {sorted(actual_set_operations)}"
+            ),
+        )
+
+    required_subquery_patterns = grading_contract.get("required_subquery_patterns", [])
+    if required_subquery_patterns:
+        expected = {
+            _normalize_identifier(pattern)
+            for pattern in required_subquery_patterns
+        }
+        actual = {
+            pattern
+            for pattern in expected
+            if _subquery_pattern_present(sql_lower, pattern)
+        }
+        _add_rule(
+            rules,
+            name="subquery_patterns",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=(
+                f"Expected subquery patterns {sorted(expected)}, "
+                f"got {sorted(actual)}"
+            ),
+        )
+
+    if grading_contract.get("required_recursive_cte") is True:
+        _add_rule(
+            rules,
+            name="recursive_cte",
+            weight=10,
+            passed=_recursive_cte_present_for_statements(target_statements),
+            message="Expected WITH RECURSIVE",
+        )
 
     required_functions = grading_contract.get("required_functions", [])
     if required_functions:
@@ -1029,6 +1306,60 @@ def grade_sql_answer(  # noqa: C901, PLR0915
             weight=10,
             passed=expected.issubset(actual),
             message=f"Expected array functions {sorted(expected)}, got {sorted(actual)}",
+        )
+
+    required_lock_clauses = grading_contract.get("required_lock_clauses", [])
+    if required_lock_clauses:
+        expected = {
+            _normalize_identifier(clause)
+            for clause in required_lock_clauses
+        }
+        actual = {
+            clause
+            for clause in expected
+            if _lock_clause_present(sql_lower, clause)
+        }
+        _add_rule(
+            rules,
+            name="lock_clauses",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=f"Expected lock clauses {sorted(expected)}, got {sorted(actual)}",
+        )
+
+    required_constraint_types = grading_contract.get("required_constraint_types", [])
+    if required_constraint_types:
+        expected = {
+            _normalize_identifier(constraint_type)
+            for constraint_type in required_constraint_types
+        }
+        actual = {
+            constraint_type
+            for constraint_type in expected
+            if _constraint_type_present(sql_lower, constraint_type)
+        }
+        _add_rule(
+            rules,
+            name="constraint_types",
+            weight=10,
+            passed=expected.issubset(actual),
+            message=(
+                f"Expected constraint types {sorted(expected)}, "
+                f"got {sorted(actual)}"
+            ),
+        )
+
+    if grading_contract.get("required_returning") is True:
+        has_returning = any(
+            statement.find(exp.Returning) is not None
+            for statement in target_statements
+        )
+        _add_rule(
+            rules,
+            name="returning_clause",
+            weight=10,
+            passed=has_returning,
+            message="Expected RETURNING clause",
         )
 
     if grading_contract.get("required_on_conflict") is True:

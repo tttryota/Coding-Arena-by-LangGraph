@@ -24,9 +24,18 @@ def test_catalog_exposes_broad_theme_coverage_and_variant_counts() -> None:
     assert "slow-query-diagnosis" in families
     assert "index-design" in families
     assert "conditional-aggregation" in families
+    assert "basic-filtering" in families
+    assert "distinct-and-derived-columns" in families
+    assert "join-variants" in families
+    assert "set-operations" in families
+    assert "subquery-patterns" in families
+    assert "write-operations" in families
     assert "business-analytics" in families
     assert "advanced-index-design" in families
-    assert total_problem_count == 63
+    assert "recursive-cte" in families
+    assert "schema-constraints" in families
+    assert "transactions-locking" in families
+    assert total_problem_count == 90
 
 
 def test_catalog_exposes_unique_topic_entries() -> None:
@@ -38,12 +47,15 @@ def test_catalog_exposes_unique_topic_entries() -> None:
     ]
 
     topic_ids = [topic["topic_id"] for topic in topics]
-    assert len(topics) == 63
+    assert len(topics) == 90
     assert len(set(topic_ids)) == len(topic_ids)
     assert "join-basics-shipped-orders" in topic_ids
+    assert "like-customer-search" in topic_ids
+    assert "update-from-mark-overdue" in topic_ids
     assert "index-design-api-requests-workspace-endpoint-requested-at" in topic_ids
     assert "case-when-paid-amount" in topic_ids
     assert "materialized-view-monthly-revenue" in topic_ids
+    assert "archive-and-log-transaction" in topic_ids
 
 
 def test_create_problem_can_pick_topic_deterministically() -> None:

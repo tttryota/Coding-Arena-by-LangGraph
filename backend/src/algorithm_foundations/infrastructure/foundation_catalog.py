@@ -95,6 +95,11 @@ _EXPECTED_MULTI_PROBLEM_COUNTS: Final[dict[str, int]] = {
     "algo-102-hashmap-count": 3,
     "algo-102-hashmap-index": 3,
     "algo-102-hashmap-match": 3,
+    "algo-025-practice": 2,
+    "algo-095-practice": 2,
+    "algo-103-practice": 2,
+    "algo-107-practice": 2,
+    "algo-111-practice": 2,
 }
 
 @dataclass(frozen=True)
@@ -627,12 +632,12 @@ class AlgorithmFoundationCatalog:
                     )
                 seen_payloads.add(payload)
         counts = self.counts()
-        if counts != (320, 361):
+        if counts != (320, 366):
             raise AlgorithmFoundationCatalogError(
                 error_code="catalog_count_mismatch",
                 message=(
                     "algorithm foundations catalog must contain exactly "
-                    "320 units and 361 problems"
+                    "320 units and 366 problems"
                 ),
             )
         self._validate_prerequisite_cycles()

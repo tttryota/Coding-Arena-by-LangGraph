@@ -318,6 +318,11 @@ def test_static_problem_banks_are_fully_differentiated_within_units() -> None:
         "algo-051-basic",
         "algo-053-basic",
         "algo-054-basic",
+        "algo-025-practice",
+        "algo-095-practice",
+        "algo-103-practice",
+        "algo-107-practice",
+        "algo-111-practice",
     ]:
         unit = catalog.get_unit(unit_id)
         payloads = {
@@ -333,7 +338,7 @@ def test_static_problem_banks_are_fully_differentiated_within_units() -> None:
         }
         assert len(payloads) == len(unit["problem_bank"])
 
-    assert catalog.counts() == (320, 361)
+    assert catalog.counts() == (320, 366)
 
     stack_titles = [
         problem["title"]
@@ -368,6 +373,41 @@ def test_static_problem_banks_are_fully_differentiated_within_units() -> None:
             "存在判定をハッシュで高速化 / 2 本目の列から含まれる値だけを抜き出す",
             "存在判定をハッシュで高速化 / 追加・削除・照会を同じ集合で処理する",
         ]
+    assert [
+        problem["title"]
+        for problem in catalog.get_unit("algo-025-practice")["problem_bank"]
+    ] == [
+        "プリム法（最小全域木） を素直に実装する / 重み行列から最小全域木の重みを求める",
+        "プリム法（最小全域木） を素直に実装する / すでにつながっている頂点集合から全体を結ぶ最小追加コストを求める",
+    ]
+    assert [
+        problem["title"]
+        for problem in catalog.get_unit("algo-095-practice")["problem_bank"]
+    ] == [
+        "優先度付きキュー（ヒープ） を素直に実装する / 最小値の参照と削除を分けて扱う",
+        "優先度付きキュー（ヒープ） を素直に実装する / 上位 K 個だけを保ちながら K 番目に大きい値を求める",
+    ]
+    assert [
+        problem["title"]
+        for problem in catalog.get_unit("algo-103-practice")["problem_bank"]
+    ] == [
+        "スパーステーブル（RMQ） を素直に実装する / 前処理を行い、各区間で最小値を取る最左位置を求める",
+        "スパーステーブル（RMQ） を素直に実装する / 前処理を行い、各区間の gcd を求める",
+    ]
+    assert [
+        problem["title"]
+        for problem in catalog.get_unit("algo-107-practice")["problem_bank"]
+    ] == [
+        "凸包（Convex Hull） を素直に実装する / 凸包の周長を求める",
+        "凸包（Convex Hull） を素直に実装する / 最遠点対の距離の二乗を求める",
+    ]
+    assert [
+        problem["title"]
+        for problem in catalog.get_unit("algo-111-practice")["problem_bank"]
+    ] == [
+        "点の多角形内包判定 を素直に実装する / 凸多角形に対する複数の点問い合わせを処理する",
+        "点の多角形内包判定 を素直に実装する / 凸性を使って各点を高速に内包判定する",
+    ]
 
     for group in catalog.list_catalog()["groups"]:
         for unit_summary in group["units"]:

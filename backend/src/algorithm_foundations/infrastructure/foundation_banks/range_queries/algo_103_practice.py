@@ -27,5 +27,17 @@ UNIT_BANK = unit_bank(
             canonical_language='python',
             grading_rubric=RUBRIC,
         ),
+        problem(
+            problem_id='algo-103-practice-p2',
+            title='スパーステーブル（RMQ） を素直に実装する / 前処理を行い、各区間の gcd を求める',
+            problem_statement='長さ N の正整数列 A と Q 個の区間 [L, R] が与えられる。前処理を行い、各区間に含まれる値の最大公約数を求めよ。',
+            input_format='1 行目に N Q。\n2 行目に A1..AN。\n続く Q 行に L R。',
+            output_format='各問い合わせの gcd を 1 行ずつ出力する。',
+            constraints='1 <= N, Q <= 2 * 10^5\n1 <= A_i <= 10^18\n1 <= L <= R <= N',
+            examples=[{'input': '5 3\n12 18 6 15 9\n1 3\n2 5\n4 5', 'output': '6\n3\n3'}],
+            canonical_reference_solution="from math import gcd\n\n\ndef solve() -> None:\n    import sys\n    input = sys.stdin.readline\n    n, q = map(int, input().split())\n    a = list(map(int, input().split()))\n    log = [0] * (n + 1)\n    for i in range(2, n + 1):\n        log[i] = log[i // 2] + 1\n    st = [a[:]]\n    j = 1\n    while (1 << j) <= n:\n        prev = st[-1]\n        width = 1 << j\n        half = width >> 1\n        row = [0] * (n - width + 1)\n        for i in range(n - width + 1):\n            row[i] = gcd(prev[i], prev[i + half])\n        st.append(row)\n        j += 1\n    out = []\n    for _ in range(q):\n        l, r = map(int, input().split())\n        l -= 1\n        r -= 1\n        length = r - l + 1\n        j = log[length]\n        out.append(str(gcd(st[j][l], st[j][r - (1 << j) + 1])))\n    sys.stdout.write('\\n'.join(out))\n\nif __name__ == '__main__':\n    solve()\n",
+            canonical_language='python',
+            grading_rubric=RUBRIC,
+        ),
     ],
 )

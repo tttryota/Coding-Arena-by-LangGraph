@@ -27,5 +27,17 @@ UNIT_BANK = unit_bank(
             canonical_language='python',
             grading_rubric=RUBRIC,
         ),
+        problem(
+            problem_id='algo-107-practice-p2',
+            title='凸包（Convex Hull） を素直に実装する / 最遠点対の距離の二乗を求める',
+            problem_statement='平面上の N 点が与えられる。これらの点の中から 2 点を選ぶとき、ユークリッド距離の二乗が最大となる値を求めよ。',
+            input_format='1 行目に N。\n続く N 行に xi yi。',
+            output_format='最大距離の二乗を出力する。',
+            constraints='3 <= N <= 2 * 10^5\n-10^9 <= x_i, y_i <= 10^9\n入力点は相異なる\n少なくとも 3 点は同一直線上にない',
+            examples=[{'input': '5\n0 0\n2 0\n2 2\n0 2\n1 1', 'output': '8'}],
+            canonical_reference_solution="def cross(o: tuple[int, int], a: tuple[int, int], b: tuple[int, int]) -> int:\n    return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])\n\n\ndef dist2(a: tuple[int, int], b: tuple[int, int]) -> int:\n    dx = a[0] - b[0]\n    dy = a[1] - b[1]\n    return dx * dx + dy * dy\n\n\ndef area2(a: tuple[int, int], b: tuple[int, int], c: tuple[int, int]) -> int:\n    return abs(cross(a, b, c))\n\n\ndef convex_hull(points: list[tuple[int, int]]) -> list[tuple[int, int]]:\n    pts = sorted(points)\n    lower = []\n    for p in pts:\n        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:\n            lower.pop()\n        lower.append(p)\n    upper = []\n    for p in reversed(pts):\n        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:\n            upper.pop()\n        upper.append(p)\n    return lower[:-1] + upper[:-1]\n\n\ndef solve() -> None:\n    n = int(input())\n    points = [tuple(map(int, input().split())) for _ in range(n)]\n    hull = convex_hull(points)\n    m = len(hull)\n    if m == 1:\n        print(0)\n        return\n    if m == 2:\n        print(dist2(hull[0], hull[1]))\n        return\n    j = 1\n    answer = 0\n    for i in range(m):\n        ni = (i + 1) % m\n        while area2(hull[i], hull[ni], hull[(j + 1) % m]) > area2(hull[i], hull[ni], hull[j]):\n            j = (j + 1) % m\n        answer = max(answer, dist2(hull[i], hull[j]), dist2(hull[ni], hull[j]))\n    print(answer)\n\n\nif __name__ == '__main__':\n    solve()\n",
+            canonical_language='python',
+            grading_rubric=RUBRIC,
+        ),
     ],
 )

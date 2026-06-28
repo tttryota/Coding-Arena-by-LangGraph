@@ -3029,8 +3029,8 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 topic_title="SKIP LOCKED で次ジョブ取得",
                 problem_statement=(
                     "必要なら複数文で、queue_jobs から status='queued' の最古ジョブを"
-                    "競合なく 1 件取得して claimed に更新してください。"
-                    "BEGIN と COMMIT、SELECT ... FOR UPDATE SKIP LOCKED、UPDATE を使います。"
+                    "競合なく 1 件 claimed に更新し、その id を返してください。"
+                    "BEGIN と COMMIT、FOR UPDATE SKIP LOCKED、UPDATE、RETURNING を使います。"
                 ),
                 schema_markdown=(
                     "```sql\n"
@@ -3065,12 +3065,23 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                     ],
                     "required_tables": ["queue_jobs"],
                     "required_lock_clauses": ["FOR_UPDATE", "SKIP_LOCKED"],
-                    "required_cte_names": ["locked_job"],
                     "required_returning": True,
                     "required_sql_fragments": [
+                        "WHERE status = 'queued'",
+                        "ORDER BY created_at ASC",
                         "SET status = 'claimed'",
-                        "FROM locked_job",
-                        "WHERE queue_jobs.id = locked_job.id",
+                        "LIMIT 1",
+                    ],
+                    "required_sql_regexes": [
+                        (
+                            r"(?:updatequeue_jobssetstatus='claimed'from"
+                            r"(?P<source>(?!queue_jobs)\w+)"
+                            r"wherequeue_jobs\.id=(?P=source)\.idreturningqueue_jobs\.id;|"
+                            r"updatequeue_jobs(?:as)?(?P<target>\w+)setstatus='claimed'from"
+                            r"(?P<source_alias>(?!queue_jobs)\w+)"
+                            r"where(?P=target)\.id=(?P=source_alias)\.id"
+                            r"returning(?P=target)\.id;)"
+                        ),
                     ],
                 },
             ),
@@ -3078,8 +3089,9 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                 topic_id="reserve-inventory-transaction",
                 topic_title="在庫引当 transaction",
                 problem_statement=(
-                    "必要なら複数文で、inventory の available_quantity を 1 減らし、"
-                    "inventory_reservations に予約行を追加してください。"
+                    "必要なら複数文で、product_id = 42 の inventory.available_quantity を 1 減らし、"
+                    "inventory_reservations に (product_id, reserved_quantity) = (42, 1)"
+                    " の予約行を追加してください。"
                     "BEGIN と COMMIT を含めます。"
                 ),
                 schema_markdown=(
@@ -3108,9 +3120,16 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                         "commit",
                     ],
                     "required_tables": ["inventory", "inventory_reservations"],
+                    "required_statement_predicates": [
+                        {
+                            "statement_kind": "update",
+                            "predicate": "product_id = 42",
+                        },
+                    ],
                     "required_sql_fragments": [
                         "SET available_quantity = available_quantity - 1",
                         "INSERT INTO inventory_reservations",
+                        "VALUES (42, 1)",
                     ],
                 },
             ),
@@ -3150,7 +3169,20 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                     ],
                     "required_tables": ["completed_orders", "archived_orders"],
                     "required_predicate_columns": ["completed_at"],
-                    "required_sql_fragments": ["INSERT INTO archived_orders", "DELETE FROM completed_orders"],
+                    "required_statement_predicates": [
+                        {
+                            "statement_kind": "insert",
+                            "predicate": "completed_at < CAST('2026-01-01' AS DATE)",
+                        },
+                        {
+                            "statement_kind": "delete",
+                            "predicate": "completed_at < CAST('2026-01-01' AS DATE)",
+                        },
+                    ],
+                    "required_sql_fragments": [
+                        "INSERT INTO archived_orders",
+                        "DELETE FROM completed_orders",
+                    ],
                 },
             ),
         ),

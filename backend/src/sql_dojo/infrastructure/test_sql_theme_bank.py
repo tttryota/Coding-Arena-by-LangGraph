@@ -106,3 +106,219 @@ def test_all_reference_sql_variants_satisfy_their_grading_contracts() -> None:
                 f"{theme.family} reference SQL should satisfy its contract: "
                 f"{variant.reference_sql}"
             )
+
+
+def test_claim_next_job_contract_requires_queue_filter_and_oldest_order() -> None:
+    problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="claim-next-job-skip-locked",
+    )
+
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "WITH claimed_job AS ("
+            "SELECT id "
+            "FROM queue_jobs "
+            "LIMIT 1 "
+            "FOR UPDATE SKIP LOCKED"
+            ") "
+            "UPDATE queue_jobs "
+            "SET status = 'claimed' "
+            "FROM claimed_job "
+            "WHERE queue_jobs.id = claimed_job.id "
+            "RETURNING queue_jobs.id; "
+            "COMMIT;"
+        ),
+        problem["grading_contract"],
+    )
+
+    assert result.score < 90
+
+
+def test_reserve_inventory_contract_rejects_global_update_even_with_matching_values() -> None:
+    problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="reserve-inventory-transaction",
+    )
+
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "UPDATE inventory "
+            "SET available_quantity = available_quantity - 1 "
+            "WHERE product_id = 42 OR 1 = 1; "
+            "INSERT INTO inventory_reservations (product_id, reserved_quantity) "
+            "VALUES (42, 1); "
+            "COMMIT;"
+        ),
+        problem["grading_contract"],
+    )
+
+    assert result.score < 90
+
+
+def test_reserve_inventory_contract_requires_top_level_update_predicate() -> None:
+    problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="reserve-inventory-transaction",
+    )
+
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "UPDATE inventory "
+            "SET available_quantity = available_quantity - 1 "
+            "FROM (SELECT product_id FROM inventory WHERE product_id = 42) matched; "
+            "INSERT INTO inventory_reservations (product_id, reserved_quantity) "
+            "VALUES (42, 1); "
+            "COMMIT;"
+        ),
+        problem["grading_contract"],
+    )
+
+    assert result.score < 90
+
+
+def test_archive_and_log_contract_requires_same_cutoff_on_delete() -> None:
+    problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="archive-and-log-transaction",
+    )
+
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "INSERT INTO archived_orders (id, completed_at, total_amount) "
+            "SELECT id, completed_at, total_amount "
+            "FROM completed_orders "
+            "WHERE completed_at < DATE '2026-01-01'; "
+            "DELETE FROM completed_orders "
+            "WHERE completed_at < DATE '2026-01-01' OR TRUE; "
+            "COMMIT;"
+        ),
+        problem["grading_contract"],
+    )
+
+    assert result.score < 90
+
+
+def test_archive_and_log_contract_requires_top_level_delete_predicate() -> None:
+    problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="archive-and-log-transaction",
+    )
+
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "INSERT INTO archived_orders (id, completed_at, total_amount) "
+            "SELECT id, completed_at, total_amount "
+            "FROM completed_orders "
+            "WHERE completed_at < DATE '2026-01-01'; "
+            "DELETE FROM completed_orders "
+            "USING ("
+            "SELECT id FROM completed_orders "
+            "WHERE completed_at < DATE '2026-01-01'"
+            ") old_rows; "
+            "COMMIT;"
+        ),
+        problem["grading_contract"],
+    )
+
+    assert result.score < 90
+
+
+def test_claim_next_job_contract_rejects_self_join_shortcut() -> None:
+    problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="claim-next-job-skip-locked",
+    )
+
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "WITH locked_job AS ("
+            "SELECT id "
+            "FROM queue_jobs "
+            "WHERE status = 'queued' "
+            "ORDER BY created_at ASC "
+            "LIMIT 1 "
+            "FOR UPDATE SKIP LOCKED"
+            ") "
+            "UPDATE queue_jobs "
+            "SET status = 'claimed' "
+            "FROM queue_jobs "
+            "WHERE queue_jobs.id = queue_jobs.id "
+            "RETURNING queue_jobs.id; "
+            "COMMIT;"
+        ),
+        problem["grading_contract"],
+    )
+
+    assert result.score < 90
+
+
+def test_transaction_contracts_accept_reasonable_alias_usage() -> None:
+    claim_problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="claim-next-job-skip-locked",
+    )
+    reserve_problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="reserve-inventory-transaction",
+    )
+    archive_problem = SqlThemeBank().create_problem(
+        difficulty="advanced",
+        topic_id="archive-and-log-transaction",
+    )
+
+    claim_result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "WITH claimed_job AS ("
+            "SELECT id "
+            "FROM queue_jobs "
+            "WHERE status = 'queued' "
+            "ORDER BY created_at ASC "
+            "LIMIT 1 "
+            "FOR UPDATE SKIP LOCKED"
+            ") "
+            "UPDATE queue_jobs AS q "
+            "SET status = 'claimed' "
+            "FROM claimed_job "
+            "WHERE q.id = claimed_job.id "
+            "RETURNING q.id; "
+            "COMMIT;"
+        ),
+        claim_problem["grading_contract"],
+    )
+    reserve_result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "UPDATE inventory AS i "
+            "SET available_quantity = available_quantity - 1 "
+            "WHERE i.product_id = 42; "
+            "INSERT INTO inventory_reservations (product_id, reserved_quantity) "
+            "VALUES (42, 1); "
+            "COMMIT;"
+        ),
+        reserve_problem["grading_contract"],
+    )
+    archive_result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "INSERT INTO archived_orders (id, completed_at, total_amount) "
+            "SELECT c.id, c.completed_at, c.total_amount "
+            "FROM completed_orders AS c "
+            "WHERE c.completed_at < DATE '2026-01-01'; "
+            "DELETE FROM completed_orders AS c "
+            "WHERE c.completed_at < DATE '2026-01-01'; "
+            "COMMIT;"
+        ),
+        archive_problem["grading_contract"],
+    )
+
+    assert claim_result.score >= 90
+    assert reserve_result.score >= 90
+    assert archive_result.score >= 90

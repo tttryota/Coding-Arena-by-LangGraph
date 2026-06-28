@@ -58,6 +58,32 @@ class _FakeSqlThemeBank:
                 error_code="topic_not_found",
                 message="No SQL dojo topic for topic_id='missing-topic'",
             )
+        if topic_id == "claim-next-job-skip-locked" or theme_family == "transactions-locking":
+            return {
+                "family": "transactions-locking",
+                "topic_id": "claim-next-job-skip-locked",
+                "topic_title": "SKIP LOCKED で次ジョブ取得",
+                "difficulty": "advanced",
+                "dialect": "postgresql",
+                "theme_title": "Transaction と Locking を扱う",
+                "business_domain": "Operations",
+                "target_skill": "Transaction と Locking",
+                "problem_statement": "複数文でジョブを claim してください",
+                "schema_markdown": "queue_jobs(id bigint, status text, created_at timestamptz)",
+                "sample_data_json": '[{"table":"queue_jobs","rows":10}]',
+                "expected_focus": "BEGIN, FOR UPDATE SKIP LOCKED, UPDATE, COMMIT",
+                "allow_multiple_statements": True,
+                "reference_sql": "BEGIN; UPDATE queue_jobs SET status = 'claimed'; COMMIT;",
+                "grading_contract": {
+                    "allow_multiple_statements": True,
+                    "required_statement_sequence": [
+                        "transaction_begin",
+                        "update",
+                        "commit",
+                    ],
+                    "required_tables": ["queue_jobs"],
+                },
+            }
         if topic_id is not None:
             return {
                 "family": "join-basics",
@@ -307,6 +333,20 @@ class TestStartSession:
         assert data["topic_title"] == "shipped注文件数"
         assert data["allow_multiple_statements"] is False
 
+    def test_creates_session_for_multi_statement_topic(self) -> None:
+        client = _make_client()
+        resp = client.post(
+            "/sql-dojo/sessions",
+            json={"topic_id": "claim-next-job-skip-locked"},
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["difficulty"] == "advanced"
+        assert data["theme_family"] == "transactions-locking"
+        assert data["topic_id"] == "claim-next-job-skip-locked"
+        assert data["allow_multiple_statements"] is True
+
     def test_rejects_unknown_topic(self) -> None:
         client = _make_client()
         resp = client.post(
@@ -384,6 +424,20 @@ class TestGetSession:
         assert resp.json()["topic_id"] == "join-basics-shipped-orders"
         assert resp.json()["topic_title"] == "shipped注文件数"
         assert resp.json()["allow_multiple_statements"] is False
+
+    def test_returns_multi_statement_flag_for_multi_statement_topic(self) -> None:
+        client = _make_client()
+        session = client.post(
+            "/sql-dojo/sessions",
+            json={"topic_id": "claim-next-job-skip-locked"},
+        ).json()
+        session_id = session["session_id"]
+
+        resp = client.get(f"/sql-dojo/sessions/{session_id}")
+
+        assert resp.status_code == 200
+        assert resp.json()["topic_id"] == "claim-next-job-skip-locked"
+        assert resp.json()["allow_multiple_statements"] is True
 
 
 class TestListSessions:

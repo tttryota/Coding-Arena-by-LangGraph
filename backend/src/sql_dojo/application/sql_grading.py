@@ -628,6 +628,27 @@ def _compact_structural_sql(raw_sql: str) -> str:
     return re.sub(r"\s+", "", _normalized_structural_sql(raw_sql))
 
 
+def _strip_sql_qualifiers(compacted_sql: str) -> str:
+    return re.sub(r"\b[a-z_][a-z_0-9]*\.", "", compacted_sql)
+
+
+def _normalized_predicate_sql(predicate: exp.Expression) -> str:
+    return _strip_sql_qualifiers(_compact_sql(predicate.sql(dialect="postgres")))
+
+
+def _statement_predicates(parsed: exp.Expression) -> list[str]:
+    top_level_where = parsed.args.get("where")
+    if isinstance(top_level_where, exp.Where):
+        return [_normalized_predicate_sql(top_level_where.this)]
+    if isinstance(parsed, exp.Insert):
+        source_query = parsed.expression
+        if isinstance(source_query, exp.Expression):
+            source_where = source_query.args.get("where")
+            if isinstance(source_where, exp.Where):
+                return [_normalized_predicate_sql(source_where.this)]
+    return []
+
+
 def _compact_sql_with_offsets(raw_sql: str) -> tuple[str, list[int]]:
     sql_without_comments = _strip_sql_comments_preserving_offsets(raw_sql)
     compact_chars: list[str] = []
@@ -1010,6 +1031,38 @@ def grade_sql_answer(  # noqa: C901, PLR0915
             weight=10,
             passed=expected.issubset(actual_predicates),
             message=f"Expected predicates {sorted(expected)}, got {sorted(actual_predicates)}",
+        )
+
+    required_statement_predicates = grading_contract.get("required_statement_predicates", [])
+    if required_statement_predicates:
+        actual_predicates_by_kind = [
+            (
+                _statement_kind(statement, statement.sql(dialect="postgres")),
+                _statement_predicates(statement),
+            )
+            for statement in expression_statements
+        ]
+        missing_predicates: list[tuple[str, str]] = []
+        for requirement in required_statement_predicates:
+            expected_kind = _normalize_identifier(str(requirement["statement_kind"]))
+            expected_predicate = _strip_sql_qualifiers(
+                _compact_sql(str(requirement["predicate"])),
+            )
+            predicate_matched = any(
+                statement_kind == expected_kind and expected_predicate in predicates
+                for statement_kind, predicates in actual_predicates_by_kind
+            )
+            if not predicate_matched:
+                missing_predicates.append((expected_kind, expected_predicate))
+        _add_rule(
+            rules,
+            name="statement_predicates",
+            weight=10,
+            passed=not missing_predicates,
+            message=(
+                f"Expected statement predicates {missing_predicates or 'all matched'}, "
+                f"got {actual_predicates_by_kind}"
+            ),
         )
 
     group_by_columns = grading_contract.get("required_group_by_columns", [])
@@ -1458,6 +1511,25 @@ def grade_sql_answer(  # noqa: C901, PLR0915
             weight=10,
             passed=expected.issubset(actual),
             message=f"Expected SQL fragments {sorted(expected)}, got {sorted(actual)}",
+        )
+
+    required_sql_regexes = grading_contract.get("required_sql_regexes", [])
+    if required_sql_regexes:
+        compacted_sql = _compact_sql(user_sql)
+        matched = [
+            pattern
+            for pattern in required_sql_regexes
+            if re.search(pattern, compacted_sql, re.IGNORECASE)
+        ]
+        _add_rule(
+            rules,
+            name="sql_regexes",
+            weight=10,
+            passed=len(matched) == len(required_sql_regexes),
+            message=(
+                f"Expected SQL regexes {required_sql_regexes}, "
+                f"matched {matched}"
+            ),
         )
 
     if grading_contract.get("require_explain") is True:

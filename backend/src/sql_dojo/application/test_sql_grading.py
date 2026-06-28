@@ -1461,41 +1461,81 @@ def test_multiple_statement_transaction_fails_sequence_rule_when_out_of_order() 
     assert sequence_rule["passed"] is False
 
 
-def test_transaction_update_requires_using_locked_row_in_update() -> None:
+def test_sql_regex_rule_rejects_update_without_locked_row_link() -> None:
     result = grade_sql_answer(
         (
             "BEGIN; "
+            "WITH locked_job AS ("
             "SELECT id FROM queue_jobs "
             "WHERE status = 'queued' "
             "ORDER BY created_at ASC "
             "LIMIT 1 "
-            "FOR UPDATE SKIP LOCKED; "
-            "UPDATE queue_jobs SET status = 'claimed' WHERE id = 42; "
+            "FOR UPDATE SKIP LOCKED"
+            ") "
+            "UPDATE queue_jobs "
+            "SET status = 'claimed' "
+            "FROM queue_jobs "
+            "WHERE queue_jobs.id = queue_jobs.id "
+            "RETURNING id; "
             "COMMIT;"
         ),
         {
             "allow_multiple_statements": True,
             "required_statement_sequence": [
                 "transaction_begin",
-                "select",
                 "update",
                 "commit",
             ],
             "required_tables": ["queue_jobs"],
             "required_lock_clauses": ["FOR_UPDATE", "SKIP_LOCKED"],
-            "required_sql_fragments": [
-                "FROM locked_job",
-                "WHERE queue_jobs.id = locked_job.id",
+            "required_sql_regexes": [
+                r"from(?P<source>(?!queue_jobs)\w+)wherequeue_jobs\.id=(?P=source)\.idreturning",
             ],
         },
     )
 
-    fragment_rule = next(
+    regex_rule = next(
         rule for rule in _rules(result.rule_breakdown_json)
-        if rule["name"] == "sql_fragments"
+        if rule["name"] == "sql_regexes"
     )
     assert result.score < 90
-    assert fragment_rule["passed"] is False
+    assert regex_rule["passed"] is False
+
+
+def test_sql_regex_rule_accepts_update_with_locked_row_link() -> None:
+    result = grade_sql_answer(
+        (
+            "BEGIN; "
+            "WITH claimed_job AS ("
+            "SELECT id FROM queue_jobs "
+            "WHERE status = 'queued' "
+            "ORDER BY created_at ASC "
+            "LIMIT 1 "
+            "FOR UPDATE SKIP LOCKED"
+            ") "
+            "UPDATE queue_jobs "
+            "SET status = 'claimed' "
+            "FROM claimed_job "
+            "WHERE queue_jobs.id = claimed_job.id "
+            "RETURNING queue_jobs.id; "
+            "COMMIT;"
+        ),
+        {
+            "allow_multiple_statements": True,
+            "required_statement_sequence": [
+                "transaction_begin",
+                "update",
+                "commit",
+            ],
+            "required_tables": ["queue_jobs"],
+            "required_lock_clauses": ["FOR_UPDATE", "SKIP_LOCKED"],
+            "required_sql_regexes": [
+                r"from(?P<source>(?!queue_jobs)\w+)wherequeue_jobs\.id=(?P=source)\.idreturning",
+            ],
+        },
+    )
+
+    assert result.score >= 90
 
 
 def test_multiple_statement_sequence_recognizes_create_materialized_view() -> None:

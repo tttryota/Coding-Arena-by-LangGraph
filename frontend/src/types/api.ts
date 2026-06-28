@@ -258,6 +258,7 @@ export interface AlgorithmFoundationUnitSummary {
   target_skill: string;
   unit_kind: AlgorithmFoundationUnitKind;
   problem_count: number;
+  started_problem_count: number;
   best_score: number | null;
   last_attempted_at: string | null;
   recommended: boolean;
@@ -425,6 +426,7 @@ export interface SqlDojoStartResponse {
   schema_markdown: string;
   sample_data_json: string;
   expected_focus: string;
+  allow_multiple_statements: boolean;
 }
 
 export interface SqlDojoAnswerResponse {

@@ -21,8 +21,10 @@ class _FakeCatalog:
         *,
         best_scores: dict[str, int | None] | None = None,
         last_attempted_at: dict[str, str | None] | None = None,
+        started_problem_counts: dict[str, int] | None = None,
     ) -> dict[str, object]:
         _ = best_scores, last_attempted_at
+        started_problem_counts = started_problem_counts or {}
         return {
             "total_unit_count": 2,
             "total_problem_count": 6,
@@ -42,6 +44,10 @@ class _FakeCatalog:
                             "target_skill": "存在判定をハッシュで高速化",
                             "unit_kind": "foundation",
                             "problem_count": 3,
+                            "started_problem_count": started_problem_counts.get(
+                                "algo-102-hashmap-exists",
+                                0,
+                            ),
                             "best_score": None,
                             "last_attempted_at": None,
                             "recommended": True,
@@ -195,6 +201,9 @@ class _FakeStore:
             )(),
         ]
 
+    def list_problem_history(self) -> list[object]:
+        return self.list_problem_history_for_unit("algo-102-hashmap-exists")
+
     def create_session(self, **kwargs: Any) -> object:
         session_id = str(kwargs["session_id"])
         self.sessions[session_id] = {**kwargs, "status": "in_progress"}
@@ -277,6 +286,7 @@ def test_get_catalog() -> None:
     data = response.json()
     assert data["total_unit_count"] == 2
     assert data["groups"][0]["units"][0]["recommended"] is True
+    assert data["groups"][0]["units"][0]["started_problem_count"] == 1
 
 
 def test_get_languages() -> None:

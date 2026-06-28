@@ -325,6 +325,16 @@ class SqlAlgorithmFoundationStore:
         self,
         unit_id: str,
     ) -> list[AlgorithmFoundationProblemHistoryRecord]:
+        return self._list_problem_history(unit_id=unit_id)
+
+    def list_problem_history(self) -> list[AlgorithmFoundationProblemHistoryRecord]:
+        return self._list_problem_history(unit_id=None)
+
+    def _list_problem_history(
+        self,
+        *,
+        unit_id: str | None,
+    ) -> list[AlgorithmFoundationProblemHistoryRecord]:
         stmt = (
             select(
                 AlgorithmFoundationSession.unit_id,
@@ -337,12 +347,13 @@ class SqlAlgorithmFoundationStore:
                 AlgorithmFoundationAnswer,
                 AlgorithmFoundationAnswer.session_id == AlgorithmFoundationSession.id,
             )
-            .where(AlgorithmFoundationSession.unit_id == unit_id)
             .group_by(
                 AlgorithmFoundationSession.unit_id,
                 AlgorithmFoundationSession.problem_id,
             )
         )
+        if unit_id is not None:
+            stmt = stmt.where(AlgorithmFoundationSession.unit_id == unit_id)
         with Session(self._engine) as s:
             rows = s.execute(stmt).all()
             return [

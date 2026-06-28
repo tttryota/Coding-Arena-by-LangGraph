@@ -107,3 +107,6 @@ def test_store_persists_session_answer_and_history() -> None:
             last_attempted_at=problem_history[0].last_attempted_at,
         ),
     ]
+
+    all_problem_history = store.list_problem_history()
+    assert all_problem_history == problem_history

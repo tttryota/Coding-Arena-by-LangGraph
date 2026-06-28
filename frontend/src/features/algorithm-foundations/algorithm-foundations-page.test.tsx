@@ -23,6 +23,7 @@ const mockCatalog = {
           target_skill: "スタックの基本操作",
           unit_kind: "foundation",
           problem_count: 3,
+          started_problem_count: 0,
           best_score: null,
           last_attempted_at: null,
           recommended: true,
@@ -38,6 +39,7 @@ const mockCatalog = {
           target_skill: "出現回数カウント",
           unit_kind: "foundation",
           problem_count: 3,
+          started_problem_count: 1,
           best_score: 81,
           last_attempted_at: "2026-06-25T10:00:00+09:00",
           recommended: false,
@@ -60,6 +62,7 @@ const mockCatalog = {
           target_skill: "探索順を手で追って検証する",
           unit_kind: "foundation",
           problem_count: 4,
+          started_problem_count: 0,
           best_score: null,
           last_attempted_at: null,
           recommended: false,
@@ -149,6 +152,9 @@ describe("AlgorithmFoundationsPage", () => {
     expect(screen.queryByText("次: スタックの基本操作")).not.toBeInTheDocument();
     expect(screen.getAllByText("出現回数カウント").length).toBeGreaterThan(0);
     expect(screen.getAllByText("前提注意")).toHaveLength(2);
+    expect(screen.getByText("着手 0/3")).toBeInTheDocument();
+    expect(screen.getByText("着手 1/3")).toBeInTheDocument();
+    expect(screen.getByText("着手 0/4")).toBeInTheDocument();
     expect(screen.getByText("前提: 存在判定をハッシュで高速化")).toBeInTheDocument();
     expect(
       screen.getByText("前提: 深さ優先探索の基本 / 再帰とスタックの対応"),

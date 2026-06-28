@@ -95,6 +95,11 @@ _EXPECTED_MULTI_PROBLEM_COUNTS: Final[dict[str, int]] = {
     "algo-102-hashmap-count": 3,
     "algo-102-hashmap-index": 3,
     "algo-102-hashmap-match": 3,
+    "algo-025-practice": 2,
+    "algo-095-practice": 2,
+    "algo-103-practice": 2,
+    "algo-107-practice": 2,
+    "algo-111-practice": 2,
 }
 
 @dataclass(frozen=True)
@@ -120,9 +125,11 @@ class AlgorithmFoundationCatalog:
         *,
         best_scores: dict[str, int | None] | None = None,
         last_attempted_at: dict[str, str | None] | None = None,
+        started_problem_counts: dict[str, int] | None = None,
     ) -> AlgorithmFoundationCatalogResponse:
         best_scores = best_scores or {}
         last_attempted_at = last_attempted_at or {}
+        started_problem_counts = started_problem_counts or {}
         recommended_id = self.pick_recommended_unit_id(best_scores)
         groups: dict[str, AlgorithmFoundationGroupSummary] = {}
         for unit in self._units:
@@ -145,6 +152,7 @@ class AlgorithmFoundationCatalog:
                 "target_skill": unit["target_skill"],
                 "unit_kind": unit["unit_kind"],
                 "problem_count": len(unit["problem_bank"]),
+                "started_problem_count": started_problem_counts.get(unit["unit_id"], 0),
                 "best_score": best_scores.get(unit["unit_id"]),
                 "last_attempted_at": last_attempted_at.get(unit["unit_id"]),
                 "recommended": unit["unit_id"] == recommended_id,
@@ -627,12 +635,12 @@ class AlgorithmFoundationCatalog:
                     )
                 seen_payloads.add(payload)
         counts = self.counts()
-        if counts != (320, 361):
+        if counts != (320, 366):
             raise AlgorithmFoundationCatalogError(
                 error_code="catalog_count_mismatch",
                 message=(
                     "algorithm foundations catalog must contain exactly "
-                    "320 units and 361 problems"
+                    "320 units and 366 problems"
                 ),
             )
         self._validate_prerequisite_cycles()

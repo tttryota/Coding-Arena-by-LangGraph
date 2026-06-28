@@ -92,19 +92,36 @@ class SqlDojoPaginationRequirement(TypedDict):
     style: str
 
 
+class SqlDojoStatementPredicateRequirement(TypedDict):
+    """statement kind ごとの厳密な述語条件。"""
+
+    statement_kind: str
+    predicate: str
+
+
 class SqlDojoGradingContract(TypedDict, total=False):
     """採点契約。"""
 
     statement_kind: str
+    allow_multiple_statements: bool
+    required_statement_sequence: list[str]
     required_tables: list[str]
     required_joins: list[SqlDojoJoinRequirement]
     required_predicate_columns: list[str]
+    required_predicate_patterns: list[str]
     required_group_by_columns: list[str]
+    required_statement_predicates: list[SqlDojoStatementPredicateRequirement]
     required_aggregates: list[SqlDojoAggregateRequirement]
     required_order_by: list[SqlDojoOrderRequirement]
     required_limit: int
     required_window_functions: list[str]
     required_cte_names: list[str]
+    required_recursive_cte: bool
+    required_set_operations: list[str]
+    required_subquery_patterns: list[str]
+    required_lock_clauses: list[str]
+    required_constraint_types: list[str]
+    required_returning: bool
     require_explain: bool
     required_explain_options: list[str]
     required_index: SqlDojoIndexRequirement
@@ -124,6 +141,7 @@ class SqlDojoGradingContract(TypedDict, total=False):
     required_index_method: str
     required_pagination_style: str
     required_sql_fragments: list[str]
+    required_sql_regexes: list[str]
     prohibited_patterns: list[str]
 
 
@@ -193,6 +211,7 @@ __all__ = [
     "SqlDojoProblem",
     "SqlDojoQuestionError",
     "SqlDojoSessionStatus",
+    "SqlDojoStatementPredicateRequirement",
     "SqlDojoThemeSummary",
     "SqlDojoTopicSummary",
 ]

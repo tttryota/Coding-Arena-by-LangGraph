@@ -27,5 +27,17 @@ UNIT_BANK = unit_bank(
             canonical_language='python',
             grading_rubric=RUBRIC,
         ),
+        problem(
+            problem_id='algo-095-practice-p2',
+            title='優先度付きキュー（ヒープ） を素直に実装する / 上位 K 個だけを保ちながら K 番目に大きい値を求める',
+            problem_statement='長さ N の整数列 A と整数 K が与えられる。A を左から 1 つずつ読み込み、その時点までに現れた値のうち大きい方から K 個だけをヒープで保ちながら、最後に列全体で K 番目に大きい値を求めよ。',
+            input_format='1 行目に N K。\n2 行目に A1..AN。',
+            output_format='K 番目に大きい値を出力する。',
+            constraints='1 <= K <= N <= 2 * 10^5\n-10^9 <= A_i <= 10^9',
+            examples=[{'input': '7 3\n5 1 9 3 7 8 2', 'output': '7'}],
+            canonical_reference_solution="import heapq\n\n\ndef solve() -> None:\n    _, k = map(int, input().split())\n    a = list(map(int, input().split()))\n    heap = []\n    for value in a:\n        if len(heap) < k:\n            heapq.heappush(heap, value)\n        elif value > heap[0]:\n            heapq.heapreplace(heap, value)\n    print(heap[0])\n\n\nif __name__ == '__main__':\n    solve()\n",
+            canonical_language='python',
+            grading_rubric=RUBRIC,
+        ),
     ],
 )

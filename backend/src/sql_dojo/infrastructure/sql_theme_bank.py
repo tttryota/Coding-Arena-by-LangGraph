@@ -1580,6 +1580,567 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
         ),
     ),
     _ThemeTemplate(
+        family="basic-filtering",
+        difficulty="beginner",
+        business_domain="Cross-domain",
+        target_skill="WHERE の代表パターン",
+        title="WHERE の代表パターンで絞り込む",
+        generation_prompt="IN, BETWEEN, LIKE/ILIKE の基本を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="where-status-in-orders",
+                topic_title="status IN で注文抽出",
+                problem_statement=(
+                    "orders から status が shipped または delivered の注文を抽出してください。"
+                    "出力列は id, status, created_at とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "orders(id bigint primary key, status text, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("orders", 14600000)),
+                expected_focus="WHERE, IN, ORDER BY",
+                reference_sql=(
+                    "SELECT id, status, created_at "
+                    "FROM orders "
+                    "WHERE status IN ('shipped', 'delivered') "
+                    "ORDER BY created_at DESC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["orders"],
+                    "required_predicate_columns": ["status"],
+                    "required_predicate_patterns": ["IN"],
+                    "required_order_by": [{"column": "created_at", "direction": "DESC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="between-issued-at-invoices",
+                topic_title="BETWEEN で期間絞り込み",
+                problem_statement=(
+                    "invoices から 2026-04-01 から 2026-04-30 までに発行された請求だけを抽出してください。"
+                    "出力列は id, account_id, issued_at, amount とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "invoices(id bigint primary key, account_id bigint, issued_at date, amount numeric)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("invoices", 430000)),
+                expected_focus="WHERE, BETWEEN, ORDER BY",
+                reference_sql=(
+                    "SELECT id, account_id, issued_at, amount "
+                    "FROM invoices "
+                    "WHERE issued_at BETWEEN DATE '2026-04-01' AND DATE '2026-04-30' "
+                    "ORDER BY issued_at ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["invoices"],
+                    "required_predicate_columns": ["issued_at"],
+                    "required_predicate_patterns": ["BETWEEN"],
+                    "required_order_by": [{"column": "issued_at", "direction": "ASC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="like-customer-search",
+                topic_title="ILIKE で顧客検索",
+                problem_statement=(
+                    "customers から name に 'shop' を含む顧客を抽出してください。"
+                    "大文字小文字は区別しません。出力列は id, name とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "customers(id bigint primary key, name text, segment text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("customers", 12500)),
+                expected_focus="WHERE, ILIKE",
+                reference_sql=(
+                    "SELECT id, name "
+                    "FROM customers "
+                    "WHERE name ILIKE '%shop%'"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["customers"],
+                    "required_predicate_columns": ["name"],
+                    "required_predicate_patterns": ["ILIKE"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="distinct-and-derived-columns",
+        difficulty="beginner",
+        business_domain="Cross-domain",
+        target_skill="DISTINCT と派生列",
+        title="DISTINCT と派生列を作る",
+        generation_prompt="DISTINCT と簡単な計算式・文字列式を SELECT に載せる",
+        variants=(
+            _ThemeVariant(
+                topic_id="distinct-customer-emails",
+                topic_title="重複なし email 一覧",
+                problem_statement=(
+                    "crm_contacts から重複しない email 一覧を抽出してください。"
+                    "出力列は email とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "crm_contacts(id bigint primary key, email text, company_name text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("crm_contacts", 580000)),
+                expected_focus="SELECT DISTINCT, ORDER BY",
+                reference_sql=(
+                    "SELECT DISTINCT email "
+                    "FROM crm_contacts "
+                    "ORDER BY email ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["crm_contacts"],
+                    "required_sql_fragments": ["SELECT DISTINCT email"],
+                    "required_order_by": [{"column": "email", "direction": "ASC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="price-with-tax",
+                topic_title="税込価格の派生列",
+                problem_statement=(
+                    "products から price に 10% の税を乗せた taxed_price を出してください。"
+                    "出力列は id, name, taxed_price とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "products(id bigint primary key, name text, price numeric, category_id bigint)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("products", 860000)),
+                expected_focus="算術式, alias",
+                reference_sql=(
+                    "SELECT id, name, price * 1.1 AS taxed_price "
+                    "FROM products"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["products"],
+                    "required_sql_fragments": ["price * 1.1 AS taxed_price"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="display-name-expression",
+                topic_title="文字列結合の表示名",
+                problem_statement=(
+                    "profiles から first_name と last_name を結合した display_name を作ってください。"
+                    "出力列は user_id, display_name とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "profiles(user_id bigint primary key, first_name text, last_name text, email text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("profiles", 850000)),
+                expected_focus="文字列結合, alias",
+                reference_sql=(
+                    "SELECT user_id, first_name || ' ' || last_name AS display_name "
+                    "FROM profiles"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["profiles"],
+                    "required_sql_fragments": ["first_name || ' ' || last_name AS display_name"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="join-variants",
+        difficulty="intermediate",
+        business_domain="Operations",
+        target_skill="RIGHT/FULL JOIN",
+        title="外部結合のバリエーションを使い分ける",
+        generation_prompt="RIGHT JOIN と FULL OUTER JOIN を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="right-join-unassigned-records",
+                topic_title="RIGHT JOIN で未アサインも含める",
+                problem_statement=(
+                    "agents と tickets を結合し、すべての ticket を残したまま担当 agent 名を表示してください。"
+                    "RIGHT JOIN を使い、出力列は ticket_id, agent_name とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "agents(id bigint primary key, name text)\n"
+                    "tickets(id bigint primary key, agent_id bigint, status text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("agents", 2400), ("tickets", 185000)),
+                expected_focus="RIGHT JOIN",
+                reference_sql=(
+                    "SELECT t.id AS ticket_id, a.name AS agent_name "
+                    "FROM agents AS a "
+                    "RIGHT JOIN tickets AS t ON t.agent_id = a.id"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["agents", "tickets"],
+                    "required_joins": [{"left": "agents", "right": "tickets", "join_type": "RIGHT"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="full-join-ledger-reconciliation",
+                topic_title="FULL JOIN で突合差分を見る",
+                problem_statement=(
+                    "billing_ledger と payout_ledger を transaction_id で突合し、"
+                    "片側だけにある transaction も含めて一覧化してください。"
+                    "出力列は transaction_id, billing_amount, payout_amount とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "billing_ledger(transaction_id text primary key, amount numeric)\n"
+                    "payout_ledger(transaction_id text primary key, amount numeric)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("billing_ledger", 1800000), ("payout_ledger", 1795000)),
+                expected_focus="FULL OUTER JOIN",
+                reference_sql=(
+                    "SELECT COALESCE(b.transaction_id, p.transaction_id) AS transaction_id, "
+                    "b.amount AS billing_amount, p.amount AS payout_amount "
+                    "FROM billing_ledger AS b "
+                    "FULL OUTER JOIN payout_ledger AS p ON p.transaction_id = b.transaction_id"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["billing_ledger", "payout_ledger"],
+                    "required_joins": [{"left": "billing_ledger", "right": "payout_ledger", "join_type": "FULL"}],
+                    "required_functions": ["COALESCE"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="set-operations",
+        difficulty="intermediate",
+        business_domain="Analytics",
+        target_skill="集合演算",
+        title="集合演算で結果集合を組み立てる",
+        generation_prompt="UNION, UNION ALL, INTERSECT, EXCEPT を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="union-all-event-streams",
+                topic_title="UNION ALL でイベント連結",
+                problem_statement=(
+                    "web_events と mobile_events の event_id, occurred_at をまとめて時系列で出してください。"
+                    "UNION ALL を使います。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "web_events(event_id bigint primary key, occurred_at timestamptz)\n"
+                    "mobile_events(event_id bigint primary key, occurred_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("web_events", 6200000), ("mobile_events", 8400000)),
+                expected_focus="UNION ALL, ORDER BY",
+                reference_sql=(
+                    "SELECT event_id, occurred_at FROM web_events "
+                    "UNION ALL "
+                    "SELECT event_id, occurred_at FROM mobile_events "
+                    "ORDER BY occurred_at ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["web_events", "mobile_events"],
+                    "required_set_operations": ["UNION ALL"],
+                    "required_order_by": [{"column": "occurred_at", "direction": "ASC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="union-unique-target-users",
+                topic_title="UNION で重複排除",
+                problem_statement=(
+                    "email_targets と push_targets の user_id を重複なくまとめてください。"
+                    "UNION を使い、出力列は user_id とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "email_targets(user_id bigint primary key)\n"
+                    "push_targets(user_id bigint primary key)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("email_targets", 180000), ("push_targets", 145000)),
+                expected_focus="UNION",
+                reference_sql=(
+                    "SELECT user_id FROM email_targets "
+                    "UNION "
+                    "SELECT user_id FROM push_targets"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["email_targets", "push_targets"],
+                    "required_set_operations": ["UNION"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="intersect-power-users",
+                topic_title="INTERSECT で共通ユーザー抽出",
+                problem_statement=(
+                    "paid_users と webinar_attendees の両方に存在する user_id を抽出してください。"
+                    "INTERSECT を使います。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "paid_users(user_id bigint primary key)\n"
+                    "webinar_attendees(user_id bigint primary key)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("paid_users", 91000), ("webinar_attendees", 42000)),
+                expected_focus="INTERSECT",
+                reference_sql=(
+                    "SELECT user_id FROM paid_users "
+                    "INTERSECT "
+                    "SELECT user_id FROM webinar_attendees"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["paid_users", "webinar_attendees"],
+                    "required_set_operations": ["INTERSECT"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="except-churn-candidates",
+                topic_title="EXCEPT で除外集合を作る",
+                problem_statement=(
+                    "all_subscribers から active_subscribers を除いた user_id を抽出してください。"
+                    "EXCEPT を使います。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "all_subscribers(user_id bigint primary key)\n"
+                    "active_subscribers(user_id bigint primary key)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("all_subscribers", 280000), ("active_subscribers", 251000)),
+                expected_focus="EXCEPT",
+                reference_sql=(
+                    "SELECT user_id FROM all_subscribers "
+                    "EXCEPT "
+                    "SELECT user_id FROM active_subscribers"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["all_subscribers", "active_subscribers"],
+                    "required_set_operations": ["EXCEPT"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="subquery-patterns",
+        difficulty="intermediate",
+        business_domain="Analytics",
+        target_skill="Subquery の使い分け",
+        title="Subquery の使い分けを覚える",
+        generation_prompt="IN(subquery), scalar subquery, derived table を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="in-subquery-paid-accounts",
+                topic_title="IN(subquery) で支払済み account 抽出",
+                problem_statement=(
+                    "accounts から paid invoice がある account だけを抽出してください。"
+                    "IN (subquery) を使い、出力列は id, name とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "accounts(id bigint primary key, name text)\n"
+                    "invoices(id bigint primary key, account_id bigint, status text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("accounts", 120000), ("invoices", 430000)),
+                expected_focus="IN(subquery)",
+                reference_sql=(
+                    "SELECT id, name "
+                    "FROM accounts "
+                    "WHERE id IN ("
+                    "SELECT account_id FROM invoices WHERE status = 'paid'"
+                    ")"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["accounts", "invoices"],
+                    "required_predicate_columns": ["id", "account_id", "status"],
+                    "required_subquery_patterns": ["IN_SUBQUERY"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="scalar-subquery-latest-order-at",
+                topic_title="scalar subquery で最終注文日時",
+                problem_statement=(
+                    "accounts ごとに最新注文日時を 1 列で返してください。"
+                    "scalar subquery を使い、出力列は id, latest_order_at とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "accounts(id bigint primary key, name text)\n"
+                    "orders(id bigint primary key, account_id bigint, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("accounts", 120000), ("orders", 14600000)),
+                expected_focus="scalar subquery",
+                reference_sql=(
+                    "SELECT a.id, ("
+                    "SELECT MAX(o.created_at) FROM orders AS o WHERE o.account_id = a.id"
+                    ") AS latest_order_at "
+                    "FROM accounts AS a"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["accounts", "orders"],
+                    "required_aggregates": [{"function": "MAX", "column": "created_at"}],
+                    "required_subquery_patterns": ["SCALAR_SUBQUERY"],
+                    "required_predicate_columns": ["account_id", "id"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="derived-table-top-plan-month",
+                topic_title="derived table で月次トッププラン",
+                problem_statement=(
+                    "plan_revenue の月次集計結果を derived table にまとめてから、"
+                    "売上 100000 以上の行だけを抽出してください。"
+                    "出力列は plan_code, bill_month, total_revenue とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "plan_revenue(id bigint primary key, plan_code text, bill_month date, amount numeric)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("plan_revenue", 540000)),
+                expected_focus="FROM(subquery), GROUP BY",
+                reference_sql=(
+                    "SELECT monthly.plan_code, monthly.bill_month, monthly.total_revenue "
+                    "FROM ("
+                    "SELECT plan_code, bill_month, SUM(amount) AS total_revenue "
+                    "FROM plan_revenue "
+                    "GROUP BY plan_code, bill_month"
+                    ") AS monthly "
+                    "WHERE monthly.total_revenue >= 100000"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["plan_revenue"],
+                    "required_aggregates": [{"function": "SUM", "column": "amount"}],
+                    "required_group_by_columns": ["plan_code", "bill_month"],
+                    "required_subquery_patterns": ["DERIVED_TABLE"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="write-operations",
+        difficulty="intermediate",
+        business_domain="Operations",
+        target_skill="DML 基本形",
+        title="DML の基本形を書く",
+        generation_prompt="UPDATE FROM, DELETE USING, INSERT SELECT を使う",
+        variants=(
+            _ThemeVariant(
+                topic_id="update-from-mark-overdue",
+                topic_title="UPDATE FROM で延滞更新",
+                problem_statement=(
+                    "accounts の billing_status が delinquent の account に属する orders を archived に更新してください。"
+                    "UPDATE ... FROM を使い、更新された order の id を返します。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "accounts(id bigint primary key, billing_status text)\n"
+                    "orders(id bigint primary key, account_id bigint, status text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("accounts", 120000), ("orders", 14600000)),
+                expected_focus="UPDATE ... FROM, RETURNING",
+                reference_sql=(
+                    "UPDATE orders AS o "
+                    "SET status = 'archived' "
+                    "FROM accounts AS a "
+                    "WHERE o.account_id = a.id "
+                    "AND a.billing_status = 'delinquent' "
+                    "RETURNING o.id"
+                ),
+                grading_contract={
+                    "statement_kind": "update",
+                    "required_tables": ["orders", "accounts"],
+                    "required_predicate_columns": ["account_id", "id", "billing_status"],
+                    "required_returning": True,
+                    "required_sql_fragments": ["FROM accounts AS a"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="delete-using-remove-orphans",
+                topic_title="DELETE USING で孤児行削除",
+                problem_statement=(
+                    "cancelled_accounts に紐づく sessions を削除してください。"
+                    "DELETE ... USING を使い、削除された session の id を返します。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "sessions(id bigint primary key, account_id bigint, created_at timestamptz)\n"
+                    "cancelled_accounts(account_id bigint primary key, cancelled_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("sessions", 8900000), ("cancelled_accounts", 18000)),
+                expected_focus="DELETE ... USING, RETURNING",
+                reference_sql=(
+                    "DELETE FROM sessions AS s "
+                    "USING cancelled_accounts AS c "
+                    "WHERE s.account_id = c.account_id "
+                    "RETURNING s.id"
+                ),
+                grading_contract={
+                    "statement_kind": "delete",
+                    "required_tables": ["sessions", "cancelled_accounts"],
+                    "required_predicate_columns": ["account_id"],
+                    "required_returning": True,
+                    "required_sql_fragments": ["USING cancelled_accounts AS c"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="insert-select-backfill-settings",
+                topic_title="INSERT SELECT で設定を補完",
+                problem_statement=(
+                    "marketing_opt_in=true の users について、user_settings に未作成なら"
+                    " key='newsletter', value='enabled' を backfill してください。"
+                    "INSERT ... SELECT を使います。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "users(id bigint primary key, marketing_opt_in boolean)\n"
+                    "user_settings(id bigint primary key, user_id bigint, key text, value text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("users", 480000), ("user_settings", 730000)),
+                expected_focus="INSERT ... SELECT, NOT EXISTS",
+                reference_sql=(
+                    "INSERT INTO user_settings (user_id, key, value) "
+                    "SELECT u.id, 'newsletter', 'enabled' "
+                    "FROM users AS u "
+                    "WHERE u.marketing_opt_in = TRUE "
+                    "AND NOT EXISTS ("
+                    "SELECT 1 FROM user_settings AS s "
+                    "WHERE s.user_id = u.id AND s.key = 'newsletter'"
+                    ")"
+                ),
+                grading_contract={
+                    "statement_kind": "insert",
+                    "required_tables": ["users", "user_settings"],
+                    "required_predicate_columns": ["marketing_opt_in", "user_id", "id", "key"],
+                    "required_sql_fragments": ["SELECT u.id, 'newsletter', 'enabled'"],
+                    "required_not_exists": True,
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
         family="business-analytics",
         difficulty="advanced",
         business_domain="Analytics",
@@ -2232,6 +2793,396 @@ _THEMES: tuple[_ThemeTemplate, ...] = (
                     "required_functions": ["DATE_TRUNC"],
                     "required_predicate_columns": ["status"],
                     "required_aggregates": [{"function": "SUM", "column": "amount"}],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="recursive-cte",
+        difficulty="advanced",
+        business_domain="Cross-domain",
+        target_skill="WITH RECURSIVE",
+        title="再帰CTEで階層や依存関係をたどる",
+        generation_prompt="WITH RECURSIVE と UNION ALL を使って階層を展開する",
+        variants=(
+            _ThemeVariant(
+                topic_id="category-descendants-tree",
+                topic_title="カテゴリ配下を再帰展開",
+                problem_statement=(
+                    "categories から id=10 を起点に、配下カテゴリをすべて再帰的に取得してください。"
+                    "出力列は id, parent_id, depth とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "categories(id bigint primary key, parent_id bigint, name text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("categories", 9200)),
+                expected_focus="WITH RECURSIVE, UNION ALL",
+                reference_sql=(
+                    "WITH RECURSIVE category_tree AS ("
+                    "SELECT id, parent_id, 0 AS depth "
+                    "FROM categories "
+                    "WHERE id = 10 "
+                    "UNION ALL "
+                    "SELECT c.id, c.parent_id, ct.depth + 1 AS depth "
+                    "FROM categories AS c "
+                    "INNER JOIN category_tree AS ct ON c.parent_id = ct.id"
+                    ") "
+                    "SELECT id, parent_id, depth "
+                    "FROM category_tree "
+                    "ORDER BY depth ASC, id ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["categories"],
+                    "required_cte_names": ["category_tree"],
+                    "required_recursive_cte": True,
+                    "required_set_operations": ["UNION ALL"],
+                    "required_predicate_columns": ["id"],
+                    "required_joins": [{"left": "categories", "right": "category_tree", "join_type": "INNER"}],
+                    "required_order_by": [{"column": "depth", "direction": "ASC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="manager-chain-depth",
+                topic_title="上司チェーンをたどる",
+                problem_statement=(
+                    "employees から id=42 の上司チェーンを再帰的にたどってください。"
+                    "出力列は employee_id, manager_id, level とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "employees(id bigint primary key, manager_id bigint, name text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("employees", 38000)),
+                expected_focus="WITH RECURSIVE, self join",
+                reference_sql=(
+                    "WITH RECURSIVE manager_chain AS ("
+                    "SELECT id AS employee_id, manager_id, 0 AS level "
+                    "FROM employees "
+                    "WHERE id = 42 "
+                    "UNION ALL "
+                    "SELECT e.id AS employee_id, e.manager_id, mc.level + 1 AS level "
+                    "FROM employees AS e "
+                    "INNER JOIN manager_chain AS mc ON e.id = mc.manager_id"
+                    ") "
+                    "SELECT employee_id, manager_id, level "
+                    "FROM manager_chain "
+                    "ORDER BY level ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["employees"],
+                    "required_cte_names": ["manager_chain"],
+                    "required_recursive_cte": True,
+                    "required_set_operations": ["UNION ALL"],
+                    "required_predicate_columns": ["id"],
+                    "required_joins": [{"left": "employees", "right": "manager_chain", "join_type": "INNER"}],
+                    "required_order_by": [{"column": "level", "direction": "ASC"}],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="dependency-expansion",
+                topic_title="依存関係を再帰展開",
+                problem_statement=(
+                    "package_dependencies から package_id=7 の依存先をすべて再帰的に取得してください。"
+                    "出力列は package_id, depends_on_id, depth とします。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "package_dependencies(package_id bigint, depends_on_id bigint)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("package_dependencies", 145000)),
+                expected_focus="WITH RECURSIVE, UNION ALL",
+                reference_sql=(
+                    "WITH RECURSIVE dependency_tree AS ("
+                    "SELECT package_id, depends_on_id, 0 AS depth "
+                    "FROM package_dependencies "
+                    "WHERE package_id = 7 "
+                    "UNION ALL "
+                    "SELECT pd.package_id, pd.depends_on_id, dt.depth + 1 AS depth "
+                    "FROM package_dependencies AS pd "
+                    "INNER JOIN dependency_tree AS dt ON pd.package_id = dt.depends_on_id"
+                    ") "
+                    "SELECT package_id, depends_on_id, depth "
+                    "FROM dependency_tree "
+                    "ORDER BY depth ASC, depends_on_id ASC"
+                ),
+                grading_contract={
+                    "statement_kind": "select",
+                    "required_tables": ["package_dependencies"],
+                    "required_cte_names": ["dependency_tree"],
+                    "required_recursive_cte": True,
+                    "required_set_operations": ["UNION ALL"],
+                    "required_predicate_columns": ["package_id"],
+                    "required_joins": [{"left": "package_dependencies", "right": "dependency_tree", "join_type": "INNER"}],
+                    "required_order_by": [{"column": "depth", "direction": "ASC"}],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="schema-constraints",
+        difficulty="advanced",
+        business_domain="Platform",
+        target_skill="DDL と制約",
+        title="DDL と制約を設計する",
+        generation_prompt="CREATE TABLE と ALTER TABLE で制約を付ける",
+        variants=(
+            _ThemeVariant(
+                topic_id="create-table-subscriptions-with-constraints",
+                topic_title="制約付き subscriptions テーブル作成",
+                problem_statement=(
+                    "subscriptions テーブルを作成してください。"
+                    "id を PRIMARY KEY、user_id を users(id) 参照の FOREIGN KEY、"
+                    "external_key を UNIQUE、seat_count に 1 以上の CHECK 制約を付けます。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "users(id bigint primary key)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("users", 120000)),
+                expected_focus="CREATE TABLE, PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK",
+                reference_sql=(
+                    "CREATE TABLE subscriptions ("
+                    "id bigint PRIMARY KEY, "
+                    "user_id bigint REFERENCES users(id), "
+                    "external_key text UNIQUE, "
+                    "seat_count int CHECK (seat_count >= 1)"
+                    ")"
+                ),
+                grading_contract={
+                    "statement_kind": "create_table",
+                    "required_tables": ["subscriptions", "users"],
+                    "required_constraint_types": ["PRIMARY_KEY", "FOREIGN_KEY", "UNIQUE", "CHECK"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="alter-table-add-foreign-key",
+                topic_title="ALTER TABLE で外部キー追加",
+                problem_statement=(
+                    "subscriptions.user_id が users(id) を参照するように、"
+                    "ALTER TABLE で外部キー制約を追加してください。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "subscriptions(id bigint primary key, user_id bigint)\n"
+                    "users(id bigint primary key)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("subscriptions", 380000), ("users", 120000)),
+                expected_focus="ALTER TABLE, ADD CONSTRAINT, FOREIGN KEY",
+                reference_sql=(
+                    "ALTER TABLE subscriptions "
+                    "ADD CONSTRAINT subscriptions_user_id_fkey "
+                    "FOREIGN KEY (user_id) REFERENCES users(id)"
+                ),
+                grading_contract={
+                    "statement_kind": "alter_table",
+                    "required_tables": ["subscriptions", "users"],
+                    "required_constraint_types": ["FOREIGN_KEY"],
+                    "required_sql_fragments": ["ADD CONSTRAINT subscriptions_user_id_fkey"],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="alter-table-add-unique-check",
+                topic_title="ALTER TABLE で UNIQUE 制約追加",
+                problem_statement=(
+                    "subscriptions.external_key に UNIQUE 制約を追加してください。"
+                    "ALTER TABLE ... ADD CONSTRAINT を使います。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "subscriptions(id bigint primary key, external_key text)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("subscriptions", 380000)),
+                expected_focus="ALTER TABLE, ADD CONSTRAINT, UNIQUE",
+                reference_sql=(
+                    "ALTER TABLE subscriptions "
+                    "ADD CONSTRAINT subscriptions_external_key_unique "
+                    "UNIQUE (external_key)"
+                ),
+                grading_contract={
+                    "statement_kind": "alter_table",
+                    "required_tables": ["subscriptions"],
+                    "required_constraint_types": ["UNIQUE"],
+                    "required_sql_fragments": ["ADD CONSTRAINT subscriptions_external_key_unique"],
+                },
+            ),
+        ),
+    ),
+    _ThemeTemplate(
+        family="transactions-locking",
+        difficulty="advanced",
+        business_domain="Operations",
+        target_skill="Transaction と Locking",
+        title="Transaction と Locking を扱う",
+        generation_prompt="BEGIN/COMMIT, FOR UPDATE, SKIP LOCKED を含む複数文を書く",
+        variants=(
+            _ThemeVariant(
+                topic_id="claim-next-job-skip-locked",
+                topic_title="SKIP LOCKED で次ジョブ取得",
+                problem_statement=(
+                    "必要なら複数文で、queue_jobs から status='queued' の最古ジョブを"
+                    "競合なく 1 件 claimed に更新し、その id を返してください。"
+                    "BEGIN と COMMIT、FOR UPDATE SKIP LOCKED、UPDATE、RETURNING を使います。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "queue_jobs(id bigint primary key, status text, created_at timestamptz)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("queue_jobs", 1850000)),
+                expected_focus="BEGIN, FOR UPDATE SKIP LOCKED, UPDATE, COMMIT",
+                reference_sql=(
+                    "BEGIN; "
+                    "WITH locked_job AS ("
+                    "SELECT id "
+                    "FROM queue_jobs "
+                    "WHERE status = 'queued' "
+                    "ORDER BY created_at ASC "
+                    "LIMIT 1 "
+                    "FOR UPDATE SKIP LOCKED"
+                    ") "
+                    "UPDATE queue_jobs "
+                    "SET status = 'claimed' "
+                    "FROM locked_job "
+                    "WHERE queue_jobs.id = locked_job.id "
+                    "RETURNING queue_jobs.id; "
+                    "COMMIT;"
+                ),
+                grading_contract={
+                    "allow_multiple_statements": True,
+                    "required_statement_sequence": [
+                        "transaction_begin",
+                        "update",
+                        "commit",
+                    ],
+                    "required_tables": ["queue_jobs"],
+                    "required_lock_clauses": ["FOR_UPDATE", "SKIP_LOCKED"],
+                    "required_returning": True,
+                    "required_sql_fragments": [
+                        "WHERE status = 'queued'",
+                        "ORDER BY created_at ASC",
+                        "SET status = 'claimed'",
+                        "LIMIT 1",
+                    ],
+                    "required_sql_regexes": [
+                        (
+                            r"(?:updatequeue_jobssetstatus='claimed'from"
+                            r"(?P<source>(?!queue_jobs)\w+)"
+                            r"wherequeue_jobs\.id=(?P=source)\.idreturningqueue_jobs\.id;|"
+                            r"updatequeue_jobs(?:as)?(?P<target>\w+)setstatus='claimed'from"
+                            r"(?P<source_alias>(?!queue_jobs)\w+)"
+                            r"where(?P=target)\.id=(?P=source_alias)\.id"
+                            r"returning(?P=target)\.id;)"
+                        ),
+                    ],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="reserve-inventory-transaction",
+                topic_title="在庫引当 transaction",
+                problem_statement=(
+                    "必要なら複数文で、product_id = 42 の inventory.available_quantity を 1 減らし、"
+                    "inventory_reservations に (product_id, reserved_quantity) = (42, 1)"
+                    " の予約行を追加してください。"
+                    "BEGIN と COMMIT を含めます。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "inventory(product_id bigint primary key, available_quantity int)\n"
+                    "inventory_reservations(id bigint primary key, product_id bigint, reserved_quantity int)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("inventory", 860000), ("inventory_reservations", 3200000)),
+                expected_focus="BEGIN, UPDATE, INSERT, COMMIT",
+                reference_sql=(
+                    "BEGIN; "
+                    "UPDATE inventory "
+                    "SET available_quantity = available_quantity - 1 "
+                    "WHERE product_id = 42; "
+                    "INSERT INTO inventory_reservations (product_id, reserved_quantity) "
+                    "VALUES (42, 1); "
+                    "COMMIT;"
+                ),
+                grading_contract={
+                    "allow_multiple_statements": True,
+                    "required_statement_sequence": [
+                        "transaction_begin",
+                        "update",
+                        "insert",
+                        "commit",
+                    ],
+                    "required_tables": ["inventory", "inventory_reservations"],
+                    "required_statement_predicates": [
+                        {
+                            "statement_kind": "update",
+                            "predicate": "product_id = 42",
+                        },
+                    ],
+                    "required_sql_fragments": [
+                        "SET available_quantity = available_quantity - 1",
+                        "INSERT INTO inventory_reservations",
+                        "VALUES (42, 1)",
+                    ],
+                },
+            ),
+            _ThemeVariant(
+                topic_id="archive-and-log-transaction",
+                topic_title="archive と削除を同一 transaction で行う",
+                problem_statement=(
+                    "必要なら複数文で、completed_orders のうち completed_at が 2025 年以前の行を"
+                    "archived_orders に退避してから completed_orders から削除してください。"
+                    "BEGIN と COMMIT を含めます。"
+                ),
+                schema_markdown=(
+                    "```sql\n"
+                    "completed_orders(id bigint primary key, completed_at date, total_amount numeric)\n"
+                    "archived_orders(id bigint primary key, completed_at date, total_amount numeric)\n"
+                    "```"
+                ),
+                sample_data=_sample_rows(("completed_orders", 9200000), ("archived_orders", 18500000)),
+                expected_focus="BEGIN, INSERT SELECT, DELETE, COMMIT",
+                reference_sql=(
+                    "BEGIN; "
+                    "INSERT INTO archived_orders (id, completed_at, total_amount) "
+                    "SELECT id, completed_at, total_amount "
+                    "FROM completed_orders "
+                    "WHERE completed_at < DATE '2026-01-01'; "
+                    "DELETE FROM completed_orders "
+                    "WHERE completed_at < DATE '2026-01-01'; "
+                    "COMMIT;"
+                ),
+                grading_contract={
+                    "allow_multiple_statements": True,
+                    "required_statement_sequence": [
+                        "transaction_begin",
+                        "insert",
+                        "delete",
+                        "commit",
+                    ],
+                    "required_tables": ["completed_orders", "archived_orders"],
+                    "required_predicate_columns": ["completed_at"],
+                    "required_statement_predicates": [
+                        {
+                            "statement_kind": "insert",
+                            "predicate": "completed_at < CAST('2026-01-01' AS DATE)",
+                        },
+                        {
+                            "statement_kind": "delete",
+                            "predicate": "completed_at < CAST('2026-01-01' AS DATE)",
+                        },
+                    ],
+                    "required_sql_fragments": [
+                        "INSERT INTO archived_orders",
+                        "DELETE FROM completed_orders",
+                    ],
                 },
             ),
         ),

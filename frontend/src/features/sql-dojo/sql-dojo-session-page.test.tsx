@@ -23,8 +23,19 @@ const inProgressSession: SqlDojoSessionResponse = {
   schema_markdown: "```sql\ncustomers(...)\n```",
   sample_data_json: '[{"table":"customers","rows":100}]',
   expected_focus: "JOIN, COUNT",
+  allow_multiple_statements: false,
   status: "in_progress",
   created_at: "2026-06-19T00:00:00+09:00",
+};
+
+const multiStatementSession: SqlDojoSessionResponse = {
+  ...inProgressSession,
+  theme_family: "transactions-locking",
+  topic_id: "claim-next-job-skip-locked",
+  topic_title: "SKIP LOCKED で次ジョブ取得",
+  theme_title: "Transaction と Locking を扱う",
+  target_skill: "Transaction と Locking",
+  allow_multiple_statements: true,
 };
 
 const completedSession: SqlDojoSessionResponse = {
@@ -130,6 +141,9 @@ describe("SqlDojoSessionPage", () => {
     const sqlTextarea = (await screen.findByLabelText(
       "SQL を入力",
     )) as HTMLTextAreaElement;
+    expect(sqlTextarea.placeholder).toBe(
+      "PostgreSQL で 1 文を書いてください",
+    );
     fireEvent.change(sqlTextarea, { target: { value: "SELECT 1" } });
     fireEvent.click(screen.getByRole("button", { name: "提出" }));
 
@@ -161,6 +175,25 @@ describe("SqlDojoSessionPage", () => {
     await waitFor(() => {
       expect(sqlTextarea.value).toBe("SELECT\n\tFROM users");
     });
+  });
+
+  it("複数文テーマでは複数文可のプレースホルダを表示する", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/sql-dojo/sessions/sql-1")) {
+        return mockJsonResponse(multiStatementSession);
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderPage();
+
+    const sqlTextarea = (await screen.findByLabelText(
+      "SQL を入力",
+    )) as HTMLTextAreaElement;
+    expect(sqlTextarea.placeholder).toBe(
+      "PostgreSQL で SQL を書いてください（必要なら複数文可）",
+    );
   });
 
   it("完了済みセッション再訪では結果と参考 SQL を表示する", async () => {

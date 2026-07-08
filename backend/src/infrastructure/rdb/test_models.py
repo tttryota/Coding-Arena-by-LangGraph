@@ -7,8 +7,6 @@ from sqlalchemy.orm import Session
 
 from infrastructure.rdb.base import Base
 from infrastructure.rdb.models import (
-    DiffSnapshot,
-    IngestionFeedback,
     QuizAnswer,
     QuizSession,
     Roadmap,
@@ -22,10 +20,8 @@ EXPECTED_TABLES = {
     "roadmap_items",
     "quiz_sessions",
     "quiz_answers",
-    "ingestion_feedbacks",
     "summary_test_results",
     "topics",
-    "diff_snapshots",
     "competitive_sessions",
     "competitive_answers",
     "algorithm_foundation_sessions",
@@ -265,33 +261,6 @@ class TestQuizAnswer:
         assert result.confirmation_point_id == "cp-001"
 
 
-class TestIngestionFeedback:
-    def test_insert_without_roadmap_item(self) -> None:
-        """テスト対象: IngestionFeedback の処理。
-        テストケース: 個別条件での処理を検証する。
-        期待結果: 想定どおりの処理結果が得られる。"""
-        engine = _create_in_memory_engine()
-        now = datetime.now(tz=UTC)
-        feedback = IngestionFeedback(
-            id=uuid.uuid4(),
-            source_path="study/ts/generics.md",
-            roadmap_item_id=None,
-            title="内容の正確性",
-            body="ジェネリクスの説明が正確です",
-            is_read=False,
-            created_at=now,
-            read_at=None,
-        )
-        with Session(engine) as session:
-            session.add(feedback)
-            session.commit()
-            result = session.get(IngestionFeedback, feedback.id)
-
-        assert result is not None
-        assert result.source_path == "study/ts/generics.md"
-        assert result.is_read is False
-
-
 class TestSummaryTestResult:
     def test_insert_and_read(self) -> None:
         """テスト対象: SummaryTestResult の処理。
@@ -390,23 +359,3 @@ class TestTopic:
                 raised = True
         assert raised
 
-
-class TestDiffSnapshot:
-    def test_insert_and_read(self) -> None:
-        """テスト対象: DiffSnapshot の処理。
-        テストケース: 個別条件での処理を検証する。
-        期待結果: 想定どおりの処理結果が得られる。"""
-        engine = _create_in_memory_engine()
-        now = datetime.now(tz=UTC)
-        snapshot = DiffSnapshot(
-            snapshot_key="/path/to/vault",
-            files_json='{"file1.md": 12345}',
-            updated_at=now,
-        )
-        with Session(engine) as session:
-            session.add(snapshot)
-            session.commit()
-            result = session.get(DiffSnapshot, "/path/to/vault")
-
-        assert result is not None
-        assert result.files_json == '{"file1.md": 12345}'

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from infrastructure.rdb.base import Base
@@ -64,10 +64,6 @@ class RoadmapItem(Base):
         "QuizAnswer",
         back_populates="roadmap_item",
     )
-    ingestion_feedbacks: Mapped[list["IngestionFeedback"]] = relationship(
-        "IngestionFeedback",
-        back_populates="roadmap_item",
-    )
 
 
 class QuizSession(Base):
@@ -128,28 +124,6 @@ class QuizAnswer(Base):
     roadmap_item: Mapped["RoadmapItem"] = relationship(
         "RoadmapItem",
         back_populates="quiz_answers",
-    )
-
-
-class IngestionFeedback(Base):
-    __tablename__ = "ingestion_feedbacks"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    source_path: Mapped[str] = mapped_column(String, nullable=False)
-    roadmap_item_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid,
-        ForeignKey("roadmap_items.id"),
-        nullable=True,
-    )
-    title: Mapped[str] = mapped_column(String, nullable=False)
-    body: Mapped[str] = mapped_column(Text, nullable=False)
-    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    roadmap_item: Mapped["RoadmapItem | None"] = relationship(
-        "RoadmapItem",
-        back_populates="ingestion_feedbacks",
     )
 
 
@@ -352,11 +326,3 @@ class AlgorithmFoundationAnswer(Base):
         "AlgorithmFoundationSession",
         back_populates="answer",
     )
-
-
-class DiffSnapshot(Base):
-    __tablename__ = "diff_snapshots"
-
-    snapshot_key: Mapped[str] = mapped_column(String, primary_key=True)
-    files_json: Mapped[str] = mapped_column(Text, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { GeneratingDialog } from "@/components/common/generating-dialog";
 import { MarkdownContent } from "@/components/common/markdown-content";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import {
 } from "@/lib/textarea-indent";
 import {
   useAlgorithmFoundationSession,
+  useStartAlgorithmFoundationSession,
   useSubmitAlgorithmFoundationAnswer,
 } from "./use-algorithm-foundations";
 import type {
@@ -69,8 +71,10 @@ function AlgorithmFoundationsSessionPageInner({
 }) {
   const navigate = useNavigate();
   const sessionQuery = useAlgorithmFoundationSession(sessionId ?? "");
+  const restartMutation = useStartAlgorithmFoundationSession();
   const submitMutation = useSubmitAlgorithmFoundationAnswer(sessionId ?? "");
   const [draft, setDraft] = useState("");
+  const [generatingTarget, setGeneratingTarget] = useState("");
   const [resultOverride, setResultOverride] =
     useState<AlgorithmFoundationAnswerResponse | null>(null);
   const session = sessionQuery.data;
@@ -132,6 +136,20 @@ function AlgorithmFoundationsSessionPageInner({
     restoreTextareaSelection(event.currentTarget, nextState);
   };
 
+  const handleRetry = async () => {
+    setGeneratingTarget(session.problem_title);
+    try {
+      const nextSession = await restartMutation.mutateAsync({
+        unitId: session.unit_id,
+        problemId: session.problem_id,
+        programmingLanguage: session.programming_language,
+      });
+      navigate(`/algorithm-foundations/${nextSession.session_id}`);
+    } catch {
+      // handled by mutation state
+    }
+  };
+
   if (result) {
     return (
       <AppShell
@@ -141,10 +159,18 @@ function AlgorithmFoundationsSessionPageInner({
           { label: "結果" },
         ]}
       >
+        <GeneratingDialog
+          open={restartMutation.isPending}
+          target={generatingTarget}
+          description="同じ問題でもう一度セッションを開始します"
+        />
         <AlgorithmFoundationsResult
           result={result}
           session={session}
-          onBack={() => navigate("/algorithm-foundations")}
+          isRetryPending={restartMutation.isPending}
+          onBackToCatalog={() => navigate("/algorithm-foundations")}
+          onBackToUnit={() => navigate(`/algorithm-foundations/units/${session.unit_id}`)}
+          onRetry={() => void handleRetry()}
         />
       </AppShell>
     );
@@ -259,11 +285,17 @@ function AlgorithmFoundationsSessionPageInner({
 function AlgorithmFoundationsResult({
   result,
   session,
-  onBack,
+  isRetryPending,
+  onBackToCatalog,
+  onBackToUnit,
+  onRetry,
 }: {
   result: AlgorithmFoundationAnswerResponse;
   session: AlgorithmFoundationSessionResponse;
-  onBack: () => void;
+  isRetryPending: boolean;
+  onBackToCatalog: () => void;
+  onBackToUnit: () => void;
+  onRetry: () => void;
 }) {
   const rubricScores = (() => {
     try {
@@ -342,9 +374,22 @@ function AlgorithmFoundationsResult({
         </CardContent>
       </Card>
 
-      <Button onClick={onBack} className="w-full">
-        別の unit に進む
-      </Button>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button variant="outline" onClick={onBackToUnit} className="flex-1">
+          unit の項目一覧へ
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={onRetry}
+          disabled={isRetryPending}
+          className="flex-1"
+        >
+          {isRetryPending ? "開始中..." : "もう一度解く"}
+        </Button>
+        <Button onClick={onBackToCatalog} className="flex-1">
+          競プロうさぎTOPへ
+        </Button>
+      </div>
     </div>
   );
 }

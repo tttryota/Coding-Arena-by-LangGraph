@@ -1,6 +1,6 @@
 """Roadmap シナリオテスト R-1..R-6。
 
-TestClient → FastAPI Router → Application 層 → 実 Infrastructure (SQLite + ChromaDB)
+TestClient → FastAPI Router → Application 層 → 実 Infrastructure (SQLite)
 LLM は ScenarioLlmTransport でスタブ。
 """
 

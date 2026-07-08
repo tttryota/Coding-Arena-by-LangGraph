@@ -4,7 +4,6 @@ import { DashboardPage } from "@/features/dashboard/dashboard-page";
 import { RoadmapListPage } from "@/features/roadmap/roadmap-list-page";
 import { RoadmapDetailPage } from "@/features/roadmap/roadmap-detail-page";
 import { QuizSessionPage } from "@/features/session/quiz-session-page";
-import { FeedbackListPage } from "@/features/feedback/feedback-list-page";
 import { CompetitivePage } from "@/features/competitive/competitive-page";
 import { CompetitiveSessionPage } from "@/features/competitive/competitive-session-page";
 import { AlgorithmFoundationsPage } from "@/features/algorithm-foundations/algorithm-foundations-page";
@@ -30,7 +29,6 @@ export default function App() {
             path="/sessions/:sessionId"
             element={<QuizSessionPage />}
           />
-          <Route path="/feedbacks" element={<FeedbackListPage />} />
           <Route path="/algorithm-quiz" element={<CompetitivePage />} />
           <Route
             path="/algorithm-quiz/:sessionId"

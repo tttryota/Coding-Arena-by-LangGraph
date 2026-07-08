@@ -17,39 +17,10 @@ def _setup_db() -> Engine:
     return eng
 
 
-class _FakeChromaCollection:
-    """ChromaDB collection の最小スタブ。"""
-
-    def get(self, include: list[str]) -> dict:
-        return {"ids": [], "documents": [], "metadatas": [], "embeddings": []}
-
-    def query(
-        self,
-        query_embeddings: list[list[float]],
-        n_results: int,
-    ) -> dict:
-        return {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
-
-    def upsert(
-        self,
-        ids: list[str],
-        documents: list[str],
-        embeddings: list[list[float]],
-        metadatas: list[dict],
-    ) -> None:
-        pass
-
-    def delete(self, where: dict) -> None:
-        pass
-
-
 def _make_container() -> object:
     from api.dependencies import Container
 
-    return Container(
-        engine=_setup_db(),
-        chroma_collection=_FakeChromaCollection(),
-    )
+    return Container(engine=_setup_db())
 
 
 class TestCreateApp:
@@ -64,7 +35,7 @@ class TestCreateApp:
         app = create_app()
 
         assert isinstance(app, FastAPI)
-        assert app.title == "Obsidian RAG Quiz"
+        assert app.title == "Obsidian Quiz"
 
     def test_app_has_docs_enabled(self) -> None:
         """テスト対象: create_app 関数。
@@ -183,34 +154,6 @@ class TestContainerRoadmapStores:
         assert isinstance(container.topic_store, SqlTopicStore)
 
 
-class TestContainerIngestionStores:
-    def test_creates_ingestion_feedback_store(self) -> None:
-        """テスト対象: 取り込み用コンテナ構築処理。
-        テストケース: 個別条件での処理を検証する。
-        期待結果: 想定どおりの処理結果が得られる。"""
-        from ingestion.infrastructure.sql_ingestion_feedback_store import (
-            SqlIngestionFeedbackStore,
-        )
-
-        container = _make_container()
-
-        assert isinstance(
-            container.ingestion_feedback_store, SqlIngestionFeedbackStore,
-        )
-
-    def test_creates_diff_snapshot_store(self) -> None:
-        """テスト対象: 取り込み用コンテナ構築処理。
-        テストケース: 個別条件での処理を検証する。
-        期待結果: 想定どおりの処理結果が得られる。"""
-        from ingestion.infrastructure.sql_file_diff_snapshot_store import (
-            SqlFileDiffSnapshotStore,
-        )
-
-        container = _make_container()
-
-        assert isinstance(container.diff_snapshot_store, SqlFileDiffSnapshotStore)
-
-
 class TestContainerLlmClients:
     def test_creates_llm_clients_with_shared_transport(self) -> None:
         """テスト対象: LLM クライアント構築処理。
@@ -245,44 +188,6 @@ class TestContainerLlmClients:
         )
 
 
-class _FakeEmbedder:
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[0.1] for _ in texts]
-
-
-class TestContainerChroma:
-    def test_creates_chroma_based_instances_with_collection(self) -> None:
-        """テスト対象: Chroma 依存構築処理。
-        テストケース: 個別条件での処理を検証する。
-        期待結果: 想定どおりの処理結果が得られる。"""
-        from ingestion.infrastructure.chroma_chunk_store import ChromaChunkStore
-        from quiz.infrastructure.chroma_explanation_rag import (
-            ChromaExplanationRagClient,
-        )
-        from roadmap.infrastructure.chroma_note_topic_reader import (
-            ChromaNoteTopicReader,
-        )
-
-        chroma = _FakeChromaCollection()
-        embedder = _FakeEmbedder()
-        container = _make_container_with(
-            chroma_collection=chroma, embedder=embedder,
-        )
-
-        assert isinstance(container.explanation_rag_client, ChromaExplanationRagClient)
-        assert isinstance(container.note_topic_reader, ChromaNoteTopicReader)
-        assert isinstance(container.chunk_store, ChromaChunkStore)
-        assert container.note_topic_reader._collection is chroma
-
-    def test_rag_client_is_none_without_embedder(self) -> None:
-        """テスト対象: Chroma 依存構築処理。
-        テストケース: 個別条件での処理を検証する。
-        期待結果: 想定どおりの処理結果が得られる。"""
-        container = _make_container()
-
-        assert container.explanation_rag_client is None
-
-
 class TestContainerLifecycle:
     def test_uuid_generator_produces_uuids(self) -> None:
         """テスト対象: コンテナのライフサイクル処理。
@@ -304,6 +209,18 @@ class TestContainerLifecycle:
 
         with pytest.raises(RuntimeError):
             container.executor.submit(lambda: None)
+
+    def test_shutdown_closes_transport(self) -> None:
+        """テスト対象: コンテナ shutdown 時の LLM transport 後始末。"""
+        from unittest.mock import MagicMock
+
+        container = _make_container()
+        transport = MagicMock()
+        container.transport = transport
+
+        container.shutdown()
+
+        transport.close.assert_called_once()
 
     def test_executor_is_thread_pool(self) -> None:
         """テスト対象: コンテナのライフサイクル処理。
@@ -332,17 +249,7 @@ class TestContainerLifecycle:
 def _make_container_with(
     *,
     engine: Engine | None = None,
-    chroma_collection: object | None = None,
-    embedder: object | None = None,
 ) -> object:
     from api.dependencies import Container
 
-    return Container(
-        engine=engine if engine is not None else _setup_db(),
-        chroma_collection=(
-            chroma_collection
-            if chroma_collection is not None
-            else _FakeChromaCollection()
-        ),
-        embedder=embedder,
-    )
+    return Container(engine=engine if engine is not None else _setup_db())

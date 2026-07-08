@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Map,
   TrendingUp,
-  MessageSquare,
   BookOpenText,
   AlertTriangle,
   X,
@@ -56,7 +55,7 @@ export function DashboardPage() {
 
   // Stat card rendering — shared between loaded and empty states
   const statCards = stats && (
-    <div className="grid grid-cols-7 gap-4 max-[1280px]:grid-cols-4 max-[780px]:grid-cols-2">
+    <div className="grid grid-cols-6 gap-4 max-[1280px]:grid-cols-3 max-[780px]:grid-cols-2">
       <StatCard
         icon={Map}
         label="学習中のロードマップ"
@@ -68,14 +67,6 @@ export function DashboardPage() {
         value={hasAvgScore ? stats.avgScore! : "—"}
         valueColor={avgLvl?.fg}
         hint={avgLvl ? avgLvl.label : "未計測"}
-      />
-      <StatCard
-        icon={MessageSquare}
-        label="未読フィードバック"
-        value={stats.unreadCount}
-        onClick={() => navigate("/feedbacks")}
-        hot={stats.unreadCount > 0}
-        hint={stats.unreadCount > 0 ? "クリックして一覧へ" : "すべて既読"}
       />
       <StatCard
         icon={BookOpenText}
@@ -153,8 +144,8 @@ export function DashboardPage() {
         {/* Loading skeleton */}
         {showSkeleton && (
           <>
-            <div className="grid grid-cols-7 gap-4 max-[1280px]:grid-cols-4 max-[780px]:grid-cols-2">
-              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <div className="grid grid-cols-6 gap-4 max-[1280px]:grid-cols-3 max-[780px]:grid-cols-2">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
                 <StatSkeleton key={i} />
               ))}
             </div>

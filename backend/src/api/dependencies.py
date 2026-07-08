@@ -11,12 +11,9 @@ from infrastructure.uuid_generator import UuidGenerator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
     from uuid import UUID
 
     from sqlalchemy import Engine
-
-    from ingestion.domain.embedder_types import EmbeddingModel
 
 
 class Container:
@@ -30,26 +27,22 @@ class Container:
     graph_runner: Any
     coding_graph_runner: Any
     competitive_graph_runner: Any
+    quiz_checkpointer: Any
+    competitive_checkpointer: Any
+    coding_checkpointer: Any
     competitive_question_llm: Any
     algorithm_foundation_solution_evaluator: Any
     algorithm_foundation_language_adapter: Any
     sql_dojo_feedback_llm: Any
     sql_dojo_question_llm: Any
-    batch_embedder: Any
 
-    def __init__(  # noqa: PLR0913, PLR0915
+    def __init__(
         self,
         engine: Engine,
-        chroma_collection: object,
-        embedder: object | None = None,
         preset_topics_path: str = "data/preset_topics.json",
-        vault_path: Path | None = None,
     ) -> None:
         self._engine = engine
-        self._chroma = chroma_collection
-        self._embedder = embedder
         self._preset_topics_path = preset_topics_path
-        self.vault_path = vault_path
         self.transport = CodexLlmTransport()
         self.uuid_generator = UuidGenerator()
         self.executor = ThreadPoolExecutor(max_workers=2)
@@ -59,16 +52,13 @@ class Container:
             # 「何を受け取るか」を追いやすい。
             self._init_quiz_stores()
             self._init_roadmap_stores()
-            self._init_ingestion_stores()
             self._init_llm_clients()
-            self._init_chroma_clients()
             self._init_graph_runner()
             self._init_competitive()
             self._init_algorithm_foundations()
             self._init_sql_dojo()
             self._init_coding_graph()
             self._init_scheduler()
-            self._init_batch_adapters()
         except Exception:
             # 一部初期化後に失敗しても executor を残さない。
             self.executor.shutdown(wait=False)
@@ -120,26 +110,8 @@ class Container:
         self.topic_store = SqlTopicStore(self._engine)
         self.preset_reader = PresetTopicFileReader(self._preset_topics_path)
 
-    def _init_ingestion_stores(self) -> None:
-        """ingestion の差分スナップショットと feedback の保存先を初期化する。"""
-        from ingestion.infrastructure.sql_file_diff_snapshot_store import (
-            SqlFileDiffSnapshotStore,
-        )
-        from ingestion.infrastructure.sql_ingestion_feedback_store import (
-            SqlIngestionFeedbackStore,
-        )
-
-        self.ingestion_feedback_store = SqlIngestionFeedbackStore(self._engine)
-        self.diff_snapshot_store = SqlFileDiffSnapshotStore(self._engine)
-
     def _init_llm_clients(self) -> None:
         """各ユースケース向けの LLM adapter を生成する。"""
-        from ingestion.infrastructure.codex_ingestion_feedback_llm import (
-            CodexIngestionFeedbackLlm,
-        )
-        from ingestion.infrastructure.codex_llm_tag_classifier import (
-            CodexLlmTagClassifier,
-        )
         from quiz.infrastructure.codex_llm_adapters import (
             CodexAnswerEvaluationLlm,
             CodexChatResponseLlm,
@@ -164,36 +136,6 @@ class Container:
         self.progress_update_llm = CodexProgressUpdateLlm(t)
         self.summary_test_llm = CodexSummaryTestLlm(t)
         self.roadmap_generation_llm = CodexRoadmapGenerationLlm(t)
-        self.ingestion_feedback_llm = CodexIngestionFeedbackLlm(t)
-        self.tag_classifier = CodexLlmTagClassifier(t)
-
-    def _init_chroma_clients(self) -> None:
-        """Chroma を使う reader / writer を初期化する。"""
-        from ingestion.infrastructure.chroma_chunk_store import (
-            ChromaChunkStore,
-            ChunkCollection,
-        )
-        from quiz.infrastructure.chroma_explanation_rag import (
-            ChromaExplanationRagClient,
-            ChromaQueryCollection,
-        )
-        from roadmap.infrastructure.chroma_note_topic_reader import (
-            ChromaMetadataCollection,
-            ChromaNoteTopicReader,
-        )
-
-        self.chunk_store = ChromaChunkStore(cast("ChunkCollection", self._chroma))
-        self.explanation_rag_client: Any | None = None
-        if self._embedder is not None:
-            # explanation RAG は検索時に埋め込みが必要なので、
-            # embedder がない場合は graph 自体を組み上げない。
-            self.explanation_rag_client = ChromaExplanationRagClient(
-                cast("ChromaQueryCollection", self._chroma),
-                cast("EmbeddingModel", self._embedder),
-            )
-        self.note_topic_reader = ChromaNoteTopicReader(
-            cast("ChromaMetadataCollection", self._chroma),
-        )
 
     def _init_graph_runner(self) -> None:
         """通常 quiz 用の LangGraph 実行器を初期化する。"""
@@ -203,25 +145,20 @@ class Container:
         from quiz.application.graph import QuizGraphRunner, build_graph
         from quiz.application.graph_types import GraphDependencies
 
-        if self.explanation_rag_client is None:
-            # 補足説明ノードまで含む通常 quiz 全体を安全に提供できないため、
-            # runner を作らず router 側で 503 に寄せる。
-            self.graph_runner = None
-            return
         deps = GraphDependencies(
             question_set_design_llm=self.question_set_design_llm,
             question_delivery_llm=self.question_delivery_llm,
             input_classification_llm=cast("Any", self.input_classification_llm),
             chat_response_llm=self.chat_response_llm,
             answer_evaluation_llm=cast("Any", self.answer_evaluation_llm),
-            explanation_rag=self.explanation_rag_client,
             explanation_llm=self.explanation_llm,
             progress_update_llm=self.progress_update_llm,
             progress_update_store=self.progress_update_store,
             summary_test_llm=self.summary_test_llm,
             summary_test_store=self.summary_test_result_store,
         )
-        compiled = build_graph(deps, checkpointer=MemorySaver())
+        self.quiz_checkpointer = MemorySaver()
+        compiled = build_graph(deps, checkpointer=self.quiz_checkpointer)
         self.graph_runner = QuizGraphRunner(compiled)
 
     def _init_competitive(self) -> None:
@@ -257,7 +194,11 @@ class Container:
             problem_generation_llm=problem_llm,
             solution_evaluation_llm=cast("Any", eval_llm),
         )
-        compiled = build_competitive_graph(deps, checkpointer=MemorySaver())
+        self.competitive_checkpointer = MemorySaver()
+        compiled = build_competitive_graph(
+            deps,
+            checkpointer=self.competitive_checkpointer,
+        )
         self.competitive_graph_runner = CompetitiveGraphRunner(compiled)
 
     def _init_sql_dojo(self) -> None:
@@ -327,7 +268,8 @@ class Container:
             coding_chat_response_llm=CodexLectureChatResponseLlm(t),
             code_evaluation_llm=CodexCodeEvaluationLlm(t),
         )
-        compiled = build_coding_graph(deps, checkpointer=MemorySaver())
+        self.coding_checkpointer = MemorySaver()
+        compiled = build_coding_graph(deps, checkpointer=self.coding_checkpointer)
         self.coding_graph_runner = CodingGraphRunner(compiled)
 
     def _init_scheduler(self) -> None:
@@ -364,42 +306,27 @@ class Container:
 
         return runner
 
-    def _init_batch_adapters(self) -> None:
-        """ingestion 一括実行に必要な adapter 群を初期化する。"""
-        from ingestion.infrastructure.batch_adapters import (
-            ChunkSplitterAdapter,
-            ChunkTaggerAdapter,
-            DefaultTaggingPromptStrategy,
-            EmbedderAdapter,
-            FileDiffDetectorAdapter,
-            SimpleTokenCounter,
-        )
-        from ingestion.infrastructure.ingestion_feedback_hook import (
-            IngestionFeedbackHook,
-            RoadmapItemReaderAdapter,
-        )
-
-        self.batch_diff_detector = FileDiffDetectorAdapter(self.diff_snapshot_store)
-        self.batch_chunk_splitter = ChunkSplitterAdapter(SimpleTokenCounter())
-        self.batch_chunk_tagger = ChunkTaggerAdapter(
-            DefaultTaggingPromptStrategy(),
-            self.tag_classifier,
-        )
-        if self._embedder is not None:
-            # 埋め込み器がない環境でも feedback 閲覧は生かしたいので、
-            # ingestion trigger だけを無効化できるよう None を許容する。
-            self.batch_embedder = EmbedderAdapter(cast("Any", self._embedder))
-        else:
-            self.batch_embedder = None
-        self.post_ingestion_hook = IngestionFeedbackHook(
-            llm_client=self.ingestion_feedback_llm,
-            roadmap_reader=RoadmapItemReaderAdapter(self.roadmap_retrieval_reader),
-            writer=self.ingestion_feedback_store,
-        )
-
     def shutdown(self) -> None:
-        """アプリ終了時にバックグラウンド executor を停止する。"""
+        """アプリ終了時にバックグラウンド executor と子プロセスを停止する。"""
+        close_transport = getattr(self.transport, "close", None)
+        if callable(close_transport):
+            close_transport()
         self.executor.shutdown(wait=True)
+
+    def delete_quiz_checkpoint(self, session_id: str) -> None:
+        """完了済み通常 quiz の LangGraph checkpoint を破棄する。"""
+        if hasattr(self, "quiz_checkpointer"):
+            self.quiz_checkpointer.delete_thread(session_id)
+
+    def delete_competitive_checkpoint(self, session_id: str) -> None:
+        """完了済み競プロ session の LangGraph checkpoint を破棄する。"""
+        if hasattr(self, "competitive_checkpointer"):
+            self.competitive_checkpointer.delete_thread(session_id)
+
+    def delete_coding_checkpoint(self, session_id: str) -> None:
+        """完了済み coding session の LangGraph checkpoint を破棄する。"""
+        if hasattr(self, "coding_checkpointer"):
+            self.coding_checkpointer.delete_thread(session_id)
 
 
 class _UtcClock:

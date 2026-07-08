@@ -59,7 +59,6 @@ def _build_test_graph():
         input_classification_llm=stub,  # type: ignore[arg-type]
         chat_response_llm=stub,  # type: ignore[arg-type]
         answer_evaluation_llm=stub,  # type: ignore[arg-type]
-        explanation_rag=stub,  # type: ignore[arg-type]
         explanation_llm=stub,  # type: ignore[arg-type]
         progress_update_llm=stub,  # type: ignore[arg-type]
         progress_update_store=stub,  # type: ignore[arg-type]

@@ -4,14 +4,12 @@ import { renderWithProviders, mockJsonResponse } from "@/test-utils";
 import { apiFetch, ApiError } from "@/lib/api";
 import { RoadmapDetailPage } from "./roadmap-detail-page";
 import { useTreeStore } from "./use-tree-store";
-import type { RoadmapTree, FeedbackListResponse } from "@/types/api";
+import type { RoadmapTree } from "@/types/api";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return { ...actual, apiFetch: vi.fn() };
 });
-
-const emptyFeedbacks: FeedbackListResponse = { items: [], total_count: 0 };
 
 const roadmapTree: RoadmapTree = {
   roadmap_id: "rm-1",
@@ -72,8 +70,6 @@ function renderPage() {
 function mockSuccess(tree: RoadmapTree = roadmapTree) {
   vi.mocked(apiFetch).mockImplementation(async (path: string) => {
     if (path === "/roadmaps/rm-1") return mockJsonResponse(tree);
-    if (path.includes("/ingestion/feedbacks"))
-      return mockJsonResponse(emptyFeedbacks);
     throw new Error(`Unexpected path: ${path}`);
   });
 }
@@ -139,9 +135,7 @@ describe("RoadmapDetailPage", () => {
    * 期待結果: 想定どおりの処理結果が得られる。
    */
   it("404エラー時は「見つかりません」を表示する", async () => {
-    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
-      if (path.includes("/ingestion/feedbacks"))
-        return mockJsonResponse(emptyFeedbacks);
+    vi.mocked(apiFetch).mockImplementation(async () => {
       throw new ApiError(404, "not found");
     });
     renderPage();
@@ -158,9 +152,7 @@ describe("RoadmapDetailPage", () => {
    * 期待結果: 想定どおりの処理結果が得られる。
    */
   it("汎用エラー時は再読み込みを表示する", async () => {
-    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
-      if (path.includes("/ingestion/feedbacks"))
-        return mockJsonResponse(emptyFeedbacks);
+    vi.mocked(apiFetch).mockImplementation(async () => {
       throw new ApiError(500, "server error");
     });
     renderPage();

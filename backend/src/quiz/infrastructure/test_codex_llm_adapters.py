@@ -325,7 +325,7 @@ class TestCodexExplanationLlm:
         transport = FakeTransport("型推論とは、コンパイラが型を自動判別する仕組みです。")
         adapter = CodexExplanationLlm(transport)
 
-        result = adapter.generate_explanation("問題文", "型推論", ["ノートの内容"])
+        result = adapter.generate_explanation("問題文", "型推論")
 
         assert result == "型推論とは、コンパイラが型を自動判別する仕組みです。"
 

@@ -1,9 +1,22 @@
 # 概要
-codex app-serverをベースとしたLangGraph問題生成フローによってコーディング学習を実施できるprogate的ローカルアプリケーションです。（モデルはsparkがおすすめです。sparkでもちょっと待ちます）<br>
-ロードマップでテーマを選択してロードマップを生成することで、テーマを体系的に学習できます。コーディングがメインです。<br>
-また、競プロ的なアルゴリズム学習セクションを特設してテーマごとに選択できるようになっています。<br>
-オプションとして、Obsidianの/study配下にノートを作成すると、ベクトルとして取り込み、RAGとして参照してフィードバックをくれるオマケもあります。<br>
-構成は `FastAPI + ChromaDB + SQLite + React/Vite` です。
+codex app-server をベースにしたローカル学習アプリです。ロードマップ生成、理解度チェック用クイズ、コーディング演習、複数の問題演習モードをまとめて扱えます。<br>
+学習テーマを選んでロードマップを生成し、その項目ごとに通常クイズやコーディング演習へ進む構成です。加えて、競プロ形式のアルゴリズム学習、初学者向けの「競プロうさぎ」、SQL 道場を独立した導線として持ちます。<br>
+構成は `FastAPI + SQLite + React/Vite` です。
+
+## 主な機能
+
+- ロードマップ生成
+  - 学習テーマから階層型ロードマップを生成し、進捗とスコアを保持します。
+- 通常クイズ
+  - ロードマップ項目ごとに確認ポイントを設計し、対話形式で理解度を確認します。
+- コーディング演習
+  - ロードマップ項目に紐づく lecture + practice フローで、説明から実装課題まで進めます。
+- 競プロ
+  - テーマ選択式で問題を出題し、提出コードを採点します。
+- 競プロうさぎ
+  - 初学者向けに unit 単位で問題を整理し、問題一覧から 1 問ずつ解けます。
+- SQL 道場
+  - SQL のテーマ別演習を出題し、回答とフィードバックを返します。
 
 ## リポジトリ構成
 
@@ -12,7 +25,7 @@ codex app-serverをベースとしたLangGraph問題生成フローによって�
 - `backend/docs/`: backend の振る舞い docs
 - `frontend/`: React + Vite フロントエンド
 - `docs/`: 仕様・設計メモ
-- `data/`: SQLite、ChromaDB、Hugging Face キャッシュ
+- `data/`: SQLite データなどのローカル保存領域
 
 backend の docs は [backend/docs/README.md](/Users/tsuryoryo/Desktop/repo/obsidian/backend/docs/README.md) から辿れます。overview と機能別 docs を分けていて、実装詳細よりも API 契約、状態遷移、永続化境界を優先して記述しています。
 
@@ -50,20 +63,13 @@ lefthook install
 cp .env.example .env
 ```
 
-Vault を取り込みたい場合だけ、`VAULT_PATH` を実際の Vault パスに設定してください。未設定でもアプリは起動できますが、`POST /ingestion/trigger` は無効になります。
-
-```env
-VAULT_PATH=/absolute/path/to/your/obsidian/vault
-```
-
-他の設定値は未指定でもデフォルトで動作します。ローカル開発時に ChromaDB を手動起動する場合だけ、必要に応じて `CHROMADB_HOST=localhost` を使ってください。
+主要な設定値は未指定でもデフォルトで動作します。必要に応じて `.env.example` の値を有効化してください。
 
 ## 起動方法
 
 ### Docker Compose で起動
 
 backend コンテナはホストの `~/.codex` を `/root/.codex` にマウントして、その認証情報を使います。ホストで `codex` に未ログインの場合は、先にログインしてください。
-`VAULT_PATH` を未設定のままでも起動できます。その場合、Vault 取り込みは無効になり、feedback API の参照だけが利用可能です。
 
 ```bash
 docker compose up --build
@@ -74,9 +80,6 @@ docker compose up --build
 - Frontend: [http://localhost:3080](http://localhost:3080)
 - Backend API: [http://localhost:8081](http://localhost:8081)
 - FastAPI Docs: [http://localhost:8081/docs](http://localhost:8081/docs)
-- ChromaDB: `localhost:8000`
-
-初回起動時は埋め込みモデル `intfloat/multilingual-e5-large` の取得に時間がかかります。キャッシュは `data/huggingface/` に永続化されます。
 
 停止:
 
@@ -86,15 +89,7 @@ docker compose down
 
 ### ローカル開発で起動
 
-ChromaDB だけ Docker で立てて、フロントエンドとバックエンドをローカル実行する手順です。
-
-1. ChromaDB を起動
-
-```bash
-docker compose up -d chromadb
-```
-
-2. バックエンドを起動
+1. バックエンドを起動
 
 ```bash
 cd backend
@@ -106,7 +101,7 @@ uv run alembic upgrade head
 uv run uvicorn --app-dir src dev_server:app --reload --host 0.0.0.0 --port 8001
 ```
 
-3. フロントエンドを起動
+2. フロントエンドを起動
 
 ```bash
 cd frontend
@@ -156,6 +151,5 @@ pnpm run build
 ## 補足
 
 - Docker 起動時、バックエンドコンテナは起動時に Alembic migration を自動実行します
-- SQLite は `data/app.db`、ChromaDB は `data/chromadb/` に保存されます
+- SQLite は `data/app.db` に保存されます
 - backend コンテナはホストの `~/.codex` を共有します
-- `VAULT_PATH` を設定した場合だけ、Vault は Docker で `/vault` に読み取り専用マウントされます

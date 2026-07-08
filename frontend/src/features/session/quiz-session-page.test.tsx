@@ -6,7 +6,6 @@ import { QuizSessionPage } from "./quiz-session-page";
 import { useQuizSessionStore } from "./use-quiz-session-store";
 import type {
   SessionDetailResponse,
-  FeedbackListResponse,
   CodingSessionStateDTO,
 } from "@/types/api";
 
@@ -14,8 +13,6 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return { ...actual, apiFetch: vi.fn() };
 });
-
-const emptyFeedbacks: FeedbackListResponse = { items: [], total_count: 0 };
 
 const sessionDetail: SessionDetailResponse = {
   session_id: "sess-1",
@@ -133,8 +130,6 @@ function mockSuccess(detail: SessionDetailResponse = sessionDetail) {
     if (path === "/sessions/sess-1") return mockJsonResponse(detail);
     if (path === "/sessions/coding-1") return mockJsonResponse(detail);
     if (path === "/sessions/coding-2") return mockJsonResponse(detail);
-    if (path.includes("/ingestion/feedbacks"))
-      return mockJsonResponse(emptyFeedbacks);
     throw new Error(`Unexpected path: ${path}`);
   });
 }
@@ -189,9 +184,7 @@ describe("QuizSessionPage", () => {
   });
 
   it("404エラー時は「見つかりません」を表示する", async () => {
-    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
-      if (path.includes("/ingestion/feedbacks"))
-        return mockJsonResponse(emptyFeedbacks);
+    vi.mocked(apiFetch).mockImplementation(async () => {
       throw new ApiError(404, "not found");
     });
     renderPage();
@@ -203,9 +196,7 @@ describe("QuizSessionPage", () => {
   });
 
   it("汎用エラー時は再読み込みを表示する", async () => {
-    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
-      if (path.includes("/ingestion/feedbacks"))
-        return mockJsonResponse(emptyFeedbacks);
+    vi.mocked(apiFetch).mockImplementation(async () => {
       throw new ApiError(500, "server error");
     });
     renderPage();

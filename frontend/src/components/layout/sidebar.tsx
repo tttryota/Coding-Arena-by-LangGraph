@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   Map,
-  MessageSquare,
   BookOpenText,
   PanelLeftClose,
   PanelLeft,
@@ -52,19 +51,16 @@ const NAV_ITEMS: NavItem[] = [
     to: "/sql-dojo",
     match: (p) => p.startsWith("/sql-dojo"),
   },
-  { icon: MessageSquare, label: "フィードバック", to: "/feedbacks" },
 ];
 
 interface SidebarProps {
   pathname: string;
-  unreadCount?: number;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
 
 export function Sidebar({
   pathname,
-  unreadCount = 0,
   collapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
@@ -114,10 +110,6 @@ export function Sidebar({
       {/* Navigation */}
       {NAV_ITEMS.map((item) => {
         const active = isActive(item);
-        const badge =
-          item.to === "/feedbacks" && unreadCount > 0
-            ? unreadCount
-            : undefined;
 
         return (
           <NavLink
@@ -137,16 +129,6 @@ export function Sidebar({
           >
             <item.icon className="h-4 w-4 shrink-0" />
             {!collapsed && <span>{item.label}</span>}
-            {badge != null && (
-              <span
-                className={cn(
-                  "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary font-mono text-[11px] font-semibold text-white",
-                  collapsed ? "absolute -top-1 -right-1 px-1" : "ml-auto px-1.5",
-                )}
-              >
-                {badge > 99 ? "99+" : badge}
-              </span>
-            )}
           </NavLink>
         );
       })}

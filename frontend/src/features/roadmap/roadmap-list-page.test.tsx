@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { renderWithProviders, mockJsonResponse } from "@/test-utils";
 import { apiFetch, ApiError } from "@/lib/api";
 import { RoadmapListPage } from "./roadmap-list-page";
-import type { RoadmapListResponse, FeedbackListResponse } from "@/types/api";
+import type { RoadmapListResponse } from "@/types/api";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -20,8 +20,6 @@ const roadmapList: RoadmapListResponse = {
 
 const emptyRoadmapList: RoadmapListResponse = { items: [], total_count: 0 };
 
-const emptyFeedbacks: FeedbackListResponse = { items: [], total_count: 0 };
-
 function renderPage() {
   return renderWithProviders(<RoadmapListPage />, {
     initialEntries: ["/roadmaps"],
@@ -31,8 +29,6 @@ function renderPage() {
 function mockSuccess(roadmaps: RoadmapListResponse = roadmapList) {
   vi.mocked(apiFetch).mockImplementation(async (path: string) => {
     if (path === "/roadmaps") return mockJsonResponse(roadmaps);
-    if (path.includes("/ingestion/feedbacks"))
-      return mockJsonResponse(emptyFeedbacks);
     throw new Error(`Unexpected path: ${path}`);
   });
 }
@@ -92,9 +88,7 @@ describe("RoadmapListPage", () => {
    * 期待結果: 想定どおりの処理結果が得られる。
    */
   it("エラー時はエラーメッセージと再読み込みボタンを表示する", async () => {
-    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
-      if (path.includes("/ingestion/feedbacks"))
-        return mockJsonResponse(emptyFeedbacks);
+    vi.mocked(apiFetch).mockImplementation(async () => {
       throw new ApiError(500, "server error");
     });
     renderPage();

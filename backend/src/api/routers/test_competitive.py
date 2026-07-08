@@ -173,6 +173,10 @@ class _FakeContainer:
         self.competitive_graph_runner = _FakeGraphRunner()
         self.competitive_store = _FakeCompetitiveStore()
         self.competitive_question_llm = _FakeQuestionLlm()
+        self.deleted_competitive_checkpoints: list[str] = []
+
+    def delete_competitive_checkpoint(self, session_id: str) -> None:
+        self.deleted_competitive_checkpoints.append(session_id)
 
 
 def _make_client() -> TestClient:
@@ -252,6 +256,7 @@ class TestSubmitAnswer:
         client = _make_client()
         start_resp = client.post("/algorithm-quiz/sessions")
         session_id = start_resp.json()["session_id"]
+        container = client.app.state.container
 
         resp = client.post(
             f"/algorithm-quiz/sessions/{session_id}/answer",
@@ -263,6 +268,7 @@ class TestSubmitAnswer:
         assert data["score"] == 85
         assert data["feedback"] == "良い解答です"
         assert data["reference_solution"] == "def solve(): pass"
+        assert container.deleted_competitive_checkpoints == [session_id]
 
     def test_empty_code_rejected(self) -> None:
         client = _make_client()

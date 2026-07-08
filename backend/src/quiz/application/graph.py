@@ -163,11 +163,7 @@ def _add_quiz_nodes(
     )
     graph.add_node(
         NODE_EXPLANATION_GENERATION,
-        partial(
-            generate_explanation,
-            rag=deps.explanation_rag,
-            llm=deps.explanation_llm,
-        ),
+        partial(generate_explanation, llm=deps.explanation_llm),
     )
     graph.add_node(
         NODE_PROGRESS_UPDATE,

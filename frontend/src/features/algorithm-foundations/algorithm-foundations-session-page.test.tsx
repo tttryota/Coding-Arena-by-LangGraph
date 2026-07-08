@@ -117,7 +117,46 @@ describe("AlgorithmFoundationsSessionPage", () => {
 
     expect(await screen.findByText("結果: 出現回数カウント")).toBeInTheDocument();
     expect(screen.getByText("模範解答")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "unit の項目一覧へ" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "もう一度解く" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "競プロうさぎTOPへ" })).toBeInTheDocument();
     expect(screen.queryByText("解答コード")).not.toBeInTheDocument();
+  });
+
+  it("結果画面から同じ問題をもう一度開始できる", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/api/algorithm-foundations/sessions/af-1")) {
+        return mockJsonResponse(completedSession);
+      }
+      if (
+        url.endsWith("/api/algorithm-foundations/sessions") &&
+        init?.method === "POST"
+      ) {
+        return mockJsonResponse({
+          ...inProgressSession,
+          session_id: "af-2",
+        });
+      }
+      if (url.endsWith("/api/algorithm-foundations/sessions/af-2")) {
+        return mockJsonResponse({
+          ...inProgressSession,
+          session_id: "af-2",
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "もう一度解く" }));
+
+    expect(
+      await screen.findByPlaceholderText("# Python で解答を書いてください"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("出現回数カウント / 典型入力をそのまま処理する"),
+    ).toBeInTheDocument();
   });
 
   it("セッション言語に応じた placeholder を表示する", async () => {

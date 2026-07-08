@@ -16,7 +16,7 @@ export function DetailEmptyState({ onAdd }: DetailEmptyStateProps) {
           まだ項目がありません
         </div>
         <div className="mb-5 max-w-[360px] text-xs leading-relaxed">
-          大枠を追加してロードマップを組み立てましょう。AIにノートから生成させることもできます。
+          大枠を追加してロードマップを組み立てましょう。必要なら AI 生成で全体像を作ることもできます。
         </div>
         <Button onClick={onAdd}>
           <Plus className="h-4 w-4" />

@@ -11,15 +11,11 @@ class TestSettingsDefaults:
         期待結果: 想定どおりの処理結果が得られる。"""
         with patch.dict(
             "os.environ",
-            {"VAULT_PATH": "/test/vault"},
             clear=True,
         ):
             settings = Settings(_env_file=None)
 
         assert settings.sqlite_path == Path("data/app.db")
-        assert settings.chromadb_host == "localhost"
-        assert settings.chromadb_port == 8000
-        assert settings.batch_interval_minutes == 15
         assert settings.score_threshold_not_started == 25
         assert settings.score_threshold_insufficient == 50
         assert settings.score_threshold_partial == 75
@@ -32,16 +28,7 @@ class TestSettingsDefaults:
         with patch.dict("os.environ", {}, clear=True):
             settings = Settings(_env_file=None)
 
-        assert settings.vault_path is None
-
-    def test_vault_path_missing_returns_none(self) -> None:
-        """テスト対象: SettingsDefaults の処理。
-        テストケース: 個別条件での処理を検証する。
-        期待結果: 想定どおりの処理結果が得られる。"""
-        with patch.dict("os.environ", {}, clear=True):
-            settings = Settings(_env_file=None)
-
-        assert settings.vault_path is None
+        assert settings.sqlite_path == Path("data/app.db")
 
 
 class TestSettingsEnvOverride:
@@ -52,41 +39,41 @@ class TestSettingsEnvOverride:
         with patch.dict(
             "os.environ",
             {
-                "VAULT_PATH": "/my/vault",
-                "BATCH_INTERVAL_MINUTES": "10",
+                "SQLITE_PATH": "tmp/test.db",
+                "SESSION_MAX_QUESTIONS": "10",
             },
             clear=True,
         ):
             settings = Settings(_env_file=None)
 
-        assert settings.vault_path == Path("/my/vault")
-        assert settings.batch_interval_minutes == 10
+        assert settings.sqlite_path == Path("tmp/test.db")
+        assert settings.session_max_questions == 10
 
     def test_env_file_loaded(self, tmp_path: Path) -> None:
         """テスト対象: SettingsEnvOverride の処理。
         テストケース: 個別条件での処理を検証する。
         期待結果: 想定どおりの処理結果が得られる。"""
         env_file = tmp_path / ".env"
-        env_file.write_text("VAULT_PATH=/env/vault\n")
+        env_file.write_text("SQLITE_PATH=data/test.db\n")
         with patch.dict("os.environ", {}, clear=True):
             settings = Settings(_env_file=str(env_file))
 
-        assert settings.vault_path == Path("/env/vault")
+        assert settings.sqlite_path == Path("data/test.db")
 
     def test_env_var_overrides_env_file(self, tmp_path: Path) -> None:
         """テスト対象: SettingsEnvOverride の処理。
         テストケース: 個別条件での処理を検証する。
         期待結果: 想定どおりの処理結果が得られる。"""
         env_file = tmp_path / ".env"
-        env_file.write_text("VAULT_PATH=/env/vault\n")
+        env_file.write_text("SQLITE_PATH=data/test.db\n")
         with patch.dict(
             "os.environ",
-            {"VAULT_PATH": "/override/vault"},
+            {"SQLITE_PATH": "data/override.db"},
             clear=True,
         ):
             settings = Settings(_env_file=str(env_file))
 
-        assert settings.vault_path == Path("/override/vault")
+        assert settings.sqlite_path == Path("data/override.db")
 
 
 class TestSettingsScoreThresholds:
@@ -97,7 +84,6 @@ class TestSettingsScoreThresholds:
         with patch.dict(
             "os.environ",
             {
-                "VAULT_PATH": "/test/vault",
                 "SCORE_THRESHOLD_NOT_STARTED": "30",
                 "SCORE_THRESHOLD_INSUFFICIENT": "60",
                 "SCORE_THRESHOLD_PARTIAL": "80",

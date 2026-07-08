@@ -13,21 +13,15 @@ class ExplanationGenerationError(Exception):
         self.message = message
 
 
-class ExplanationRagClient(Protocol):
-    def search_related_chunks(self, query: str) -> list[str]: ...
-
-
 class ExplanationLlmClient(Protocol):
     def generate_explanation(
         self,
         question_text: str,
         confirmation_point_content: str,
-        note_chunks: list[str],
     ) -> str: ...
 
 
 __all__ = [
     "ExplanationGenerationError",
     "ExplanationLlmClient",
-    "ExplanationRagClient",
 ]

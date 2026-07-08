@@ -5,8 +5,6 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from infrastructure.rdb.base import Base
 from infrastructure.rdb.models import (  # noqa: F401
-    DiffSnapshot,
-    IngestionFeedback,
     QuizAnswer,
     QuizSession,
     Roadmap,

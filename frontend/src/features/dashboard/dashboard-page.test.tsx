@@ -5,7 +5,6 @@ import { DashboardPage } from "./dashboard-page";
 import type {
   RoadmapListResponse,
   RoadmapTree,
-  FeedbackListResponse,
 } from "@/types/api";
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -71,35 +70,15 @@ const roadmapTree2: RoadmapTree = {
   items: [],
 };
 
-const unreadFeedbacks: FeedbackListResponse = {
-  items: [
-    {
-      id: "fb-1",
-      source_path: "notes/ts.md",
-      roadmap_item_id: null,
-      title: "型の説明不正確",
-      body: "内容に誤りがあります",
-      is_read: false,
-      created_at: recentDate.toISOString(),
-      read_at: null,
-    },
-  ],
-  total_count: 1,
-};
-
 const emptyRoadmapList: RoadmapListResponse = { items: [], total_count: 0 };
-const emptyFeedbacks: FeedbackListResponse = { items: [], total_count: 0 };
 
 function mockSuccess(
   roadmaps: RoadmapListResponse = roadmapList,
-  feedbacks: FeedbackListResponse = unreadFeedbacks,
 ) {
   vi.mocked(apiFetch).mockImplementation(async (path: string) => {
     if (path === "/roadmaps") return mockJsonResponse(roadmaps);
     if (path === "/roadmaps/rm-1") return mockJsonResponse(roadmapTree1);
     if (path === "/roadmaps/rm-2") return mockJsonResponse(roadmapTree2);
-    if (path.includes("/ingestion/feedbacks"))
-      return mockJsonResponse(feedbacks);
     if (path === "/algorithm-quiz/sessions")
       return mockJsonResponse({ sessions: [] });
     if (path === "/algorithm-foundations/sessions")
@@ -144,8 +123,6 @@ describe("DashboardPage", () => {
     ).toBeInTheDocument();
     // ロードマップ数
     expect(screen.getByText("学習中のロードマップ")).toBeInTheDocument();
-    // 未読フィードバック
-    expect(screen.getByText("未読フィードバック")).toBeInTheDocument();
     expect(screen.getByText("競プロうさぎ(直近)")).toBeInTheDocument();
     expect(screen.getByText("SQL道場(直近)")).toBeInTheDocument();
   });
@@ -156,7 +133,7 @@ describe("DashboardPage", () => {
    * 期待結果: 想定どおりの処理結果が得られる。
    */
   it("ロードマップが空なら Welcome を表示する", async () => {
-    mockSuccess(emptyRoadmapList, emptyFeedbacks);
+    mockSuccess(emptyRoadmapList);
     renderWithProviders(<DashboardPage />);
 
     expect(
@@ -190,9 +167,6 @@ describe("DashboardPage", () => {
       if (path === "/roadmaps") return mockJsonResponse(roadmapList);
       if (path === "/roadmaps/rm-1") return mockJsonResponse(roadmapTree1);
       if (path === "/roadmaps/rm-2") return mockJsonResponse(roadmapTree2);
-      if (path.includes("/ingestion/feedbacks")) {
-        return mockJsonResponse(unreadFeedbacks);
-      }
       if (path === "/algorithm-quiz/sessions") {
         return mockJsonResponse({ sessions: [] });
       }
@@ -219,9 +193,6 @@ describe("DashboardPage", () => {
       if (path === "/roadmaps") return mockJsonResponse(roadmapList);
       if (path === "/roadmaps/rm-1") return mockJsonResponse(roadmapTree1);
       if (path === "/roadmaps/rm-2") return mockJsonResponse(roadmapTree2);
-      if (path.includes("/ingestion/feedbacks")) {
-        return mockJsonResponse(emptyFeedbacks);
-      }
       if (path === "/algorithm-quiz/sessions") {
         return mockJsonResponse({ sessions: [] });
       }

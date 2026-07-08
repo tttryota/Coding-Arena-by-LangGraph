@@ -7,10 +7,6 @@ function SourceBadge({ source }: { source: TopicSource }) {
       label: "プリセット",
       cls: "border-blue-500/25 bg-blue-500/10 text-blue-400",
     },
-    note: {
-      label: "ノート",
-      cls: "border-emerald-500/25 bg-emerald-500/10 text-emerald-400",
-    },
     manual: {
       label: "手動",
       cls: "border-slate-500/30 bg-slate-500/[0.12] text-muted-foreground",
@@ -89,14 +85,6 @@ export function TopicCandidateList({
 
             {/* Source badge */}
             <SourceBadge source={c.source} />
-
-            {/* Note count */}
-            <span className="w-15 text-right font-mono text-xs text-muted-foreground">
-              <span className="text-[13px] font-semibold text-foreground">
-                {c.note_count}
-              </span>{" "}
-              ノート
-            </span>
           </button>
         );
       })}

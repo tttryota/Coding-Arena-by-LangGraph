@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -178,6 +179,7 @@ class TestSendOsError:
         transport._process = mock_process
         with pytest.raises(CodexTransportHttpError, match="Failed to write"):
             transport._send({"test": "data"})
+
     def test_os_error_becomes_http_error(self) -> None:
         """テスト対象: CodexTransport._send 関連処理。
         テストケース: 個別条件での処理を検証する。
@@ -190,3 +192,95 @@ class TestSendOsError:
         transport._process = mock_process
         with pytest.raises(CodexTransportHttpError, match="Failed to write"):
             transport._send({"test": "data"})
+
+
+class TestRecycle:
+    """成功した call 後の codex app-server recycle を検証する。"""
+
+    @patch.object(CodexLlmTransport, "_close_unlocked")
+    @patch.object(CodexLlmTransport, "_call_once")
+    def test_recycles_after_max_calls(
+        self,
+        mock_call_once: MagicMock,
+        mock_close_unlocked: MagicMock,
+    ) -> None:
+        mock_call_once.return_value = "ok"
+        transport = CodexLlmTransport(max_calls=2, max_rss_mb=0)
+        messages = [CodexMessage(role="user", content="hello")]
+
+        assert transport.call(messages) == "ok"
+        assert transport.call(messages) == "ok"
+
+        mock_close_unlocked.assert_called_once()
+
+    @patch.object(CodexLlmTransport, "_child_rss_mb", return_value=2048)
+    @patch.object(CodexLlmTransport, "_close_unlocked")
+    @patch.object(CodexLlmTransport, "_call_once")
+    def test_recycles_after_max_rss(
+        self,
+        mock_call_once: MagicMock,
+        mock_close_unlocked: MagicMock,
+        mock_child_rss_mb: MagicMock,
+    ) -> None:
+        mock_call_once.return_value = "ok"
+        transport = CodexLlmTransport(max_calls=0, max_rss_mb=1024)
+        transport._process = SimpleNamespace(pid=123)  # type: ignore[assignment]
+
+        assert transport.call([CodexMessage(role="user", content="hello")]) == "ok"
+
+        mock_close_unlocked.assert_called_once()
+        mock_child_rss_mb.assert_called_once_with(123)
+
+    @patch.object(CodexLlmTransport, "_child_rss_mb", return_value=2048)
+    @patch.object(CodexLlmTransport, "_close_unlocked")
+    @patch.object(CodexLlmTransport, "_call_once")
+    def test_zero_thresholds_disable_recycle(
+        self,
+        mock_call_once: MagicMock,
+        mock_close_unlocked: MagicMock,
+        mock_child_rss_mb: MagicMock,
+    ) -> None:
+        mock_call_once.return_value = "ok"
+        transport = CodexLlmTransport(max_calls=0, max_rss_mb=0)
+        transport._process = SimpleNamespace(pid=123)  # type: ignore[assignment]
+
+        assert transport.call([CodexMessage(role="user", content="hello")]) == "ok"
+        assert transport.call([CodexMessage(role="user", content="hello")]) == "ok"
+
+        mock_close_unlocked.assert_not_called()
+        assert mock_child_rss_mb.call_count == 2
+
+    def test_next_call_starts_new_process_after_recycle(self) -> None:
+        class FakeProcess:
+            def __init__(self, pid: int) -> None:
+                self.pid = pid
+
+            def kill(self) -> None:
+                pass
+
+            def wait(self) -> None:
+                pass
+
+        class FakeTransport(CodexLlmTransport):
+            def __init__(self) -> None:
+                super().__init__(max_calls=1, max_rss_mb=0)
+                self.starts = 0
+
+            def _call_once(
+                self,
+                messages: list[CodexMessage],
+                *,
+                model: str = "default",
+                temperature: float = 0.7,
+            ) -> str:
+                if self._process is None:
+                    self.starts += 1
+                    self._process = FakeProcess(self.starts)  # type: ignore[assignment]
+                return "ok"
+
+        transport = FakeTransport()
+
+        assert transport.call([CodexMessage(role="user", content="hello")]) == "ok"
+        assert transport.call([CodexMessage(role="user", content="hello")]) == "ok"
+
+        assert transport.starts == 2

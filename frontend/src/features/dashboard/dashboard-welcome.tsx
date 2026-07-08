@@ -6,7 +6,7 @@ const STEPS = [
   {
     num: "01",
     title: "トピックを選ぶ",
-    desc: "プリセットから選ぶか、ノートから検出された候補を選択",
+    desc: "プリセットから選ぶか、学びたい内容を直接追加",
   },
   {
     num: "02",
@@ -43,8 +43,7 @@ export function DashboardWelcome() {
 
       {/* Description */}
       <p className="mx-auto mb-7 max-w-[460px] text-[13px] leading-[1.7] text-muted-foreground">
-        Obsidian
-        のノートからロードマップを生成し、AIがクイズを出題して理解度を測定します。
+        学びたいトピックからロードマップを生成し、AIがクイズを出題して理解度を測定します。
         最初のロードマップを作成するところから始まります。
       </p>
 

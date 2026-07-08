@@ -1,5 +1,5 @@
 # プロジェクト概要
-Obsidian × RAG × LangGraph 理解度チェックシステム。
+LangGraph ベースの理解度チェックシステム。
 個人学習用。技術理解の深化が目的。
 
 # アーキテクチャ
@@ -8,8 +8,6 @@ Obsidian × RAG × LangGraph 理解度チェックシステム。
 
 # 技術制約
 - LLM: Codex（app-server経由）
-- Embedding: multilingual-e5-large（ローカル）
-- VectorDB: ChromaDB（ローカル永続化）
 - LangGraphのステートは SessionState を基本とする
 
 # ディレクトリ規約

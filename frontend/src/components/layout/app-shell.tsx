@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { Sidebar } from "./sidebar";
-import { useUnreadCount } from "@/lib/use-unread-count";
 import { useUiStore } from "@/store/ui-store";
 
 interface BreadcrumbItem {
@@ -22,7 +21,6 @@ export function AppShell({
   children,
 }: AppShellProps) {
   const { pathname } = useLocation();
-  const unreadCount = useUnreadCount();
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleCollapse = useUiStore((s) => s.toggleSidebar);
 
@@ -30,7 +28,6 @@ export function AppShell({
     <div className="flex h-screen overflow-hidden">
       <Sidebar
         pathname={pathname}
-        unreadCount={unreadCount}
         collapsed={collapsed}
         onToggleCollapse={toggleCollapse}
       />

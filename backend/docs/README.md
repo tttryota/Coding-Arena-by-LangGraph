@@ -10,7 +10,5 @@ backend の振る舞いと保守上の前提をまとめた docs です。
   - ロードマップ生成ジョブ、一覧/詳細/CRUD の責務、ジョブ状態の制約
 - [competitive.md](competitive.md)
   - 競プロクイズの 4 ノード構成、公開する状態と非公開の状態の境界
-- [ingestion.md](ingestion.md)
-  - Vault 取り込みバッチ、差分検出からフィードバック保存までの流れ、`VAULT_PATH` 未設定時の挙動
 
 詳細な意思決定の背景は repo ルートの `docs/adr/` を参照してください。

@@ -77,6 +77,12 @@ def _container(request: Request) -> Container:
     return cast("Container", c)
 
 
+def _delete_checkpoint(c: Container, session_id: str) -> None:
+    cleanup = getattr(c, "delete_competitive_checkpoint", None)
+    if callable(cleanup):
+        cleanup(session_id)
+
+
 def _require_runner(c: Container) -> CompetitiveGraphRunner:
     """競プロ graph が有効な環境かを確認する。"""
     if c.competitive_graph_runner is None:
@@ -307,6 +313,7 @@ def submit_answer(
         ) from exc
 
     answer = _save_answer(c, session_id, state, body.user_code)
+    _delete_checkpoint(c, session_id)
     return {
         "session_id": session_id,
         "score": answer.score,

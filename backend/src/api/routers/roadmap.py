@@ -64,15 +64,13 @@ def list_roadmaps(request: Request) -> dict[str, object]:
 
 @router.get("/topics")
 def list_topics(request: Request) -> dict[str, object]:
-    """preset / ノート / 手動登録をマージした topic 候補を返す。"""
+    """preset / 手動登録をマージした topic 候補を返す。"""
     from roadmap.application.topic_listing import list_topic_candidates
 
     c = _container(request)
     candidates = list_topic_candidates(
         preset_reader=c.preset_reader,
-        note_topic_reader=c.note_topic_reader,
         topic_store=c.topic_store,
-        note_count_reader=c.note_topic_reader,
     )
     return {"candidates": [_serialize_candidate(tc) for tc in candidates]}
 
@@ -90,7 +88,6 @@ def register_topic(
         result = register_manual_topic(
             body.name,
             topic_store=c.topic_store,
-            note_count_reader=c.note_topic_reader,
         )
     except TopicListingEmptyTopicNameError as exc:
         raise HTTPException(
@@ -259,7 +256,6 @@ def _serialize_candidate(candidate: object) -> dict[str, object]:
     return {
         "name": getattr(candidate, "name", ""),
         "source": getattr(candidate, "source", ""),
-        "note_count": getattr(candidate, "note_count", 0),
     }
 
 

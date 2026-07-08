@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from "react";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useRoadmaps } from "@/features/roadmap/use-roadmaps";
 import { useCompetitiveSessions } from "@/features/competitive/use-competitive";
@@ -10,8 +10,6 @@ import type {
   RoadmapListItem,
   RoadmapTree,
   RoadmapTreeNode,
-  FeedbackListItem,
-  FeedbackListResponse,
   SqlDojoSessionListItem,
 } from "@/types/api";
 
@@ -22,7 +20,6 @@ import type {
 export interface DashboardStats {
   roadmapCount: number;
   avgScore: number | null;
-  unreadCount: number;
   recentQuizCount: number;
 }
 
@@ -33,14 +30,6 @@ export interface QuizActivity {
   score: number;
   roadmapId: string;
   lastQuizAt: string;
-}
-
-export interface FeedbackActivity {
-  kind: "feedback";
-  id: string;
-  title: string;
-  unread: boolean;
-  createdAt: string;
 }
 
 export interface CompetitiveActivity {
@@ -70,7 +59,6 @@ export interface AlgorithmFoundationsActivity {
 
 export type ActivityItem =
   | QuizActivity
-  | FeedbackActivity
   | CompetitiveActivity
   | AlgorithmFoundationsActivity
   | SqlDojoActivity;
@@ -130,7 +118,6 @@ function flattenDetailNodes(nodes: RoadmapTreeNode[]): RoadmapTreeNode[] {
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const SUMMARY_LIMIT = 5;
 const ACTIVITY_LIMIT = 10;
-const FEEDBACK_ACTIVITY_LIMIT = 5;
 
 export function useDashboardData(): DashboardData {
   // 1. Roadmap list
@@ -162,39 +149,14 @@ export function useDashboardData(): DashboardData {
   const algorithmFoundationsQuery = useAlgorithmFoundationSessions();
   const sqlDojoQuery = useSqlDojoSessions();
 
-  // 4. Unread feedbacks (provides both total_count for stat card and items
-  //    for activity timeline). Key uses "feedbacks" prefix so that
-  //    use-mark-as-read's invalidateQueries({ queryKey: ["feedbacks"] })
-  //    triggers a refetch. The key shape differs from useFeedbacks()
-  //    intentionally — the dashboard fetches unread-only without date filters.
-  const feedbacksQuery = useQuery({
-    queryKey: ["feedbacks", { read_status: "unread" }] as const,
-    queryFn: async (): Promise<FeedbackListResponse> => {
-      const res = await apiFetch("/ingestion/feedbacks?read_status=unread");
-      return res.json() as Promise<FeedbackListResponse>;
-    },
-    staleTime: 60_000,
-  });
-
-  // ---------------------------------------------------------------------------
-  // Derived state
-  // ---------------------------------------------------------------------------
-
   const allDetailsLoaded =
     roadmapIds.length === 0 || detailQueries.every((q) => !q.isLoading);
-  const isLoading =
-    roadmapList.isLoading ||
-    !allDetailsLoaded ||
-    feedbacksQuery.isLoading;
-  const isError =
-    roadmapList.isError ||
-    detailQueries.some((q) => q.isError) ||
-    feedbacksQuery.isError;
+  const isLoading = roadmapList.isLoading || !allDetailsLoaded;
+  const isError = roadmapList.isError || detailQueries.some((q) => q.isError);
   const isEmpty =
     !roadmapList.isLoading && roadmapItems.length === 0 && !roadmapList.isError;
   const errorUpdatedAt = Math.max(
     roadmapList.errorUpdatedAt,
-    feedbacksQuery.errorUpdatedAt,
     ...detailQueries.map((q) => q.errorUpdatedAt),
   );
 
@@ -209,10 +171,6 @@ export function useDashboardData(): DashboardData {
   const latestTreeDataUpdatedAt = useMemo(
     () => Math.max(0, ...detailQueries.map((q) => q.dataUpdatedAt)),
     [detailQueries],
-  );
-  const unreadFeedbackItems = useMemo(
-    () => feedbacksQuery.data?.items ?? [],
-    [feedbacksQuery.data],
   );
   const competitiveSessions = useMemo(
     () => competitiveQuery.data?.sessions ?? [],
@@ -242,8 +200,6 @@ export function useDashboardData(): DashboardData {
           )
         : null;
 
-    const unreadCount = feedbacksQuery.data?.total_count ?? 0;
-
     // Use the most recent successful data fetch time as the reference point.
     const cutoff = latestTreeDataUpdatedAt - SEVEN_DAYS_MS;
     let recentQuizCount = 0;
@@ -263,7 +219,6 @@ export function useDashboardData(): DashboardData {
     return {
       roadmapCount,
       avgScore,
-      unreadCount,
       recentQuizCount,
     };
   }, [
@@ -271,7 +226,6 @@ export function useDashboardData(): DashboardData {
     roadmapList.isError,
     roadmapList.data,
     roadmapItems,
-    feedbacksQuery.data,
     detailTrees,
     latestTreeDataUpdatedAt,
   ]);
@@ -303,24 +257,6 @@ export function useDashboardData(): DashboardData {
         }
       }
     }
-
-    // Feedback activities — limit to 5 items per spec before merging
-    const recentFeedbacks = [...unreadFeedbackItems]
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      )
-      .slice(0, FEEDBACK_ACTIVITY_LIMIT);
-
-    const feedbackActivities: FeedbackActivity[] = recentFeedbacks.map(
-      (f: FeedbackListItem) => ({
-        kind: "feedback" as const,
-        id: f.id,
-        title: f.title,
-        unread: !f.is_read,
-        createdAt: f.created_at,
-      }),
-    );
 
     // Competitive activities
     const competitiveItems: CompetitiveActivity[] = competitiveSessions
@@ -361,7 +297,6 @@ export function useDashboardData(): DashboardData {
     // Merge by timestamp descending
     const merged: ActivityItem[] = [
       ...quizItems,
-      ...feedbackActivities,
       ...competitiveItems,
       ...algorithmFoundationsItems,
       ...sqlDojoItems,
@@ -377,7 +312,6 @@ export function useDashboardData(): DashboardData {
     return merged.slice(0, ACTIVITY_LIMIT);
   }, [
     detailTrees,
-    unreadFeedbackItems,
     competitiveSessions,
     algorithmFoundationSessions,
     sqlDojoSessions,
@@ -389,14 +323,12 @@ export function useDashboardData(): DashboardData {
     for (const q of detailQueries) {
       void q.refetch();
     }
-    void feedbacksQuery.refetch();
     void competitiveQuery.refetch();
     void algorithmFoundationsQuery.refetch();
     void sqlDojoQuery.refetch();
   }, [
     roadmapList,
     detailQueries,
-    feedbacksQuery,
     competitiveQuery,
     algorithmFoundationsQuery,
     sqlDojoQuery,

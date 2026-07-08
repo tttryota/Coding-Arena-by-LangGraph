@@ -151,7 +151,7 @@ flowchart TD
 | `input_classification` | chat 入力の意図判定 | `user_input` | `input_type` | answer / question / explanation_request |
 | `chat_response` | 質問への応答 | `user_input`, `current_question_text` | `chat_response_text` | `await_input` |
 | `answer_evaluation` | 回答評価 | `user_input`, `current_question_text`, `current_point_index` | `answers`, `next_action`, `input_type` | next / deepdive / complete |
-| `explanation_generation` | RAG 付き補足説明 | `user_input`, roadmap item 情報 | `explanation_text` | `question_delivery` |
+| `explanation_generation` | 補足説明 | `current_question_text`, 現在の確認ポイント | `explanation_text` | `question_delivery` |
 | `progress_update` | roadmap 側の進捗反映 | `answers`, `roadmap_item_id` | 永続化中心 | detail なら END、middle/major なら summary test |
 | `summary_test_record` | 上位レベルのサマリ結果保存 | `answers`, `roadmap_item_level` | 永続化中心 | END |
 

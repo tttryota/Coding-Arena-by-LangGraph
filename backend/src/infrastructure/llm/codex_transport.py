@@ -8,12 +8,16 @@ JSON-RPC 2.0 プロトコルで LLM を呼び出す。
 from __future__ import annotations
 
 import json
+import os
 import queue
 import subprocess
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, cast
+
+import structlog
 
 
 class CodexTransportError(Exception):
@@ -36,6 +40,21 @@ class CodexMessage:
 
 _MAX_RETRIES = 2
 _RETRY_BACKOFF_BASE = 2.0
+_DEFAULT_MAX_CALLS = 20
+_DEFAULT_MAX_RSS_MB = 1536
+
+logger = structlog.get_logger(__name__)
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("invalid integer environment value", name=name, value=raw)
+        return default
 
 
 class CodexLlmTransport:
@@ -45,11 +64,28 @@ class CodexLlmTransport:
     一過性エラー (CodexTransportHttpError) 発生時は最大 _MAX_RETRIES 回リトライする。
     """
 
-    def __init__(self, *, timeout: float = 120.0) -> None:
+    def __init__(
+        self,
+        *,
+        timeout: float = 120.0,
+        max_calls: int | None = None,
+        max_rss_mb: int | None = None,
+    ) -> None:
         self._timeout = timeout
+        self._max_calls = (
+            _env_int("CODEX_TRANSPORT_MAX_CALLS", _DEFAULT_MAX_CALLS)
+            if max_calls is None
+            else max_calls
+        )
+        self._max_rss_mb = (
+            _env_int("CODEX_TRANSPORT_MAX_RSS_MB", _DEFAULT_MAX_RSS_MB)
+            if max_rss_mb is None
+            else max_rss_mb
+        )
         self._process: subprocess.Popen[bytes] | None = None
         self._lock = threading.Lock()
         self._next_id = 1
+        self._process_call_count = 0
         self._initialized = False
         self._line_queue: queue.Queue[str | None] = queue.Queue()
         self._reader_thread: threading.Thread | None = None
@@ -71,7 +107,13 @@ class CodexLlmTransport:
         last_error: CodexTransportHttpError | None = None
         for attempt in range(_MAX_RETRIES + 1):
             try:
-                return self._call_once(messages, model=model, temperature=temperature)
+                response = self._call_once(
+                    messages,
+                    model=model,
+                    temperature=temperature,
+                )
+                self._after_successful_call(response)
+                return response
             except CodexTransportHttpError as exc:
                 last_error = exc
                 if attempt < _MAX_RETRIES:
@@ -114,10 +156,59 @@ class CodexLlmTransport:
             self._process.kill()
             self._process.wait()
             self._process = None
+        self._process_call_count = 0
         self._initialized = False
         self._notification_buffer.clear()
         # Sentinel で reader thread を停止
         self._line_queue.put(None)
+
+    def _after_successful_call(self, response: str) -> None:
+        """成功した call の計測と、必要なら子プロセス recycle を行う。"""
+        with self._lock:
+            proc = self._process
+            pid = proc.pid if proc is not None else None
+            self._process_call_count += 1
+            call_count = self._process_call_count
+            child_rss_mb = self._child_rss_mb(pid) if pid is not None else None
+            recycle_reason = self._recycle_reason(call_count, child_rss_mb)
+            logger.info(
+                "codex_transport_call_completed",
+                pid=pid,
+                call_count=call_count,
+                child_rss_mb=child_rss_mb,
+                response_chars=len(response),
+                recycle_reason=recycle_reason,
+            )
+            if recycle_reason is not None:
+                self._close_unlocked()
+
+    def _recycle_reason(
+        self,
+        call_count: int,
+        child_rss_mb: int | None,
+    ) -> str | None:
+        if self._max_calls > 0 and call_count >= self._max_calls:
+            return "max_calls"
+        if (
+            self._max_rss_mb > 0
+            and child_rss_mb is not None
+            and child_rss_mb >= self._max_rss_mb
+        ):
+            return "max_rss_mb"
+        return None
+
+    @staticmethod
+    def _child_rss_mb(pid: int) -> int | None:
+        try:
+            with Path(f"/proc/{pid}/status").open(encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            return int(parts[1]) // 1024
+        except (FileNotFoundError, OSError, ValueError):
+            return None
+        return None
 
     # ------------------------------------------------------------------
     # Subprocess lifecycle
@@ -133,6 +224,7 @@ class CodexLlmTransport:
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         )
+        self._process_call_count = 0
         self._initialized = False
         self._notification_buffer.clear()
         self._line_queue = queue.Queue()

@@ -1,22 +1,15 @@
 services:
   backend:
     build: ./backend
+    restart: unless-stopped
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-4g}
     ports:
       - "8081:8001"
     volumes:
       - ./data:/app/data
-      - ./data/huggingface:/root/.cache/huggingface
       - ${HOME}/.codex:/root/.codex
-      - type: bind
-        source: ${VAULT_PATH:-./.docker/empty-vault}
-        target: /vault
-        read_only: true
-    depends_on:
-      - chromadb
     env_file:
       - .env
-    environment:
-      - CHROMADB_HOST=chromadb
 
   frontend:
     build: ./frontend
@@ -24,10 +17,3 @@ services:
       - "3080:3000"
     depends_on:
       - backend
-
-  chromadb:
-    image: chromadb/chroma
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./data/chromadb:/chroma/chroma

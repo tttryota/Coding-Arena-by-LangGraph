@@ -78,7 +78,7 @@
   - 生成候補トピックを返す
 - 主要出力
   - `candidates`
-  - 各候補には `name`, `source`, `note_count` が含まれる
+  - 各候補には `name`, `source` が含まれる
 
 ### `POST /roadmaps/topics`
 

@@ -169,8 +169,8 @@ export function GenerateRoadmapDialog({
             <DialogHeader>
               <DialogTitle>新しいロードマップを作成</DialogTitle>
               <DialogDescription>
-                学習したいトピックを選択してください。AIがObsidianのノートを参照しながら、大枠
-                → 中枠 → 具体 の3層構造でロードマップを構築します。
+                学習したいトピックを選択してください。AIが大枠 → 中枠 → 具体
+                の3層構造でロードマップを構築します。
               </DialogDescription>
             </DialogHeader>
 
@@ -266,14 +266,13 @@ export function GenerateRoadmapDialog({
               ロードマップを生成中…
             </div>
             <p className="mb-6 max-w-[380px] text-[13px] leading-relaxed text-muted-foreground">
-              「{selected ?? "—"}
-              」のノートを解析し、トピック構造を組み立てています。通常
-              20〜40 秒かかります。
+              「{selected ?? "—"}」の学習構造を組み立てています。通常 20〜40
+              秒かかります。
             </p>
 
             <div className="mb-5 flex w-full max-w-[280px] flex-col gap-2">
               {[
-                { label: "ノートを読み込み", done: elapsed >= 4 },
+                { label: "トピックを解析", done: elapsed >= 4 },
                 { label: "大枠トピックを抽出", done: elapsed >= 9 },
                 { label: "中枠・具体項目を生成", done: false },
               ].map((step, i) => {

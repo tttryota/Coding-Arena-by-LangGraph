@@ -553,26 +553,22 @@ class CodexExplanationLlm:
         self,
         question_text: str,
         confirmation_point_content: str,
-        note_chunks: list[str],
     ) -> str:
         from quiz.application.explanation_generation_types import (
             ExplanationGenerationError,
         )
 
-        chunks_text = "\n---\n".join(note_chunks) if note_chunks else "(関連ノートなし)"
         system = (
             "あなたは学習支援AIです。問題の解説を、学習者が概念を理解できるように生成してください。\n\n"
             "解説ルール:\n"
             "- まず概念の定義を簡潔に述べてください\n"
             "- なぜその概念が重要なのか、実務上の意義を1〜2文で説明してください\n"
             "- 具体的な例やユースケースを1つ含めてください\n"
-            "- 関連ノートが提供されている場合は、その内容に関連付けて説明してください\n"
-            "- 関連ノートがない場合は、一般的な知識に基づいて説明してください\n"
+            "- 一般的な知識に基づいて、学習者がつまずきやすい点も補ってください\n"
             "- 全体で5〜10文程度にまとめてください"
         )
         user = (
-            f"問題: {question_text}\n確認ポイント: {confirmation_point_content}\n"
-            f"関連ノート:\n{chunks_text}"
+            f"問題: {question_text}\n確認ポイント: {confirmation_point_content}"
         )
         try:
             return self._transport.call(model=_QUIZ_MODEL, messages=[

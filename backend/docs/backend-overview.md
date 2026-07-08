@@ -2,15 +2,14 @@
 
 ## 何を提供するか
 
-backend は次の 4 つの能力を提供します。
+backend は次の 3 つの能力を提供します。
 
 1. ロードマップ生成と取得
 2. 学習用クイズセッション
 3. 競プロ形式のアルゴリズムクイズ
-4. Vault 取り込みとフィードバック生成
 
 フロントエンドはこれらを HTTP API として利用します。  
-個々の機能は独立していますが、`roadmap` と `quiz`、`ingestion` と `roadmap` のように、参照関係を持つものがあります。
+各機能は SQLite 上の学習データを共有しますが、対話フロー自体は独立しています。
 
 ## 起動時に組み立てるもの
 
@@ -18,8 +17,7 @@ backend は次の 4 つの能力を提供します。
 
 | 役割 | 使い道 | 永続性 |
 | --- | --- | --- |
-| SQLite | roadmap / quiz / ingestion / competitive の業務データ保存 | プロセス外に永続 |
-| Chroma | 取り込んだノートチャンクの保存と RAG 参照 | プロセス外に永続 |
+| SQLite | roadmap / quiz / competitive の業務データ保存 | プロセス外に永続 |
 | Codex transport | LLM 呼び出しの共通経路 | 永続しない |
 | LangGraph 実行器 | quiz / coding / competitive の対話状態進行 | チェックポイントはプロセス内のみ |
 | スレッドプール実行器 | roadmap 生成ジョブの非同期実行 | プロセス再起動で失われる |
@@ -32,9 +30,8 @@ DI の細かな初期化順よりも、どの機能がどの依存に乗って�
 | 機能 | 主依存 | 補足 |
 | --- | --- | --- |
 | roadmap | SQLite, Codex transport, スレッドプール | ジョブ状態はメモリ上のみ |
-| quiz | SQLite, Chroma, 埋め込みモデル, Codex transport, LangGraph | explanation generation が Chroma を参照する |
-| competitive | SQLite, Codex transport, LangGraph | Chroma や Vault には依存しない |
-| ingestion | Chroma, 埋め込みモデル, Vault ファイルシステム, Codex transport, SQLite | feedback は SQLite に保存される |
+| quiz | SQLite, Codex transport, LangGraph | explanation generation も LLM 単独で処理する |
+| competitive | SQLite, Codex transport, LangGraph | quiz とは別グラフで進行する |
 
 ## 機能の無効化条件
 
@@ -43,11 +40,9 @@ backend は一部機能だけを止めた状態で起動できます。
 | 条件 | 使えなくなるもの | 使えるもの |
 | --- | --- | --- |
 | container 未初期化 | 全 API | なし |
-| 埋め込みモデル未設定 | 通常 quiz フロー, ingestion trigger | roadmap, coding session, competitive, feedback 一覧/既読化 |
-| `VAULT_PATH` 未設定 | `POST /ingestion/trigger` | feedback 一覧/既読化, roadmap, quiz, competitive |
-
-`VAULT_PATH` 未設定時のルールは明確で、取り込み開始だけを止めます。  
-既存の feedback データを見る API はそのまま残ります。
+| quiz runner 未初期化 | 通常 quiz フロー | roadmap, coding session, competitive |
+| coding runner 未初期化 | coding session | roadmap, 通常 quiz, competitive |
+| competitive runner 未初期化 | competitive | roadmap, quiz |
 
 ## どこまで保存されるか
 
@@ -58,8 +53,6 @@ backend の保守で一番重要なのは、どこまでが再起動後も残り
 | roadmap / roadmap items | SQLite | 残る |
 | quiz sessions / answers / summary results | SQLite | 残る |
 | competitive sessions / answers | SQLite | 残る |
-| ingestion feedback / diff snapshots | SQLite | 残る |
-| note chunks | Chroma | 残る |
 | LangGraph の一時停止チェックポイント | `MemorySaver` | 残らない |
 | roadmap generation job status | `InMemoryJobStatusStore` | 残らない |
 
@@ -77,7 +70,7 @@ FastAPI の責務は薄く保たれています。
 - `domain/*`
   - 型、エラー、純粋なルール
 - `infrastructure/*`
-  - SQLite, Chroma, filesystem, Codex など外部依存への接続
+  - SQLite, Codex など外部依存への接続
 
 docs を更新すべきなのは、主に API 契約、状態遷移、保存境界、可用性条件が変わったときです。  
 接続用の小さな部品や DI の配線だけが変わった場合は、原則として overview の更新は不要です。

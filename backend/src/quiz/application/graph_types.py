@@ -6,10 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from quiz.application.answer_evaluation_types import AnswerEvaluationLlmClient
     from quiz.application.chat_response_types import ChatResponseLlmClient
-    from quiz.application.explanation_generation_types import (
-        ExplanationLlmClient,
-        ExplanationRagClient,
-    )
+    from quiz.application.explanation_generation_types import ExplanationLlmClient
     from quiz.application.input_classification_types import (
         InputClassificationLlmClient,
     )
@@ -34,7 +31,6 @@ class GraphDependencies:
     input_classification_llm: InputClassificationLlmClient
     chat_response_llm: ChatResponseLlmClient
     answer_evaluation_llm: AnswerEvaluationLlmClient
-    explanation_rag: ExplanationRagClient
     explanation_llm: ExplanationLlmClient
     progress_update_llm: ProgressUpdateLlmClient
     progress_update_store: ProgressUpdateStore

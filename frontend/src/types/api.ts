@@ -33,12 +33,11 @@ export interface RoadmapTree {
 
 // --- Topic Candidates ---
 
-export type TopicSource = "preset" | "note" | "manual";
+export type TopicSource = "preset" | "manual";
 
 export interface TopicCandidate {
   name: string;
   source: TopicSource;
-  note_count: number;
 }
 
 export interface TopicCandidatesResponse {
@@ -534,24 +533,6 @@ export interface PracticeStartResponse {
   current_format?: CodingDifficultyType;
   current_point_index?: number;
   total_questions_asked?: number;
-}
-
-// --- Feedback (GET /ingestion/feedbacks) ---
-
-export interface FeedbackListItem {
-  id: string;
-  source_path: string;
-  roadmap_item_id: string | null;
-  title: string;
-  body: string;
-  is_read: boolean;
-  created_at: string;
-  read_at: string | null;
-}
-
-export interface FeedbackListResponse {
-  items: FeedbackListItem[];
-  total_count: number;
 }
 
 // --- Session Detail (GET /sessions/:id) ---

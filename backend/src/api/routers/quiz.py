@@ -39,13 +39,19 @@ def _container(request: Request) -> Container:
     return cast("Container", c)
 
 
+def _delete_checkpoint(c: Container, method_name: str, session_id: str) -> None:
+    cleanup = getattr(c, method_name, None)
+    if callable(cleanup):
+        cleanup(session_id)
+
+
 def _require_quiz_runner(c: Container) -> QuizGraphRunner:
     """通常 quiz が有効な環境かを確認して runner を返す。"""
     runner = c.graph_runner
     if runner is None:
         raise HTTPException(
             status_code=503,
-            detail="Quiz service unavailable: embedder not configured",
+            detail="Quiz service unavailable",
         )
     return cast("QuizGraphRunner", runner)
 
@@ -127,6 +133,8 @@ def _resume_coding_session(
     except (ValueError, LookupError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     state = runner.get_state(thread_id=session_id)
+    if state.get("next_action") == "complete":
+        _delete_checkpoint(c, "delete_coding_checkpoint", session_id)
     return dict(state)
 
 
@@ -160,6 +168,8 @@ def _resume_quiz_session(
         raise HTTPException(status_code=422, detail=exc.message) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if result.get("next_action") == "complete":
+        _delete_checkpoint(c, "delete_quiz_checkpoint", session_id)
     return dict(result)
 
 

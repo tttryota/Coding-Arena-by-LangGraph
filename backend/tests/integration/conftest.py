@@ -1,16 +1,13 @@
 """インテグレーションテスト共通フィクスチャ。
 
 TestClient → FastAPI Router → Application 層 → 実 Infrastructure
-LLM のみ ScenarioLlmTransport でスタブ、Embedder は FixedVectorEmbedder。
+LLM のみ ScenarioLlmTransport でスタブする。
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
-from uuid import uuid4
 
-import chromadb
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
@@ -74,19 +71,6 @@ def clean_tables(engine: Engine) -> Iterator[None]:
 
 
 @pytest.fixture
-def chroma_collection() -> Iterator[object]:
-    """テストごとにユニークな EphemeralClient コレクションを作成。"""
-    chroma_client = chromadb.EphemeralClient()
-    collection_name = f"test_{uuid4().hex[:12]}"
-    collection = chroma_client.get_or_create_collection(
-        name=collection_name,
-        metadata={"hnsw:space": "cosine"},
-    )
-    yield collection
-    chroma_client.delete_collection(collection_name)
-
-
-@pytest.fixture
 def scenario_transport() -> ScenarioLlmTransport:
     """テストごとに新しい ScenarioLlmTransport を作成。"""
     from tests.integration.stubs.scenario_llm_transport import ScenarioLlmTransport
@@ -97,21 +81,13 @@ def scenario_transport() -> ScenarioLlmTransport:
 @pytest.fixture
 def integration_container(
     engine: Engine,
-    chroma_collection: object,
     scenario_transport: ScenarioLlmTransport,
     clean_tables: None,  # noqa: ARG001
 ) -> Iterator[object]:
-    """実 engine + 実 chroma + スタブ transport + スタブ embedder の Container。"""
+    """実 engine + スタブ transport の Container。"""
     from api.dependencies import Container
-    from tests.integration.stubs.fixed_embedder import FixedVectorEmbedder
 
-    embedder = FixedVectorEmbedder()
-    container = Container(
-        engine=engine,
-        chroma_collection=chroma_collection,
-        embedder=embedder,
-        vault_path=Path("/vault"),
-    )
+    container = Container(engine=engine)
     _replace_transport(container, scenario_transport)
     try:
         yield container

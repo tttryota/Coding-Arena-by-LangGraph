@@ -10,7 +10,6 @@ from fastapi import FastAPI
 from api.routers import (
     algorithm_foundations,
     competitive,
-    ingestion,
     quiz,
     roadmap,
     sql_dojo,
@@ -37,12 +36,11 @@ def create_app(container: Container | None = None) -> FastAPI:
     container を差し込める形にしておくことで、実運用では本物の依存を使い、
     テストでは差し替え済みの container をそのまま注入できる。
     """
-    app = FastAPI(title="Obsidian RAG Quiz", lifespan=_lifespan)
+    app = FastAPI(title="Obsidian Quiz", lifespan=_lifespan)
     if container is not None:
         app.state.container = container
     app.include_router(quiz.router)
     app.include_router(roadmap.router)
-    app.include_router(ingestion.router)
     app.include_router(competitive.router)
     app.include_router(algorithm_foundations.router)
     app.include_router(sql_dojo.router)

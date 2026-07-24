@@ -67,6 +67,7 @@ class ScenarioLlmTransport:
         *,
         model: str = "default",
         temperature: float = 0.7,
+        operation: str = "codex.call",
     ) -> str:
         """CodexLlmTransport.call() と同じシグネチャ。"""
         response = self._resolve_response(messages)
@@ -78,6 +79,7 @@ class ScenarioLlmTransport:
                 response=response,
             ),
         )
+        del operation
         return response
 
     @property

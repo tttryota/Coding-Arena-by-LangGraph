@@ -1,6 +1,9 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+from pydantic import ValidationError
+
 from infrastructure.config.settings import Settings
 
 
@@ -20,6 +23,10 @@ class TestSettingsDefaults:
         assert settings.score_threshold_insufficient == 50
         assert settings.score_threshold_partial == 75
         assert settings.session_max_questions == 20
+        assert settings.langfuse_tracing_enabled is False
+        assert settings.langfuse_base_url == "http://localhost:3000"
+        assert settings.langfuse_sample_rate == 1.0
+        assert settings.langfuse_capture_content is True
 
     def test_required_fields_raise_on_missing(self) -> None:
         """テスト対象: SettingsDefaults の処理。
@@ -95,3 +102,35 @@ class TestSettingsScoreThresholds:
         assert settings.score_threshold_not_started == 30
         assert settings.score_threshold_insufficient == 60
         assert settings.score_threshold_partial == 80
+
+
+class TestSettingsLangfuse:
+    def test_enabled_requires_project_keys(self) -> None:
+        with (
+            patch.dict(
+                "os.environ",
+                {"LANGFUSE_TRACING_ENABLED": "true"},
+                clear=True,
+            ),
+            pytest.raises(ValidationError, match="LANGFUSE_PUBLIC_KEY"),
+        ):
+            Settings(_env_file=None)
+
+    def test_enabled_accepts_complete_configuration(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "LANGFUSE_TRACING_ENABLED": "true",
+                "LANGFUSE_PUBLIC_KEY": "lf_pk_local",
+                "LANGFUSE_SECRET_KEY": "lf_sk_local",
+                "LANGFUSE_BASE_URL": "http://langfuse-web:3000",
+                "LANGFUSE_SAMPLE_RATE": "0.5",
+            },
+            clear=True,
+        ):
+            settings = Settings(_env_file=None)
+
+        assert settings.langfuse_tracing_enabled is True
+        assert settings.langfuse_public_key == "lf_pk_local"
+        assert settings.langfuse_secret_key == "lf_sk_local"  # noqa: S105
+        assert settings.langfuse_sample_rate == 0.5

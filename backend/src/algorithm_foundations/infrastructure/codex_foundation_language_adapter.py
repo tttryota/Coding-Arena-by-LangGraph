@@ -104,6 +104,7 @@ class CodexAlgorithmFoundationLanguageAdapter:
         try:
             raw = self._transport.call(
                 model=_COMPETITIVE_MODEL,
+                operation="algorithm_foundations.adapt_language",
                 messages=[
                     CodexMessage(role="system", content=system),
                     CodexMessage(role="user", content=user),

@@ -25,7 +25,9 @@ class FakeTransport:
         *,
         model: str = "default",
         temperature: float = 0.7,
+        operation: str = "codex.call",
     ) -> str:
+        del model, temperature, operation
         self.last_messages = messages
         return self._response
 

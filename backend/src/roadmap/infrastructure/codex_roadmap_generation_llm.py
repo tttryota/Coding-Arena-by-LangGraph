@@ -42,10 +42,14 @@ class CodexRoadmapGenerationLlm:
         )
         user = f"トピック: {topic}"
         try:
-            return self._transport.call(model=_ROADMAP_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            return self._transport.call(
+                model=_ROADMAP_MODEL,
+                operation="roadmap.generate",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
         except Exception as exc:
             msg = f"roadmap generation LLM call failed: {exc}"
             raise RoadmapGenerationLlmError(msg) from exc

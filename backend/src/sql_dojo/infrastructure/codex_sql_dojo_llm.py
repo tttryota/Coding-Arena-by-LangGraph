@@ -92,6 +92,7 @@ class CodexSqlDojoFeedbackLlm:
         try:
             raw = self._transport.call(
                 model=_SQL_DOJO_MODEL,
+                operation="sql_dojo.generate_question",
                 messages=[
                     CodexMessage(role="system", content=system),
                     CodexMessage(role="user", content=user),
@@ -154,6 +155,7 @@ class CodexSqlDojoQuestionLlm:
         try:
             raw = self._transport.call(
                 model=_SQL_DOJO_MODEL,
+                operation="sql_dojo.generate_feedback",
                 messages=[
                     CodexMessage(role="system", content=system),
                     CodexMessage(role="user", content=user),

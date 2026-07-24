@@ -312,6 +312,7 @@ class CodexCompetitiveProblemGenerationLlm:
         try:
             raw = self._transport.call(
                 model=_COMPETITIVE_MODEL,
+                operation="competitive.problem_generation",
                 messages=[
                     CodexMessage(role="system", content=system),
                     CodexMessage(role="user", content=user),
@@ -446,6 +447,7 @@ class CodexCompetitiveSolutionEvaluationLlm:
         try:
             raw = self._transport.call(
                 model=_COMPETITIVE_MODEL,
+                operation="competitive.solution_evaluation",
                 messages=[
                     CodexMessage(role="system", content=system),
                     CodexMessage(role="user", content=user),
@@ -544,6 +546,7 @@ class CodexCompetitiveQuestionResponseLlm:
         try:
             raw = self._transport.call(
                 model=_COMPETITIVE_MODEL,
+                operation="competitive.question_response",
                 messages=[
                     CodexMessage(role="system", content=system),
                     CodexMessage(role="user", content=user),

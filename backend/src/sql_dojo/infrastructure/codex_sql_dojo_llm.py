@@ -16,7 +16,7 @@ from sql_dojo.domain.sql_dojo_types import (
     SqlDojoQuestionError,
 )
 
-_SQL_DOJO_MODEL = "gpt-5.3-codex-spark"
+_SQL_DOJO_MODEL = "gpt-5.6-luna"
 _JSON_INSTRUCTION = (
     "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
 )

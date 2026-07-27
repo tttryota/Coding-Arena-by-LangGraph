@@ -18,7 +18,7 @@ from infrastructure.llm.codex_transport import (
 _JSON_INSTRUCTION = (
     "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
 )
-_COMPETITIVE_MODEL = "gpt-5.3-codex-spark"
+_COMPETITIVE_MODEL = "gpt-5.6-luna"
 
 
 def _parse_json(text: str) -> dict[str, Any]:

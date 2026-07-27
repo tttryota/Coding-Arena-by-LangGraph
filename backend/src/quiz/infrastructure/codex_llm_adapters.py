@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _JSON_INSTRUCTION = "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
-_QUIZ_MODEL = "gpt-5.3-codex-spark"
+_QUIZ_MODEL = "gpt-5.6-luna"
 
 _VALID_INPUT_TYPES = frozenset({"answer", "question", "explanation_request"})
 _VALID_NEXT_ACTIONS = frozenset({"next", "deepdive", "complete"})

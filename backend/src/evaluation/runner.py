@@ -270,7 +270,7 @@ def _judge(
         "application_output": output,
     }
     raw = transport.call(
-        model="gpt-5.3-codex-spark",
+        model="gpt-5.6-luna",
         operation="evaluation.judge",
         temperature=0.0,
         messages=[

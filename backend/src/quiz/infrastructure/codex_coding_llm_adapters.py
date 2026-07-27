@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _JSON_INSTRUCTION = "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
-_CODING_MODEL = "gpt-5.3-codex-spark"
+_CODING_MODEL = "gpt-5.6-luna"
 
 _VALID_FORMATS = frozenset({
     "rewrite", "fill_blank", "bug_fix", "extend", "implement",

@@ -534,6 +534,18 @@ class CodexLlmTransport:
         method = notification.get("method", "")
         params = notification.get("params", {})
 
+        if method == "thread/tokenUsage/updated":
+            if params.get("turnId") != turn_id:
+                return False
+            token_usage = params.get("tokenUsage", {})
+            if not isinstance(token_usage, dict):
+                return False
+            last_usage = token_usage.get("last", {})
+            collection.usage_details.update(
+                self._extract_thread_usage_details(last_usage),
+            )
+            return False
+
         # turn/completed は params.turn.id で turnId を持つ
         if method == "turn/completed":
             turn = params.get("turn", {})
@@ -596,6 +608,41 @@ class CodexLlmTransport:
             value = next((raw.get(name) for name in source_names if name in raw), None)
             if isinstance(value, int) and value >= 0:
                 normalized[target] = value
+        return normalized
+
+    @staticmethod
+    def _extract_thread_usage_details(raw: object) -> dict[str, int]:
+        """Normalize one turn from thread/tokenUsage/updated for Langfuse."""
+        if not isinstance(raw, dict):
+            return {}
+
+        def non_negative_int(name: str) -> int | None:
+            value = raw.get(name)
+            return value if isinstance(value, int) and value >= 0 else None
+
+        input_total = non_negative_int("inputTokens")
+        cached_input = non_negative_int("cachedInputTokens") or 0
+        cache_write_input = non_negative_int("cacheWriteInputTokens") or 0
+        output_total = non_negative_int("outputTokens")
+        reasoning_output = non_negative_int("reasoningOutputTokens") or 0
+        total = non_negative_int("totalTokens")
+
+        normalized: dict[str, int] = {}
+        if input_total is not None:
+            normalized["input"] = max(
+                input_total - cached_input - cache_write_input,
+                0,
+            )
+        if cached_input:
+            normalized["cache_read_input_tokens"] = cached_input
+        if cache_write_input:
+            normalized["cache_write_input_tokens"] = cache_write_input
+        if output_total is not None:
+            normalized["output"] = max(output_total - reasoning_output, 0)
+        if reasoning_output:
+            normalized["reasoning_output_tokens"] = reasoning_output
+        if total is not None:
+            normalized["total"] = total
         return normalized
 
     @staticmethod

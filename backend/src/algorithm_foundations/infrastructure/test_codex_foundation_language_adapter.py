@@ -17,7 +17,14 @@ class _FakeTransport:
         self.error: Exception | None = None
         self.calls: list[dict[str, object]] = []
 
-    def call(self, messages: list[object], *, model: str, temperature: float = 0.7) -> str:
+    def call(
+        self,
+        messages: list[object],
+        *,
+        model: str,
+        temperature: float = 0.7,
+        operation: str = "codex.call",
+    ) -> str:
         self.calls.append(
             {
                 "messages": messages,
@@ -25,6 +32,7 @@ class _FakeTransport:
                 "temperature": temperature,
             },
         )
+        del operation
         if self.error is not None:
             raise self.error
         return self.response

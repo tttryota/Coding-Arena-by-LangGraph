@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _JSON_INSTRUCTION = "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
-_QUIZ_MODEL = "gpt-5.3-codex-spark"
+_QUIZ_MODEL = "gpt-5.6-luna"
 
 _VALID_INPUT_TYPES = frozenset({"answer", "question", "explanation_request"})
 _VALID_NEXT_ACTIONS = frozenset({"next", "deepdive", "complete"})
@@ -234,10 +234,14 @@ class CodexQuestionSetDesignLlm:
         )
         user = f"タイトル: {title}\n説明: {description}\nレベル: {level}"
         try:
-            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_QUIZ_MODEL,
+                operation="quiz.question_set_design",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             topic_overview = _validate_str(
                 data.get("topic_overview", ""), "topic_overview",
@@ -327,10 +331,14 @@ class CodexQuestionDeliveryLlm:
                 f"形式: {confirmation_point_format}\n"
                 f"過去の回答:\n{_answers_to_text(past_answers)}"
             )
-            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_QUIZ_MODEL,
+                operation="quiz.question_delivery",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             question_text = _validate_str(data["question_text"], "question_text")
             answer_type = _validate_answer_type(data["answer_type"])
@@ -389,10 +397,14 @@ class CodexInputClassificationLlm:
         )
         user = f"出題: {question_text}\nユーザー入力: {user_input}"
         try:
-            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_QUIZ_MODEL,
+                operation="quiz.input_classification",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             return _validate_input_type(data["input_type"])
         except InputClassificationError:
@@ -423,10 +435,14 @@ class CodexChatResponseLlm:
         system = "あなたは学習支援AIです。ユーザーの質問に丁寧に回答してください。"
         user = f"出題中の問題: {question_text}\nユーザーの質問: {user_input}"
         try:
-            return self._transport.call(model=_QUIZ_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            return self._transport.call(
+                model=_QUIZ_MODEL,
+                operation="quiz.chat_response",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
         except Exception as exc:
             raise ChatResponseError(
                 error_code=_error_code_for(exc),
@@ -503,10 +519,14 @@ class CodexAnswerEvaluationLlm:
                 f"出題総数: {total_questions_asked}\n"
                 f"過去の回答:\n{_answers_to_text(past_answers)}"
             )
-            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_QUIZ_MODEL,
+                operation="quiz.answer_evaluation",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             next_action = _validate_next_action(data["next_action"])
             score = _validate_score(data["score"], "score")
@@ -571,10 +591,14 @@ class CodexExplanationLlm:
             f"問題: {question_text}\n確認ポイント: {confirmation_point_content}"
         )
         try:
-            return self._transport.call(model=_QUIZ_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            return self._transport.call(
+                model=_QUIZ_MODEL,
+                operation="quiz.explanation_generation",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
         except Exception as exc:
             raise ExplanationGenerationError(
                 error_code=_error_code_for(exc),
@@ -615,10 +639,14 @@ class CodexProgressUpdateLlm:
                 f"確認ポイント:\n{checkpoints_text}\n"
                 f"回答履歴:\n{_answers_to_text(answers)}"
             )
-            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_QUIZ_MODEL,
+                operation="quiz.progress_update",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             return ProgressOutput(
                 score=_validate_score(data["score"], "score"),
@@ -661,10 +689,14 @@ class CodexSummaryTestLlm:
                 f"タイトル: {title}\n説明: {description}\n"
                 f"回答履歴:\n{_answers_to_text(answers)}"
             )
-            raw = self._transport.call(model=_QUIZ_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_QUIZ_MODEL,
+                operation="quiz.summary_test_record",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             return SummaryAnalysis(
                 score=_validate_score(data["score"], "score"),

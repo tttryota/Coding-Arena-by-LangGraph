@@ -11,6 +11,7 @@ from sqlalchemy import create_engine
 from api.app import create_app
 from api.dependencies import Container
 from infrastructure.config.settings import Settings
+from infrastructure.observability import create_observability
 from infrastructure.rdb.base import Base
 
 
@@ -18,6 +19,7 @@ def _bootstrap() -> object:
     import infrastructure.rdb.models  # noqa: F401  — register all ORM models
 
     settings = Settings()
+    observability = create_observability(settings)
 
     engine = create_engine(
         f"sqlite:///{settings.sqlite_path}",
@@ -27,6 +29,7 @@ def _bootstrap() -> object:
 
     container = Container(
         engine=engine,
+        observability=observability,
     )
     return container
 

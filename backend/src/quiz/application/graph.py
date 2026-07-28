@@ -27,6 +27,7 @@ from quiz.application.summary_test_record_types import (  # noqa: TC001
     SummaryTestStore,
 )
 from quiz.domain.session_state import SessionState
+from shared.observability import NoOpObservability, Observability
 
 if TYPE_CHECKING:
     from quiz.application.graph_types import GraphDependencies
@@ -256,17 +257,47 @@ def _is_transient_llm_error(exc: Exception) -> bool:
 class QuizGraphRunner:
     """GraphRunner Protocol の concrete 実装。"""
 
-    def __init__(self, compiled_graph: Any) -> None:
+    def __init__(
+        self,
+        compiled_graph: Any,
+        observability: Observability | None = None,
+    ) -> None:
         self._graph = compiled_graph
+        self._observability = observability or NoOpObservability()
 
-    @staticmethod
-    def _build_thread_config(thread_id: str) -> dict[str, dict[str, str]]:
-        return {"configurable": {"thread_id": thread_id}}
+    def _build_thread_config(
+        self,
+        thread_id: str,
+        operation: str = "state",
+    ) -> dict[str, Any]:
+        config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
+        config.update(
+            self._observability.graph_config(
+                flow="quiz",
+                operation=operation,
+                session_id=thread_id,
+            ),
+        )
+        return config
 
-    def _invoke_or_raise(self, payload: object, *, thread_id: str) -> None:
+    def _invoke_or_raise(
+        self,
+        payload: object,
+        *,
+        thread_id: str,
+        operation: str,
+    ) -> None:
         """graph 実行時の一過性 LLM エラー変換を共通化する。"""
         try:
-            self._graph.invoke(payload, config=self._build_thread_config(thread_id))
+            with self._observability.graph_scope(
+                flow="quiz",
+                operation=operation,
+                session_id=thread_id,
+            ):
+                self._graph.invoke(
+                    payload,
+                    config=self._build_thread_config(thread_id, operation),
+                )
         except Exception as exc:
             if _is_transient_llm_error(exc):
                 raise TransientLlmNodeError(
@@ -280,13 +311,17 @@ class QuizGraphRunner:
         invoke() は interrupt() でグラフが一時停止した場合、例外を送出せず
         interrupt 時点の state を返す。返り値は不要 (checkpointer が state を保持する)。
         """
-        self._invoke_or_raise(state, thread_id=thread_id)
+        self._invoke_or_raise(state, thread_id=thread_id, operation="start")
 
     def resume_graph(self, user_input: dict[str, object], *, thread_id: str) -> None:
         """再開セッション用にグラフを続行する。Command(resume=...) で入力を渡す。"""
         from langgraph.types import Command
 
-        self._invoke_or_raise(Command(resume=user_input), thread_id=thread_id)
+        self._invoke_or_raise(
+            Command(resume=user_input),
+            thread_id=thread_id,
+            operation="resume",
+        )
 
     def retry_graph(self, *, thread_id: str) -> None:
         """前回失敗したノードから再実行する。
@@ -294,7 +329,7 @@ class QuizGraphRunner:
         LangGraph の checkpointer に失敗前の state が残っているため、
         invoke(None) で失敗ノードから再実行できる。
         """
-        self._invoke_or_raise(None, thread_id=thread_id)
+        self._invoke_or_raise(None, thread_id=thread_id, operation="retry")
 
     def get_state(self, *, thread_id: str) -> SessionState:
         """checkpointer から thread_id に対応するグラフの最新 state を取得する。"""

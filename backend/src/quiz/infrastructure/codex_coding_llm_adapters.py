@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _JSON_INSTRUCTION = "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
-_CODING_MODEL = "gpt-5.3-codex-spark"
+_CODING_MODEL = "gpt-5.6-luna"
 
 _VALID_FORMATS = frozenset({
     "rewrite", "fill_blank", "bug_fix", "extend", "implement",
@@ -190,10 +190,14 @@ class CodexLectureGenerationLlm:
         )
         user = f"タイトル: {title}\n説明: {description}"
         try:
-            raw = self._transport.call(model=_CODING_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_CODING_MODEL,
+                operation="coding.lecture_generation",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             content = _validate_str(data["lecture_content"], "lecture_content")
             if not content.strip():
@@ -229,10 +233,14 @@ class CodexLectureChatResponseLlm:
         )
         user = f"座学コンテンツ:\n{lecture_content}\n\nユーザーの質問: {user_input}"
         try:
-            return self._transport.call(model=_CODING_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            return self._transport.call(
+                model=_CODING_MODEL,
+                operation="coding.lecture_chat_response",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
         except Exception as exc:
             raise LectureChatResponseError(
                 error_code=_error_code_for(exc),
@@ -279,10 +287,14 @@ class CodexCodingProblemSetDesignLlm:
             f"座学コンテンツ:\n{lecture_content}"
         )
         try:
-            raw = self._transport.call(model=_CODING_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_CODING_MODEL,
+                operation="coding.problem_set_design",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             raw_points = data.get("confirmation_points", [])
             if not isinstance(raw_points, list):
@@ -362,10 +374,14 @@ class CodexCodingProblemDeliveryLlm:
             f"座学コンテンツ:\n{lecture_content}"
         )
         try:
-            raw = self._transport.call(model=_CODING_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_CODING_MODEL,
+                operation="coding.problem_delivery",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             return CodingProblemDeliveryResult(
                 question_text=_validate_str(data["question_text"], "question_text"),
@@ -417,10 +433,14 @@ class CodexCodeEvaluationLlm:
             f"ユーザーの回答:\n{user_code}"
         )
         try:
-            raw = self._transport.call(model=_CODING_MODEL, messages=[
-                CodexMessage(role="system", content=system),
-                CodexMessage(role="user", content=user),
-            ])
+            raw = self._transport.call(
+                model=_CODING_MODEL,
+                operation="coding.code_evaluation",
+                messages=[
+                    CodexMessage(role="system", content=system),
+                    CodexMessage(role="user", content=user),
+                ],
+            )
             data = _parse_json_object(raw)
             return CodeEvaluationResult(
                 score=_validate_score(data["score"], "score"),

@@ -19,6 +19,12 @@ from typing import Any, cast
 
 import structlog
 
+from shared.observability import (
+    LlmCallMetrics,
+    NoOpObservability,
+    Observability,
+)
+
 
 class CodexTransportError(Exception):
     pass
@@ -36,6 +42,19 @@ class CodexTransportResponseError(CodexTransportError):
 class CodexMessage:
     role: str
     content: str
+
+
+@dataclass(frozen=True)
+class _CallPayload:
+    text: str
+    usage_details: dict[str, int] | None = None
+
+
+@dataclass
+class _TurnCollection:
+    item_buffers: dict[str, str]
+    completed_messages: list[dict[str, Any]]
+    usage_details: dict[str, int]
 
 
 _MAX_RETRIES = 2
@@ -70,6 +89,7 @@ class CodexLlmTransport:
         timeout: float = 120.0,
         max_calls: int | None = None,
         max_rss_mb: int | None = None,
+        observability: Observability | None = None,
     ) -> None:
         self._timeout = timeout
         self._max_calls = (
@@ -90,13 +110,15 @@ class CodexLlmTransport:
         self._line_queue: queue.Queue[str | None] = queue.Queue()
         self._reader_thread: threading.Thread | None = None
         self._notification_buffer: list[dict[str, Any]] = []
+        self._observability = observability or NoOpObservability()
 
-    def call(
+    def call(  # noqa: PLR0915
         self,
         messages: list[CodexMessage],
         *,
         model: str = "default",
         temperature: float = 0.7,
+        operation: str = "codex.call",
     ) -> str:
         """LLM に messages を送信し、応答テキストを返す。
 
@@ -104,24 +126,53 @@ class CodexLlmTransport:
         最大 _MAX_RETRIES 回リトライする。
         CodexTransportResponseError (パースエラー) はリトライしない。
         """
-        last_error: CodexTransportHttpError | None = None
-        for attempt in range(_MAX_RETRIES + 1):
-            try:
-                response = self._call_once(
-                    messages,
-                    model=model,
-                    temperature=temperature,
-                )
-                self._after_successful_call(response)
-                return response
-            except CodexTransportHttpError as exc:
-                last_error = exc
-                if attempt < _MAX_RETRIES:
-                    with self._lock:
-                        self._close_unlocked()
-                    time.sleep(_RETRY_BACKOFF_BASE ** (attempt + 1))
-        assert last_error is not None  # noqa: S101
-        raise last_error
+        observed_messages = [
+            {"role": message.role, "content": message.content}
+            for message in messages
+        ]
+        with self._observability.llm_call(
+            operation=operation,
+            model=model,
+            temperature=temperature,
+            messages=observed_messages,
+        ) as observation:
+            last_error: CodexTransportHttpError | None = None
+            for attempt_index in range(_MAX_RETRIES + 1):
+                attempt_number = attempt_index + 1
+                try:
+                    with observation.attempt(attempt_number) as attempt_observation:
+                        result = self._call_once(
+                            messages,
+                            model=model,
+                            temperature=temperature,
+                        )
+                        payload = (
+                            result
+                            if isinstance(result, _CallPayload)
+                            else _CallPayload(text=result)
+                        )
+                        attempt_observation.succeeded()
+                    metrics = self._after_successful_call(
+                        payload.text,
+                        usage_details=payload.usage_details,
+                        attempts=attempt_number,
+                    )
+                    observation.succeeded(payload.text, metrics)
+                    return payload.text
+                except CodexTransportHttpError as exc:
+                    attempt_observation.failed(exc)
+                    last_error = exc
+                    if attempt_index < _MAX_RETRIES:
+                        with self._lock:
+                            self._close_unlocked()
+                        time.sleep(_RETRY_BACKOFF_BASE ** attempt_number)
+                except Exception as exc:
+                    attempt_observation.failed(exc)
+                    observation.failed(exc, attempts=attempt_number)
+                    raise
+            assert last_error is not None  # noqa: S101
+            observation.failed(last_error, attempts=_MAX_RETRIES + 1)
+            raise last_error
 
     def _call_once(
         self,
@@ -129,7 +180,7 @@ class CodexLlmTransport:
         *,
         model: str = "default",
         temperature: float = 0.7,  # noqa: ARG002
-    ) -> str:
+    ) -> _CallPayload:
         """単一試行で LLM を呼び出す。"""
         with self._lock:
             self._ensure_started()
@@ -162,7 +213,13 @@ class CodexLlmTransport:
         # Sentinel で reader thread を停止
         self._line_queue.put(None)
 
-    def _after_successful_call(self, response: str) -> None:
+    def _after_successful_call(
+        self,
+        response: str,
+        *,
+        usage_details: dict[str, int] | None = None,
+        attempts: int = 1,
+    ) -> LlmCallMetrics:
         """成功した call の計測と、必要なら子プロセス recycle を行う。"""
         with self._lock:
             proc = self._process
@@ -181,6 +238,13 @@ class CodexLlmTransport:
             )
             if recycle_reason is not None:
                 self._close_unlocked()
+            return LlmCallMetrics(
+                response_chars=len(response),
+                child_rss_mb=child_rss_mb,
+                recycle_reason=recycle_reason,
+                usage_details=usage_details,
+                attempts=attempts,
+            )
 
     def _recycle_reason(
         self,
@@ -207,7 +271,18 @@ class CodexLlmTransport:
                         if len(parts) >= 2:
                             return int(parts[1]) // 1024
         except (FileNotFoundError, OSError, ValueError):
-            return None
+            pass
+        try:
+            result = subprocess.run(  # noqa: S603
+                ["ps", "-o", "rss=", "-p", str(pid)],  # noqa: S607
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return int(result.stdout.strip()) // 1024
+        except (OSError, ValueError):
+            pass
         return None
 
     # ------------------------------------------------------------------
@@ -397,9 +472,12 @@ class CodexLlmTransport:
             raise CodexTransportResponseError(msg)
         return turn_id
 
-    def _collect_turn_response(self, turn_id: str) -> str:
-        item_buffers: dict[str, str] = {}
-        completed_messages: list[dict[str, Any]] = []
+    def _collect_turn_response(self, turn_id: str) -> _CallPayload:
+        collection = _TurnCollection(
+            item_buffers={},
+            completed_messages=[],
+            usage_details={},
+        )
 
         # Process buffered notifications first
         buffered = list(self._notification_buffer)
@@ -407,9 +485,17 @@ class CodexLlmTransport:
 
         for notification in buffered:
             if self._handle_notification(
-                notification, turn_id, item_buffers, completed_messages,
+                notification,
+                turn_id,
+                collection,
             ):
-                return self._build_response(completed_messages, item_buffers)
+                return _CallPayload(
+                    text=self._build_response(
+                        collection.completed_messages,
+                        collection.item_buffers,
+                    ),
+                    usage_details=collection.usage_details or None,
+                )
 
         # Read until turn/completed
         deadline = time.monotonic() + self._timeout
@@ -424,9 +510,17 @@ class CodexLlmTransport:
 
             if "method" in parsed and "id" not in parsed:
                 if self._handle_notification(
-                    parsed, turn_id, item_buffers, completed_messages,
+                    parsed,
+                    turn_id,
+                    collection,
                 ):
-                    return self._build_response(completed_messages, item_buffers)
+                    return _CallPayload(
+                        text=self._build_response(
+                            collection.completed_messages,
+                            collection.item_buffers,
+                        ),
+                        usage_details=collection.usage_details or None,
+                    )
             elif "method" in parsed and "id" in parsed:
                 self._reply_unsupported(parsed["id"], parsed["method"])
 
@@ -434,12 +528,23 @@ class CodexLlmTransport:
         self,
         notification: dict[str, Any],
         turn_id: str,
-        item_buffers: dict[str, str],
-        completed_messages: list[dict[str, Any]],
+        collection: _TurnCollection,
     ) -> bool:
         """notification を処理する。turn 完了なら True を返す。"""
         method = notification.get("method", "")
         params = notification.get("params", {})
+
+        if method == "thread/tokenUsage/updated":
+            if params.get("turnId") != turn_id:
+                return False
+            token_usage = params.get("tokenUsage", {})
+            if not isinstance(token_usage, dict):
+                return False
+            last_usage = token_usage.get("last", {})
+            collection.usage_details.update(
+                self._extract_thread_usage_details(last_usage),
+            )
+            return False
 
         # turn/completed は params.turn.id で turnId を持つ
         if method == "turn/completed":
@@ -455,6 +560,7 @@ class CodexLlmTransport:
                     raise CodexTransportResponseError(msg)
                 msg = f"Turn failed: {error.get('message', 'unknown')}"
                 raise CodexTransportHttpError(msg)
+            collection.usage_details.update(self._extract_usage_details(turn))
             return True
 
         if params.get("turnId") != turn_id:
@@ -463,16 +569,81 @@ class CodexLlmTransport:
         if method == "item/agentMessage/delta":
             item_id = params.get("itemId", "")
             delta = params.get("delta", "")
-            item_buffers[item_id] = item_buffers.get(item_id, "") + delta
+            collection.item_buffers[item_id] = (
+                collection.item_buffers.get(item_id, "") + delta
+            )
 
         elif method == "item/completed":
             item = params.get("item", {})
             if not isinstance(item, dict):
                 return False
             if item.get("type") == "agentMessage":
-                completed_messages.append(cast("dict[str, Any]", item))
+                collection.completed_messages.append(cast("dict[str, Any]", item))
 
         return False
+
+    @staticmethod
+    def _extract_usage_details(turn: dict[str, Any]) -> dict[str, int]:
+        """Normalize token usage if the app-server includes it."""
+        raw = turn.get("usage") or turn.get("tokenUsage")
+        if not isinstance(raw, dict):
+            return {}
+        aliases = {
+            "input": ("input_tokens", "inputTokens", "prompt_tokens", "promptTokens"),
+            "output": (
+                "output_tokens",
+                "outputTokens",
+                "completion_tokens",
+                "completionTokens",
+            ),
+            "total": ("total_tokens", "totalTokens"),
+            "cache_read_input_tokens": (
+                "cached_input_tokens",
+                "cachedInputTokens",
+                "cacheReadInputTokens",
+            ),
+        }
+        normalized: dict[str, int] = {}
+        for target, source_names in aliases.items():
+            value = next((raw.get(name) for name in source_names if name in raw), None)
+            if isinstance(value, int) and value >= 0:
+                normalized[target] = value
+        return normalized
+
+    @staticmethod
+    def _extract_thread_usage_details(raw: object) -> dict[str, int]:
+        """Normalize one turn from thread/tokenUsage/updated for Langfuse."""
+        if not isinstance(raw, dict):
+            return {}
+
+        def non_negative_int(name: str) -> int | None:
+            value = raw.get(name)
+            return value if isinstance(value, int) and value >= 0 else None
+
+        input_total = non_negative_int("inputTokens")
+        cached_input = non_negative_int("cachedInputTokens") or 0
+        cache_write_input = non_negative_int("cacheWriteInputTokens") or 0
+        output_total = non_negative_int("outputTokens")
+        reasoning_output = non_negative_int("reasoningOutputTokens") or 0
+        total = non_negative_int("totalTokens")
+
+        normalized: dict[str, int] = {}
+        if input_total is not None:
+            normalized["input"] = max(
+                input_total - cached_input - cache_write_input,
+                0,
+            )
+        if cached_input:
+            normalized["cache_read_input_tokens"] = cached_input
+        if cache_write_input:
+            normalized["cache_write_input_tokens"] = cache_write_input
+        if output_total is not None:
+            normalized["output"] = max(output_total - reasoning_output, 0)
+        if reasoning_output:
+            normalized["reasoning_output_tokens"] = reasoning_output
+        if total is not None:
+            normalized["total"] = total
+        return normalized
 
     @staticmethod
     def _build_response(

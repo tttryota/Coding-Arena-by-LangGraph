@@ -37,7 +37,7 @@ logger = structlog.get_logger(__name__)
 _JSON_INSTRUCTION = (
     "必ず JSON のみで回答してください。JSON の外にテキストを含めないでください。"
 )
-_COMPETITIVE_MODEL = "gpt-5.3-codex-spark"
+_COMPETITIVE_MODEL = "gpt-5.6-luna"
 def _parse_json(text: str) -> dict[str, Any]:
     """LLM レスポンスから JSON を抽出してパースする。"""
     cleaned = text.strip()
@@ -312,6 +312,7 @@ class CodexCompetitiveProblemGenerationLlm:
         try:
             raw = self._transport.call(
                 model=_COMPETITIVE_MODEL,
+                operation="competitive.problem_generation",
                 messages=[
                     CodexMessage(role="system", content=system),
                     CodexMessage(role="user", content=user),
@@ -446,6 +447,7 @@ class CodexCompetitiveSolutionEvaluationLlm:
         try:
             raw = self._transport.call(
                 model=_COMPETITIVE_MODEL,
+                operation="competitive.solution_evaluation",
                 messages=[
                     CodexMessage(role="system", content=system),
                     CodexMessage(role="user", content=user),
@@ -544,6 +546,7 @@ class CodexCompetitiveQuestionResponseLlm:
         try:
             raw = self._transport.call(
                 model=_COMPETITIVE_MODEL,
+                operation="competitive.question_response",
                 messages=[
                     CodexMessage(role="system", content=system),
                     CodexMessage(role="user", content=user),

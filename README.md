@@ -87,6 +87,31 @@ docker compose up --build
 docker compose down
 ```
 
+### Langfuseで実行を監視
+
+Langfuseは通常起動には含まれません。初回だけローカル秘密値を生成し、
+`observability`プロファイルを有効にして起動します。
+
+```bash
+scripts/init-langfuse-env.sh
+docker compose --profile observability up --build
+```
+
+起動後、[Langfuse UI](http://localhost:3000)に`.env`の
+`LANGFUSE_INIT_USER_EMAIL`と`LANGFUSE_INIT_USER_PASSWORD`でログインします。
+
+UIでは次の順に確認します。
+
+1. `Tracing`で失敗または遅いtraceを探す
+2. trace詳細でLangGraphノードと、その中のCodex generationをツリー表示する
+3. `Sessions`で同じクイズのstart/resume/retryを時系列にまとめて確認する
+4. `Scores`で品質評価を確認する
+5. `Datasets / Experiments`で変更前後の評価結果を比較する
+6. `Dashboards / Monitors`でエラー率、p95 latency、品質推移を確認する
+
+詳細な画面の見方とモニター設定は
+[docs/observability.md](docs/observability.md)を参照してください。
+
 ### ローカル開発で起動
 
 1. バックエンドを起動
@@ -127,6 +152,25 @@ uv run ruff check .
 uv run mypy .
 ```
 
+LangGraphの評価:
+
+```bash
+cd backend
+
+# 固定データの契約・経路・評価データ検証
+uv run python -m evaluation.cli contract
+
+# 実Codexによる品質評価（各ケース3回）とLangfuseへの結果送信
+uv run python -m evaluation.cli quality --repeat 3 --publish
+
+# 1回warm-up後、各ケース5回のローカル性能測定
+uv run python -m evaluation.cli benchmark --repeat 5 --publish
+```
+
+評価結果は`backend/.eval-results/`にJSONとMarkdownで保存されます。
+品質ベースラインは`backend/evals/baselines/quality.json`、マシン依存の
+性能ベースラインは`.eval-results/benchmark-baseline.json`です。
+
 ### Frontend
 
 ```bash
@@ -153,3 +197,5 @@ pnpm run build
 - Docker 起動時、バックエンドコンテナは起動時に Alembic migration を自動実行します
 - SQLite は `data/app.db` に保存されます
 - backend コンテナはホストの `~/.codex` を共有します
+- Langfuseのデータは名前付きDocker volumeに保存され、通常の
+  `docker compose down`では削除されません

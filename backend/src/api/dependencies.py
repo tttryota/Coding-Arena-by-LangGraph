@@ -8,12 +8,15 @@ from typing import TYPE_CHECKING, Any, cast
 
 from infrastructure.llm.codex_transport import CodexLlmTransport
 from infrastructure.uuid_generator import UuidGenerator
+from shared.observability import NoOpObservability
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from uuid import UUID
 
     from sqlalchemy import Engine
+
+    from shared.observability import Observability
 
 
 class Container:
@@ -40,10 +43,12 @@ class Container:
         self,
         engine: Engine,
         preset_topics_path: str = "data/preset_topics.json",
+        observability: Observability | None = None,
     ) -> None:
         self._engine = engine
         self._preset_topics_path = preset_topics_path
-        self.transport = CodexLlmTransport()
+        self.observability = observability or NoOpObservability()
+        self.transport = CodexLlmTransport(observability=self.observability)
         self.uuid_generator = UuidGenerator()
         self.executor = ThreadPoolExecutor(max_workers=2)
         try:
@@ -159,7 +164,7 @@ class Container:
         )
         self.quiz_checkpointer = MemorySaver()
         compiled = build_graph(deps, checkpointer=self.quiz_checkpointer)
-        self.graph_runner = QuizGraphRunner(compiled)
+        self.graph_runner = QuizGraphRunner(compiled, self.observability)
 
     def _init_competitive(self) -> None:
         """競プロセッション用の graph と永続化 store を初期化する。"""
@@ -199,7 +204,10 @@ class Container:
             deps,
             checkpointer=self.competitive_checkpointer,
         )
-        self.competitive_graph_runner = CompetitiveGraphRunner(compiled)
+        self.competitive_graph_runner = CompetitiveGraphRunner(
+            compiled,
+            self.observability,
+        )
 
     def _init_sql_dojo(self) -> None:
         """SQL道場のテーマバンク・store・LLM を初期化する。"""
@@ -270,7 +278,10 @@ class Container:
         )
         self.coding_checkpointer = MemorySaver()
         compiled = build_coding_graph(deps, checkpointer=self.coding_checkpointer)
-        self.coding_graph_runner = CodingGraphRunner(compiled)
+        self.coding_graph_runner = CodingGraphRunner(
+            compiled,
+            self.observability,
+        )
 
     def _init_scheduler(self) -> None:
         """roadmap 生成ジョブを別スレッドで流す実行器を用意する。"""
@@ -312,6 +323,8 @@ class Container:
         if callable(close_transport):
             close_transport()
         self.executor.shutdown(wait=True)
+        self.observability.flush()
+        self.observability.shutdown()
 
     def delete_quiz_checkpoint(self, session_id: str) -> None:
         """完了済み通常 quiz の LangGraph checkpoint を破棄する。"""

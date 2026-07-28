@@ -18,6 +18,7 @@ from competitive.application.problem_generation import generate_problem
 from competitive.application.solution_evaluation import evaluate_solution
 from competitive.application.theme_selection import select_theme
 from competitive.domain.competitive_types import CompetitiveSessionState
+from shared.observability import NoOpObservability, Observability
 
 if TYPE_CHECKING:
     from competitive.application.problem_generation_types import (
@@ -159,8 +160,13 @@ def _is_transient_llm_error(exc: Exception) -> bool:
 class CompetitiveGraphRunner:
     """競プログラフの実行を管理する。"""
 
-    def __init__(self, compiled_graph: Any) -> None:
+    def __init__(
+        self,
+        compiled_graph: Any,
+        observability: Observability | None = None,
+    ) -> None:
         self._graph = compiled_graph
+        self._observability = observability or NoOpObservability()
 
     @staticmethod
     def _validate_thread_id(thread_id: str) -> None:
@@ -169,17 +175,39 @@ class CompetitiveGraphRunner:
             msg = "thread_id must not be empty"
             raise ValueError(msg)
 
-    @staticmethod
-    def _build_thread_config(thread_id: str) -> dict[str, dict[str, str]]:
-        return {"configurable": {"thread_id": thread_id}}
+    def _build_thread_config(
+        self,
+        thread_id: str,
+        operation: str = "state",
+    ) -> dict[str, Any]:
+        config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
+        config.update(
+            self._observability.graph_config(
+                flow="competitive",
+                operation=operation,
+                session_id=thread_id,
+            ),
+        )
+        return config
 
-    def _invoke_or_raise(self, payload: object, *, thread_id: str) -> None:
+    def _invoke_or_raise(
+        self,
+        payload: object,
+        *,
+        thread_id: str,
+        operation: str,
+    ) -> None:
         """graph 実行時の一過性 LLM エラー変換を共通化する。"""
         try:
-            self._graph.invoke(
-                payload,
-                config=self._build_thread_config(thread_id),
-            )
+            with self._observability.graph_scope(
+                flow="competitive",
+                operation=operation,
+                session_id=thread_id,
+            ):
+                self._graph.invoke(
+                    payload,
+                    config=self._build_thread_config(thread_id, operation),
+                )
         except Exception as exc:
             if _is_transient_llm_error(exc):
                 raise TransientLlmNodeError(
@@ -192,7 +220,7 @@ class CompetitiveGraphRunner:
     ) -> None:
         """セッション開始。interrupt で一時停止する。"""
         self._validate_thread_id(thread_id)
-        self._invoke_or_raise(state, thread_id=thread_id)
+        self._invoke_or_raise(state, thread_id=thread_id, operation="start")
 
     def resume_graph(
         self, user_input: dict[str, object], *, thread_id: str,
@@ -201,7 +229,11 @@ class CompetitiveGraphRunner:
         self._validate_thread_id(thread_id)
         from langgraph.types import Command
 
-        self._invoke_or_raise(Command(resume=user_input), thread_id=thread_id)
+        self._invoke_or_raise(
+            Command(resume=user_input),
+            thread_id=thread_id,
+            operation="resume",
+        )
 
     def get_state(self, *, thread_id: str) -> CompetitiveSessionState:
         """checkpointer から最新 state を取得する。"""
